@@ -1,0 +1,149 @@
+/* ============================================================
+   Design: "Blueprint" — the drafting table, digitized.
+   A precision instrument: cool near-white surfaces, dark
+   ink-blue-black text, one confident blueprint-blue accent,
+   hairline borders, and a faint drafting grid under the sheet.
+   Everything scoped to [data-design='blueprint'].
+   ============================================================ */
+
+:root[data-design='blueprint'] {
+  /* Typography — Inter for UI/display, JetBrains Mono for all refs/numerals */
+  --fp-font-sans: 'Inter Variable', system-ui, sans-serif;
+  --fp-font-display: 'Inter Variable', system-ui, sans-serif;
+  --fp-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  /* Surfaces — cool near-whites with a faint blue cast */
+  --fp-bg-app: #eef1f6;       /* window: cool graph-paper gray-blue */
+  --fp-bg-surface: #fbfcfe;   /* toolbar/panel/cards: near-white, cool */
+  --fp-bg-surface-2: #e7ecf3; /* nested fills, hovers */
+  --fp-bg-inset: #e3e8f0;     /* canvas backdrop behind the sheet */
+
+  /* Lines — hairline, cool */
+  --fp-border: #d5dde8;
+  --fp-border-strong: #b6c2d3;
+
+  /* Text — dark ink-blue-black */
+  --fp-text-1: #101b2e;
+  --fp-text-2: #465269;
+  --fp-text-3: #8493a8;
+
+  /* Accent + semantics — confident blueprint blue */
+  --fp-accent: #1d5fd4;
+  --fp-accent-hover: #174aa8;
+  --fp-accent-soft: #e4edfb;
+  --fp-on-accent: #ffffff;
+  --fp-danger: #d33636;
+  --fp-danger-soft: #fbe9e9;
+  --fp-ok: #1c8a4f;
+  --fp-ok-soft: #e6f4ec;
+  --fp-warn: #c07a12;
+  --fp-warn-soft: #fbf1de;
+
+  /* Shape — sharp and technical, small radii */
+  --fp-radius-xs: 2px;
+  --fp-radius-md: 4px;
+  --fp-radius-lg: 6px;
+  --fp-radius-pill: 999px;
+
+  /* Elevation — crisp and tight, cool-tinted */
+  --fp-shadow-e1: 0 1px 1px rgb(16 27 46 / 0.05);
+  --fp-shadow-e2: 0 1px 2px rgb(16 27 46 / 0.10), 0 2px 5px rgb(16 27 46 / 0.06);
+  --fp-shadow-e3: 0 10px 28px rgb(16 27 46 / 0.16), 0 2px 6px rgb(16 27 46 / 0.08);
+
+  /* Motion — fast, snappy, decisive */
+  --fp-dur-fast: 100ms;
+  --fp-dur-med: 150ms;
+  --fp-dur-slow: 240ms;
+  --fp-ease: cubic-bezier(0.25, 0.85, 0.3, 1);
+
+  /* Component knobs */
+  --fp-pin-size: 28px;
+  --fp-pin-radius: 50% 50% 50% 0;   /* teardrop map marker */
+  --fp-panel-width: 384px;
+  --fp-toolbar-height: 52px;
+
+  /* Signature: a faint drafting grid — minor 24px + major 120px,
+     crossed, in a barely-there cool blue-gray. The white sheet
+     floats on graph paper; pins and sheet still dominate. */
+  --fp-canvas-texture:
+    repeating-linear-gradient(0deg,  rgb(41 78 148 / 0.055) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgb(41 78 148 / 0.055) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(0deg,  rgb(41 78 148 / 0.085) 0 1px, transparent 1px 120px),
+    repeating-linear-gradient(90deg, rgb(41 78 148 / 0.085) 0 1px, transparent 1px 120px);
+
+  /* Crisp 2px accent focus ring */
+  --fp-focus-ring: 0 0 0 2px var(--fp-bg-surface), 0 0 0 4px var(--fp-accent);
+
+  /* Animation knobs → point at the prefixed keyframes below */
+  --fp-anim-pin-drop: blueprint-pin-drop 140ms cubic-bezier(0.3, 0.9, 0.25, 1) both;
+  --fp-anim-panel-in: blueprint-panel-in 130ms cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  --fp-anim-panel-out: blueprint-panel-out 120ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+/* ---- Scoped component refinements ------------------------------------ */
+
+/* Toolbar: slightly stronger baseline, like a ruled datum line */
+[data-design='blueprint'] .fp-toolbar {
+  border-bottom: 1px solid var(--fp-border-strong);
+}
+
+/* New chrome: crisp cool datum rules to match the drafting aesthetic */
+[data-design='blueprint'] .fp-actionbar,
+[data-design='blueprint'] .fp-statusbar {
+  border-color: var(--fp-border-strong);
+}
+
+[data-design='blueprint'] .fp-sidebar {
+  border-right: 1px solid var(--fp-border-strong);
+}
+
+/* Selected pin: ring in the accent, not the pin color — a survey mark */
+[data-design='blueprint'] .fp-pin-selected .fp-pin-marker {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--fp-accent),
+    var(--fp-shadow-e2);
+}
+
+/* ---- Keyframes (global; blueprint- prefixed) ------------------------- */
+
+/* Pin drop: short vertical drop with a single-frame overshoot, no bounce */
+@keyframes blueprint-pin-drop {
+  0% {
+    opacity: 0;
+    translate: 0 -10px;
+    scale: 0.9;
+  }
+  80% {
+    translate: 0 1px;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+/* Panel: quick slide with a slight fade, no float */
+@keyframes blueprint-panel-in {
+  from {
+    transform: translateX(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Panel exit: quick, decisive slide back out */
+@keyframes blueprint-panel-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(14px);
+    opacity: 0;
+  }
+}

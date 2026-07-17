@@ -1,0 +1,75 @@
+import * as React from 'react';
+import { cn } from '../../lib/utils';
+
+interface DropdownProps {
+  trigger: React.ReactNode;
+  align?: 'left' | 'right';
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
+  className?: string;
+}
+
+/** Minimal dropdown: click trigger to open, click outside or Esc to close. */
+export function Dropdown({ trigger, align = 'right', children, className }: DropdownProps) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const close = React.useCallback(() => setOpen(false), []);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <div onClick={() => setOpen((v) => !v)}>{trigger}</div>
+      {open && (
+        <div
+          className={cn(
+            'absolute top-full mt-1.5 z-50 min-w-48 rounded-lg border border-line bg-surface p-1 shadow-e3',
+            align === 'right' ? 'right-0' : 'left-0',
+            className,
+          )}
+        >
+          {typeof children === 'function' ? children(close) : children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DropdownItem({
+  className,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'flex w-full items-center gap-2 rounded-xs px-2.5 py-2 text-left text-sm text-t1 cursor-pointer',
+        'hover:bg-surface2 transition-colors duration-(--fp-dur-fast) [&_svg]:size-4 [&_svg]:text-t3',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function DropdownLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-2.5 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-t3">
+      {children}
+    </div>
+  );
+}
