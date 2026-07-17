@@ -105,6 +105,9 @@ export default function App() {
       <Toolbar hasDoc={doc !== null} onOpenPdf={(f) => void openPdfFile(f)} onImportJson={(f) => void onImportJson(f)} />
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <Sidebar />
+        {/* The rail reserves only its collapsed footprint. Expanded content
+            overlays the viewer, so opening it never reflows or moves the PDF. */}
+        <div className="w-14 shrink-0" aria-hidden />
         <main className="relative min-w-0 flex-1 overflow-hidden">
           {doc ? (
             <Viewer doc={doc} />

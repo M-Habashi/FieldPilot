@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { ImagePlus, Send, Trash2, X } from 'lucide-react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { ImagePlus, LocateFixed, Send, Trash2, X } from 'lucide-react';
 import type { Priority, Status, Task } from '../types';
 import {
   CATEGORIES,
@@ -30,6 +30,7 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
   const updateTask = useProject((s) => s.updateTask);
   const deleteTask = useProject((s) => s.deleteTask);
   const selectTask = useProject((s) => s.selectTask);
+  const focusTask = useProject((s) => s.focusTask);
   const addNote = useProject((s) => s.addNote);
   const addPhotos = useProject((s) => s.addPhotos);
   const removePhoto = useProject((s) => s.removePhoto);
@@ -38,6 +39,14 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The drawer deliberately stays mounted when selection changes to avoid a
+  // content flash. Reset only task-local transient state instead of remounting
+  // the entire Properties view.
+  useLayoutEffect(() => {
+    setConfirmDelete(false);
+    setNoteDraft('');
+  }, [taskId]);
 
   // Task is gone (e.g. deleted) while the panel animates out — leave the shell.
   if (!task) return null;
@@ -70,14 +79,25 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
             <label htmlFor="fp-title" className="mb-0.5 block text-xs text-t3">
               Title
             </label>
-            <input
-              id="fp-title"
-              className="h-7 w-full bg-transparent p-0 text-xs font-semibold text-t1 outline-none transition-colors duration-(--fp-dur-fast) placeholder:font-normal placeholder:text-t3 hover:text-accent focus:text-accent focus-visible:shadow-none"
-              placeholder="Name this task…"
-              value={task.title}
-              autoFocus={task.title === ''}
-              onChange={(e) => updateTask(task.id, { title: e.target.value })}
-            />
+            <div className="flex items-center gap-1">
+              <input
+                id="fp-title"
+                className="h-7 min-w-0 flex-1 bg-transparent p-0 text-xs font-semibold text-t1 outline-none transition-colors duration-(--fp-dur-fast) placeholder:font-normal placeholder:text-t3 hover:text-accent focus:text-accent focus-visible:shadow-none"
+                placeholder="Name this task…"
+                value={task.title}
+                autoFocus={task.title === ''}
+                onChange={(e) => updateTask(task.id, { title: e.target.value })}
+              />
+              <Button
+                variant="text"
+                size="iconXs"
+                aria-label={`Locate ${task.title || `task ${task.seq}`} on plan`}
+                title="Locate on plan"
+                onClick={() => focusTask(task.id)}
+              >
+                <LocateFixed />
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-x-3 gap-y-2 @[340px]:grid-cols-2">

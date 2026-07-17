@@ -10,8 +10,8 @@ import { TaskPanelBody } from './TaskPanel';
  * content in place instead of overlaying a wider panel. Width is identical in
  * every theme (--fp-drawer-width).
  *
- * Layout: in-flow (pushes the plan) on wide screens; an overlay on narrow ones
- * so the plan is never crushed. The parent row clips transient slide overflow.
+ * Layout: always overlays the plan. Reflowing the viewer while the drawer width
+ * animates makes the PDF appear to flash/jump during a double-click open.
  */
 export function RightDrawer() {
   const taskListOpen = useProject((s) => s.taskListOpen);
@@ -35,6 +35,11 @@ export function RightDrawer() {
   if (!mounted) return null;
 
   const showProps = present ? selectedTaskId !== null : lastMode === 'props';
+  // Use the live selection immediately when opening from a closed drawer.
+  // renderTaskId deliberately lags in state so Properties can remain visible
+  // during an exit animation, but using it for entrance caused one frame of
+  // the Tasks list to render before Properties — the visible main-view flash.
+  const visibleTaskId = selectedTaskId ?? renderTaskId;
 
   return (
     <aside
@@ -43,16 +48,18 @@ export function RightDrawer() {
       aria-label={showProps ? 'Task details' : 'Task list'}
       className={
         'fp-panel z-30 flex min-h-0 w-full max-w-[var(--fp-drawer-width)] flex-col ' +
-        'absolute inset-y-0 right-0 ' +
-        'lg:static lg:z-20 lg:w-[var(--fp-drawer-width)] lg:max-w-none'
+        'absolute inset-y-0 right-0'
       }
     >
       <div
-        key={showProps && renderTaskId ? `props-${renderTaskId}` : 'list'}
+        // Keep the Properties view mounted while switching tasks. A task-id key
+        // replayed the entrance fade on every selection, producing a visible
+        // blink even though the drawer itself never closed.
+        key={showProps ? 'props' : 'list'}
         className="fp-drawer-view flex min-h-0 flex-1 flex-col"
       >
-        {showProps && renderTaskId ? (
-          <TaskPanelBody taskId={renderTaskId} />
+        {showProps && visibleTaskId ? (
+          <TaskPanelBody taskId={visibleTaskId} />
         ) : (
           <TaskListBody />
         )}

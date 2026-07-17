@@ -29,6 +29,7 @@ interface ProjectState {
   nextSeq: number;
   // ui
   selectedTaskId: string | null;
+  pinTooltipTaskId: string | null;
   addPinMode: boolean;
   taskListOpen: boolean;
   sidebarCollapsed: boolean;
@@ -47,6 +48,7 @@ interface ProjectState {
   addPhotos(taskId: string, files: File[]): Promise<void>;
   removePhoto(taskId: string, photoId: string): Promise<void>;
   selectTask(id: string | null): void;
+  showPinTooltip(id: string | null): void;
   focusTask(id: string): void;
   setAddPinMode(on: boolean): void;
   showTaskList(): void;
@@ -77,6 +79,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   tasks: {},
   nextSeq: 1,
   selectedTaskId: null,
+  pinTooltipTaskId: null,
   addPinMode: false,
   taskListOpen: false,
   // Default to the narrow icon rail; the single "Plans" item doesn't justify
@@ -97,6 +100,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       tasks: persisted?.tasks ?? {},
       nextSeq: persisted?.nextSeq ?? 1,
       selectedTaskId: null,
+      pinTooltipTaskId: null,
       addPinMode: false,
       focusRequest: null,
     });
@@ -135,6 +139,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       tasks: { ...s.tasks, [id]: task },
       nextSeq: seq + 1,
       selectedTaskId: id,
+      pinTooltipTaskId: null,
     }));
     schedulePersist(get);
     return id;
@@ -171,6 +176,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       return {
         tasks,
         selectedTaskId: s.selectedTaskId === id ? null : s.selectedTaskId,
+        pinTooltipTaskId: s.pinTooltipTaskId === id ? null : s.pinTooltipTaskId,
       };
     });
     schedulePersist(get);
@@ -236,7 +242,11 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   selectTask(id) {
-    set({ selectedTaskId: id });
+    set({ selectedTaskId: id, pinTooltipTaskId: null });
+  },
+
+  showPinTooltip(id) {
+    set({ pinTooltipTaskId: id });
   },
 
   focusTask(id) {
@@ -244,7 +254,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     if (!task) return;
     set({
       currentPage: task.page,
-      selectedTaskId: id,
+      pinTooltipTaskId: null,
       focusRequest: { taskId: id, ts: Date.now() },
     });
   },
@@ -254,7 +264,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   showTaskList() {
-    set({ taskListOpen: true, selectedTaskId: null });
+    set({ taskListOpen: true, selectedTaskId: null, pinTooltipTaskId: null });
   },
 
   closeTaskList() {
@@ -276,7 +286,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   replaceProject(tasks, nextSeq) {
-    set({ tasks, nextSeq, selectedTaskId: null });
+    set({ tasks, nextSeq, selectedTaskId: null, pinTooltipTaskId: null });
     schedulePersist(get);
   },
 }));

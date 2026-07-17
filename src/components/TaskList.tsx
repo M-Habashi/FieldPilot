@@ -1,4 +1,4 @@
-import { Check, MapPin, Plus, X } from 'lucide-react';
+import { Check, LocateFixed, MapPin, Plus, X } from 'lucide-react';
 import { PRIORITIES, STATUSES, categoryById, pinColor } from '../types';
 import { useProject } from '../store/project';
 import { Button } from './ui/button';
@@ -10,6 +10,7 @@ import { Button } from './ui/button';
 export function TaskListBody() {
   const tasks = useProject((s) => s.tasks);
   const selectedTaskId = useProject((s) => s.selectedTaskId);
+  const selectTask = useProject((s) => s.selectTask);
   const focusTask = useProject((s) => s.focusTask);
   const closeTaskList = useProject((s) => s.closeTaskList);
   const setAddPinMode = useProject((s) => s.setAddPinMode);
@@ -48,36 +49,47 @@ export function TaskListBody() {
               const selected = task.id === selectedTaskId;
               return (
                 <li key={task.id}>
-                  <button
-                    type="button"
-                    aria-current={selected ? 'true' : undefined}
-                    className={`fp-task-row group flex w-full cursor-pointer items-start gap-2 px-2 py-1.5 text-left transition-colors duration-(--fp-dur-fast) ${
+                  <div
+                    className={`fp-task-row group flex w-full items-start px-2 py-1.5 transition-colors duration-(--fp-dur-fast) ${
                       selected ? 'text-accent' : 'text-t1 hover:text-accent'
                     }`}
-                    onClick={() => focusTask(task.id)}
                   >
-                    <span
-                      className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full font-mono text-[9px] font-bold text-white"
-                      style={{
-                        background: pinColor(task),
-                      }}
+                    <button
+                      type="button"
+                      aria-current={selected ? 'true' : undefined}
+                      className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 text-left"
+                      onClick={() => selectTask(task.id)}
                     >
-                      {done ? <Check size={11} strokeWidth={3.5} /> : task.seq}
-                    </span>
-                    <span className="min-w-0 flex-1">
                       <span
-                        className={`block truncate text-xs ${
-                          done ? 'text-t3 line-through' : selected ? 'font-semibold text-accent' : 'text-current'
-                        }`}
+                        className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full font-mono text-[9px] font-bold text-white"
+                        style={{ background: pinColor(task) }}
                       >
+                        {done ? <Check size={11} strokeWidth={3.5} /> : task.seq}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className={`block truncate text-xs ${
+                            done ? 'text-t3 line-through' : selected ? 'font-semibold text-accent' : 'text-current'
+                          }`}
+                        >
                           {task.title || 'Untitled task'}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[11px] text-t3 group-hover:text-t2">
+                          <span style={{ color: STATUSES[task.status].color }}>{STATUSES[task.status].label}</span>
+                          {' · '}{PRIORITIES[task.priority].short} · {categoryById(task.category).label} · sheet {task.page}
+                        </span>
                       </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-t3 group-hover:text-t2">
-                        <span style={{ color: STATUSES[task.status].color }}>{STATUSES[task.status].label}</span>
-                        {' · '}{PRIORITIES[task.priority].short} · {categoryById(task.category).label} · sheet {task.page}
-                      </span>
-                    </span>
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Locate ${task.title || `task ${task.seq}`} on plan`}
+                      title="Locate on plan"
+                      className="ml-1 flex size-6 shrink-0 cursor-pointer items-center justify-center text-t3 transition-colors duration-(--fp-dur-fast) hover:text-accent"
+                      onClick={() => focusTask(task.id)}
+                    >
+                      <LocateFixed className="size-3.5" />
+                    </button>
+                  </div>
                 </li>
               );
             })}

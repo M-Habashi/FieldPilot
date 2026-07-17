@@ -135,6 +135,7 @@ body {
   }
 
   .fp-pin-marker {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,8 +146,25 @@ body {
     border-radius: var(--fp-pin-radius);
     transform: rotate(-45deg);
     box-shadow: var(--fp-shadow-e2);
-    transition: transform var(--fp-dur-fast) var(--fp-ease), box-shadow var(--fp-dur-fast) var(--fp-ease);
+    /* Keep the shape motion, but make the selection ring immediate. Delaying
+       box-shadow until after pointer-up reads as a one-frame border flicker. */
+    transition: transform var(--fp-dur-fast) var(--fp-ease);
     animation: var(--fp-anim-pin-drop, fp-pin-drop var(--fp-dur-med) var(--fp-ease) both);
+  }
+
+  /* Selection lives on a dedicated composited layer instead of sharing the
+     marker's rotated transform + repaint-heavy shadow. :active starts it on
+     pointer-down; the selected class takes over on release without a gap. */
+  .fp-pin-marker::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    pointer-events: none;
+    border: 3px solid color-mix(in srgb, var(--pin-color, var(--fp-accent)) 30%, transparent);
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity var(--fp-dur-fast) var(--fp-ease);
+    will-change: opacity;
   }
 
   .fp-pin-label {
@@ -164,15 +182,22 @@ body {
     box-shadow: var(--fp-shadow-e3);
   }
 
+  .fp-pin:active,
   .fp-pin-selected {
     z-index: 20;
   }
 
+  /* :active supplies instant pointer-down feedback. On pointer-up the Zustand
+     selection class takes over without a visual gap. */
+  .fp-pin:active .fp-pin-marker,
   .fp-pin-selected .fp-pin-marker {
     transform: rotate(-45deg) scale(1.18);
-    box-shadow:
-      0 0 0 3px color-mix(in srgb, var(--pin-color, var(--fp-accent)) 30%, transparent),
-      var(--fp-shadow-e3);
+    box-shadow: var(--fp-shadow-e3);
+  }
+
+  .fp-pin:active .fp-pin-marker::after,
+  .fp-pin-selected .fp-pin-marker::after {
+    opacity: 1;
   }
 
   .fp-chip {
@@ -229,12 +254,10 @@ body {
 
 @keyframes fp-panel-in {
   from {
-    width: 0;
     transform: translateX(18px);
     opacity: 0;
   }
   to {
-    width: min(100vw, var(--fp-drawer-width));
     transform: translateX(0);
     opacity: 1;
   }
@@ -244,12 +267,10 @@ body {
    --fp-anim-panel-out with their own <id>-panel-out keyframes. */
 @keyframes fp-panel-out {
   from {
-    width: min(100vw, var(--fp-drawer-width));
     transform: translateX(0);
     opacity: 1;
   }
   to {
-    width: 0;
     transform: translateX(18px);
     opacity: 0;
   }

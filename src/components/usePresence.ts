@@ -16,22 +16,22 @@ export function usePresence(present: boolean): {
   state: PresenceState;
   onAnimationEnd: (e: { target: EventTarget; currentTarget: EventTarget }) => void;
 } {
-  const [mounted, setMounted] = useState(present);
-  const [state, setState] = useState<PresenceState>('open');
+  // `present` participates in `mounted` directly so an opening panel mounts in
+  // the same render as the store update. Waiting for an effect here creates one
+  // paint with the old full-width viewer before the drawer appears, which reads
+  // as a flash when opening Properties from a pin.
+  const [retained, setRetained] = useState(present);
+  const mounted = present || retained;
+  const state: PresenceState = present ? 'open' : 'closing';
 
   useEffect(() => {
-    if (present) {
-      setMounted(true);
-      setState('open');
-    } else if (mounted) {
-      setState('closing');
-    }
-  }, [present, mounted]);
+    if (present) setRetained(true);
+  }, [present]);
 
   const onAnimationEnd = (e: { target: EventTarget; currentTarget: EventTarget }) => {
     // Ignore animations bubbling up from descendants.
     if (e.target !== e.currentTarget) return;
-    if (!present) setMounted(false);
+    if (!present) setRetained(false);
   };
 
   return { mounted, state, onAnimationEnd };

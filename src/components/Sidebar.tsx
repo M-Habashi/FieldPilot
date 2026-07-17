@@ -15,8 +15,9 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'fp-sidebar z-20 flex shrink-0 flex-col transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+        'fp-sidebar absolute inset-y-0 left-0 z-20 flex flex-col transition-[width,box-shadow] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
         collapsed ? 'w-14' : 'w-50',
+        !collapsed && 'shadow-e2',
       )}
       aria-label="Primary"
     >
