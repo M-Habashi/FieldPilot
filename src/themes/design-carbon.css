@@ -66,7 +66,7 @@
   --fp-pin-size: 28px;
   --fp-pin-radius: 50% 50% 50% 3px;  /* teardrop with a crisp lower corner */
   --fp-panel-width: 384px;
-  --fp-toolbar-height: 52px;
+  --fp-toolbar-height: 44px;
 
   /* Faint drafting-board grid behind the sheet (self-contained SVG) */
   --fp-canvas-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M24 0H0V24' fill='none' stroke='%2316181d' stroke-opacity='0.05' stroke-width='1'/%3E%3C/svg%3E");
@@ -77,8 +77,6 @@
 
   /* Entrance animations point at carbon-* keyframes */
   --fp-anim-pin-drop: carbon-pin-drop 120ms cubic-bezier(0.2, 0, 0, 1) both;
-  --fp-anim-panel-in: carbon-panel-in 130ms cubic-bezier(0.2, 0, 0, 1) both;
-  --fp-anim-panel-out: carbon-panel-out 110ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 /* ---- Type treatment: tighten the serif display voice ---- */

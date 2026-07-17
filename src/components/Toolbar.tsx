@@ -17,7 +17,8 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
   const addPinMode = useProject((s) => s.addPinMode);
   const setAddPinMode = useProject((s) => s.setAddPinMode);
   const taskListOpen = useProject((s) => s.taskListOpen);
-  const toggleTaskList = useProject((s) => s.toggleTaskList);
+  const selectedTaskId = useProject((s) => s.selectedTaskId);
+  const showTaskList = useProject((s) => s.showTaskList);
   const taskCount = useProject((s) => Object.keys(s.tasks).length);
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -26,7 +27,7 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
   return (
     <>
       {/* Header bar: brand (left) + open file name (truly centered). Nothing else. */}
-      <header className="fp-toolbar relative z-40 flex shrink-0 items-center gap-2 px-3">
+      <header className="fp-toolbar relative z-40 flex shrink-0 items-center gap-2 px-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex size-7 items-center justify-center rounded-md bg-accent text-on-accent">
             <MapPin className="size-4" />
@@ -45,11 +46,11 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
       </header>
 
       {/* Action bar: file menu + plan tools + design switcher. */}
-      <div className="fp-actionbar z-40 flex shrink-0 items-center gap-1.5 px-3">
+      <div className="fp-actionbar z-40 flex shrink-0 items-center gap-1 px-2.5 text-xs">
         <Dropdown
           align="left"
           trigger={
-            <Button variant="ghost" size="sm">
+            <Button variant="text" size="sm">
               <span>File</span>
               <ChevronDown />
             </Button>
@@ -99,12 +100,11 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
           )}
         </Dropdown>
 
-        <div className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden />
-
         <Button
-          variant="toggle"
+          variant="text"
           size="sm"
-          data-on={addPinMode}
+          data-active={addPinMode}
+          className={addPinMode ? 'text-accent hover:text-accent-hover' : undefined}
           aria-pressed={addPinMode}
           disabled={!hasDoc}
           onClick={() => setAddPinMode(!addPinMode)}
@@ -113,25 +113,20 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
           <Pin />
           <span className="hidden sm:inline">Add pin</span>
         </Button>
-        <Button
-          variant="toggle"
-          size="sm"
-          data-on={taskListOpen}
-          aria-pressed={taskListOpen}
-          disabled={!hasDoc}
-          onClick={toggleTaskList}
-          title="Task list"
-        >
-          <ListTodo />
-          <span className="hidden sm:inline">Tasks</span>
-          {taskCount > 0 && (
-            <span className="rounded-full bg-surface2 px-1.5 py-0.5 font-mono text-[10px] text-t2 data-[on=true]:bg-white/20">
-              {taskCount}
-            </span>
-          )}
-        </Button>
-
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant="text"
+            size="sm"
+            data-active={taskListOpen && selectedTaskId === null}
+            className={taskListOpen && selectedTaskId === null ? 'text-accent hover:text-accent-hover' : undefined}
+            disabled={!hasDoc}
+            onClick={showTaskList}
+            title="Show tasks"
+          >
+            <ListTodo />
+            <span className="hidden sm:inline">Tasks</span>
+            {taskCount > 0 && <span className="font-mono text-[10px]">{taskCount}</span>}
+          </Button>
           <DesignSwitcher />
         </div>
       </div>

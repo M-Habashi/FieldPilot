@@ -64,14 +64,12 @@
 
   /* Signature entrances — gentle spring overshoot */
   --fp-anim-pin-drop: studio-pin-drop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  --fp-anim-panel-in: studio-panel-in 360ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  --fp-anim-panel-out: studio-panel-out 240ms cubic-bezier(0.4, 0, 1, 1) both;
 
   /* Component knobs */
   --fp-pin-size: 30px;
   --fp-pin-radius: 50%;       /* fully round pins */
   --fp-panel-width: 400px;
-  --fp-toolbar-height: 56px;
+  --fp-toolbar-height: 44px;
 
   /* Canvas: a faint warm drafting grid under a soft top light */
   --fp-canvas-texture:
@@ -112,15 +110,6 @@
 [data-design='studio'] .fp-panel {
   border-left: 1px solid transparent;
   box-shadow: -18px 0 44px rgb(60 44 26 / 0.14), var(--fp-shadow-e3);
-}
-
-/* Task-list rows: rounder with a soft hover cushion */
-[data-design='studio'] .fp-task-row {
-  border-radius: var(--fp-radius-md);
-}
-
-[data-design='studio'] .fp-task-row:hover {
-  box-shadow: var(--fp-shadow-e1);
 }
 
 /* Pins: round, a crisp white safety ring, warm cast shadow */

@@ -15,7 +15,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'fp-sidebar z-20 flex shrink-0 flex-col transition-[width] duration-(--fp-dur-med) ease-(--fp-ease)',
+        'fp-sidebar z-20 flex shrink-0 flex-col transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
         collapsed ? 'w-14' : 'w-50',
       )}
       aria-label="Primary"
@@ -34,7 +34,7 @@ export function Sidebar() {
         >
           <ChevronRight
             className={cn(
-              'size-4 shrink-0 transition-transform duration-(--fp-dur-med) ease-(--fp-ease)',
+              'size-4 shrink-0 transition-transform duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
               !collapsed && 'rotate-180',
             )}
           />

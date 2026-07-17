@@ -18,6 +18,8 @@ const buttonVariants = cva(
           'bg-danger-soft text-danger hover:bg-danger hover:text-white rounded-md',
         toggle:
           'text-t2 hover:bg-surface2 hover:text-t1 rounded-md data-[on=true]:bg-accent data-[on=true]:text-on-accent data-[on=true]:shadow-e1',
+        text:
+          'rounded-none text-t3 hover:text-t1 active:scale-100 data-[active=true]:text-accent',
       },
       size: {
         sm: 'h-8 px-2.5 text-xs [&_svg]:size-3.5',

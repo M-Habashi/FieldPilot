@@ -57,9 +57,9 @@ export function DropdownItem({
     <button
       type="button"
       className={cn(
-        'flex w-full items-center gap-2 rounded-xs px-2.5 py-2 text-left text-sm text-t1 cursor-pointer',
-        'hover:bg-surface2 transition-colors duration-(--fp-dur-fast) [&_svg]:size-4 [&_svg]:text-t3',
-        'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent',
+        'flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs text-t2 cursor-pointer',
+        'hover:text-t1 transition-colors duration-(--fp-dur-fast) [&_svg]:size-3.5 [&_svg]:text-current',
+        'disabled:cursor-not-allowed disabled:opacity-45',
         className,
       )}
       {...props}

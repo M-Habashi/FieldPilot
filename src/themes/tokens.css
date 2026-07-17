@@ -61,6 +61,10 @@
   --fp-dur-med: 220ms;
   --fp-dur-slow: 380ms;
   --fp-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* One structural motion contract shared by both drawers and the PDF view. */
+  --fp-motion-duration: 220ms;
+  --fp-motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --fp-ui-font-size: 12px;
 
   /* Component knobs */
   --fp-pin-size: 30px;
@@ -69,7 +73,7 @@
   /* Shared right-drawer width — Tasks and Properties share ONE frame, so this
      is intentionally uniform across designs (do NOT override per-theme). */
   --fp-drawer-width: 384px;
-  --fp-toolbar-height: 52px;
+  --fp-toolbar-height: 44px;
   --fp-canvas-texture: none;         /* optional background-image for the canvas backdrop */
   --fp-focus-ring: 0 0 0 2px var(--fp-bg-surface), 0 0 0 4px var(--fp-accent);
 }

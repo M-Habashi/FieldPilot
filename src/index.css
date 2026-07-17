@@ -76,9 +76,10 @@ body {
   }
 
   .fp-actionbar {
-    min-height: 44px;
+    min-height: 34px;
     background: var(--fp-bg-surface);
     border-bottom: 1px solid var(--fp-border);
+    font-size: var(--fp-ui-font-size);
   }
 
   .fp-statusbar {
@@ -104,15 +105,23 @@ body {
     background: var(--fp-bg-surface);
     border-left: 1px solid var(--fp-border);
     box-shadow: var(--fp-shadow-e3);
+    font-size: var(--fp-ui-font-size);
+    overflow: hidden;
   }
 
   /* Presence-driven: entrance and exit are separate, per-design animations. */
   .fp-panel[data-state='open'] {
-    animation: var(--fp-anim-panel-in, fp-panel-in var(--fp-dur-med) var(--fp-ease) both);
+    animation: fp-panel-in var(--fp-motion-duration) var(--fp-motion-ease) both;
   }
 
   .fp-panel[data-state='closing'] {
-    animation: var(--fp-anim-panel-out, fp-panel-out var(--fp-dur-med) var(--fp-ease) both);
+    animation: fp-panel-out var(--fp-motion-duration) var(--fp-motion-ease) both;
+  }
+
+  .fp-drawer-view {
+    width: min(100vw, var(--fp-drawer-width));
+    flex: none;
+    animation: fp-drawer-view-in var(--fp-motion-duration) var(--fp-motion-ease) both;
   }
 
   .fp-pin {
@@ -192,6 +201,16 @@ body {
   }
 }
 
+/* Drawer fields use a text-editor treatment: focus is communicated by text
+   color/caret rather than reintroducing a boxed control around the field. */
+.fp-panel input:focus-visible,
+.fp-panel textarea:focus-visible,
+.fp-panel select:focus-visible {
+  outline: none;
+  box-shadow: none;
+  caret-color: var(--fp-accent);
+}
+
 @keyframes fp-pin-drop {
   0% {
     opacity: 0;
@@ -210,10 +229,12 @@ body {
 
 @keyframes fp-panel-in {
   from {
-    transform: translateX(24px);
+    width: 0;
+    transform: translateX(18px);
     opacity: 0;
   }
   to {
+    width: min(100vw, var(--fp-drawer-width));
     transform: translateX(0);
     opacity: 1;
   }
@@ -223,12 +244,25 @@ body {
    --fp-anim-panel-out with their own <id>-panel-out keyframes. */
 @keyframes fp-panel-out {
   from {
+    width: min(100vw, var(--fp-drawer-width));
     transform: translateX(0);
     opacity: 1;
   }
   to {
-    transform: translateX(24px);
+    width: 0;
+    transform: translateX(18px);
     opacity: 0;
+  }
+}
+
+@keyframes fp-drawer-view-in {
+  from {
+    transform: translateX(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
 }
 

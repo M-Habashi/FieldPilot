@@ -11,7 +11,7 @@ export function DesignSwitcher() {
   return (
     <Dropdown
       trigger={
-        <Button variant="ghost" size="sm" aria-label="Switch design">
+        <Button variant="text" size="sm" aria-label="Switch design">
           <Palette />
           <span className="hidden sm:inline">{DESIGNS.find((d) => d.id === design)?.label ?? 'Design'}</span>
         </Button>

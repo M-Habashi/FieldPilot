@@ -29,6 +29,8 @@ export interface Task {
   status: Status;
   priority: Priority;
   category: string;
+  /** Optional for backwards compatibility with projects saved before task colors. */
+  color?: string;
   assignee: string;
   dueDate: string | null;
   notes: Note[];
@@ -36,6 +38,19 @@ export interface Task {
   createdAt: number;
   updatedAt: number;
 }
+
+export const DEFAULT_TASK_COLOR = '#d97706';
+
+export const TASK_COLORS = [
+  { label: 'Amber', value: '#d97706' },
+  { label: 'Red', value: '#dc2626' },
+  { label: 'Blue', value: '#2563eb' },
+  { label: 'Cyan', value: '#0891b2' },
+  { label: 'Green', value: '#16a34a' },
+  { label: 'Teal', value: '#0f766e' },
+  { label: 'Violet', value: '#7c3aed' },
+  { label: 'Slate', value: '#475569' },
+] as const;
 
 export interface Category {
   id: string;
@@ -74,6 +89,7 @@ export const STATUSES: Record<Status, { label: string; color: string }> = {
 export const STATUS_ORDER: Status[] = ['open', 'in-progress', 'done', 'verified'];
 
 export function pinColor(task: Task): string {
+  if (task.color) return task.color;
   if (task.status === 'done' || task.status === 'verified') return STATUSES[task.status].color;
   return PRIORITIES[task.priority].color;
 }

@@ -1,7 +1,15 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Send, Trash2, X } from 'lucide-react';
 import type { Priority, Status, Task } from '../types';
-import { CATEGORIES, PRIORITIES, STATUSES, STATUS_ORDER, categoryById } from '../types';
+import {
+  CATEGORIES,
+  PRIORITIES,
+  STATUSES,
+  STATUS_ORDER,
+  TASK_COLORS,
+  categoryById,
+  pinColor,
+} from '../types';
 import { relativeTime } from '../lib/utils';
 import { useProject } from '../store/project';
 import { Button } from './ui/button';
@@ -9,7 +17,6 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Select } from './ui/select';
-import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { ConfirmDialog } from './ui/dialog';
 import { usePhotoUrl } from './usePhotoUrl';
@@ -45,28 +52,27 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
   return (
     <>
       {/* header */}
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <Badge color={category.color} dot>
-          {category.label}
-        </Badge>
-        <span className="font-mono text-xs text-t3">#{task.seq}</span>
-        <span className="text-xs text-t3">· sheet {task.page}</span>
+      <div className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-xs">
+        <span className="size-1.5 rounded-full" style={{ background: category.color }} />
+        <span style={{ color: category.color }}>{category.label}</span>
+        <span className="font-mono text-t3">#{task.seq}</span>
+        <span className="text-t3">· sheet {task.page}</span>
         <div className="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="iconSm" aria-label="Close panel" onClick={() => selectTask(null)}>
+          <Button variant="text" size="iconXs" aria-label="Close panel" onClick={() => selectTask(null)}>
             <X />
           </Button>
         </div>
       </div>
 
       <div className="@container min-h-0 flex-1 overflow-y-auto">
-        <div className="space-y-4 px-4 py-4">
+        <div className="space-y-3 px-3 py-3 text-xs">
           <div>
-            <label htmlFor="fp-title" className="mb-1 block text-[11px] font-medium text-t3">
+            <label htmlFor="fp-title" className="mb-0.5 block text-xs text-t3">
               Title
             </label>
             <input
               id="fp-title"
-              className="w-full rounded-xs border-b border-line bg-transparent pb-1 font-display text-lg font-semibold text-t1 outline-none transition-colors duration-(--fp-dur-fast) placeholder:font-normal placeholder:text-t3 hover:border-line-strong focus:border-accent"
+              className="h-7 w-full bg-transparent p-0 text-xs font-semibold text-t1 outline-none transition-colors duration-(--fp-dur-fast) placeholder:font-normal placeholder:text-t3 hover:text-accent focus:text-accent focus-visible:shadow-none"
               placeholder="Name this task…"
               value={task.title}
               autoFocus={task.title === ''}
@@ -74,11 +80,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 @[340px]:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2 @[340px]:grid-cols-2">
             <div>
-              <Label htmlFor="fp-status">Status</Label>
+              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-status">Status</Label>
               <Select
                 id="fp-status"
+                className="h-7 border-0 bg-transparent pl-0 text-xs hover:text-accent focus:ring-0"
                 value={task.status}
                 onChange={(e) => updateTask(task.id, { status: e.target.value as Status })}
               >
@@ -90,9 +97,10 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               </Select>
             </div>
             <div>
-              <Label htmlFor="fp-priority">Priority</Label>
+              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-priority">Priority</Label>
               <Select
                 id="fp-priority"
+                className="h-7 border-0 bg-transparent pl-0 text-xs hover:text-accent focus:ring-0"
                 value={task.priority}
                 onChange={(e) => updateTask(task.id, { priority: Number(e.target.value) as Priority })}
               >
@@ -104,9 +112,10 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               </Select>
             </div>
             <div>
-              <Label htmlFor="fp-category">Category</Label>
+              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-category">Category</Label>
               <Select
                 id="fp-category"
+                className="h-7 border-0 bg-transparent pl-0 text-xs hover:text-accent focus:ring-0"
                 value={task.category}
                 onChange={(e) => updateTask(task.id, { category: e.target.value })}
               >
@@ -118,27 +127,58 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               </Select>
             </div>
             <div>
-              <Label htmlFor="fp-due">Due date</Label>
+              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-due">Due date</Label>
               <Input
                 id="fp-due"
                 type="date"
+                className="h-7 border-0 bg-transparent px-0 text-xs hover:text-accent focus:ring-0"
                 value={task.dueDate ?? ''}
                 onChange={(e) => updateTask(task.id, { dueDate: e.target.value || null })}
               />
             </div>
             <div className="@[340px]:col-span-2">
-              <Label htmlFor="fp-assignee">Assignee</Label>
+              <Label className="mb-1 text-xs font-normal normal-case tracking-normal">Pin color</Label>
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Pin color">
+                {TASK_COLORS.map((color) => {
+                  const selected = pinColor(task) === color.value;
+                  return (
+                    <button
+                      key={color.value}
+                      type="button"
+                      aria-label={`${color.label} pin color`}
+                      aria-pressed={selected}
+                      title={color.label}
+                      className={`size-4 rounded-full transition-transform duration-(--fp-dur-fast) hover:scale-110 ${
+                        selected ? 'ring-2 ring-offset-2 ring-offset-surface' : ''
+                      }`}
+                      style={{
+                        background: color.value,
+                        ...(selected ? { '--tw-ring-color': color.value } as React.CSSProperties : {}),
+                      }}
+                      onClick={() => updateTask(task.id, { color: color.value })}
+                    />
+                  );
+                })}
+                <span className="text-xs" style={{ color: pinColor(task) }}>
+                  {TASK_COLORS.find((color) => color.value === pinColor(task))?.label ?? 'Custom'}
+                </span>
+              </div>
+            </div>
+            <div className="@[340px]:col-span-2">
+              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-assignee">Assignee</Label>
               <Input
                 id="fp-assignee"
+                className="h-7 border-0 bg-transparent px-0 text-xs hover:text-accent focus:ring-0"
                 placeholder="Who is on it?"
                 value={task.assignee}
                 onChange={(e) => updateTask(task.id, { assignee: e.target.value })}
               />
             </div>
             <div className="@[340px]:col-span-2">
-              <Label htmlFor="fp-desc">Description</Label>
+              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-desc">Description</Label>
               <Textarea
                 id="fp-desc"
+                className="min-h-14 border-0 bg-transparent px-0 py-1 text-xs hover:text-accent focus:ring-0"
                 placeholder="What needs to happen here?"
                 value={task.description}
                 onChange={(e) => updateTask(task.id, { description: e.target.value })}
@@ -151,7 +191,7 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
           {/* photos */}
           <section>
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-t3">
+              <h3 className="text-xs font-medium text-t3">
                 Photos {task.photos.length > 0 && `(${task.photos.length})`}
               </h3>
             </div>
@@ -165,15 +205,15 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                   onRemove={() => void removePhoto(task.id, photo.id)}
                 />
               ))}
-              <button
-                type="button"
-                className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-line text-t3 transition-colors duration-(--fp-dur-fast) hover:border-accent hover:text-accent"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <ImagePlus className="size-5" />
-                <span className="text-[10px] font-medium">Add photo</span>
-              </button>
             </div>
+            <button
+              type="button"
+              className="mt-1 inline-flex cursor-pointer items-center gap-1 py-1 text-xs text-t3 transition-colors duration-(--fp-dur-fast) hover:text-accent"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <ImagePlus className="size-4" />
+              <span>Add photo</span>
+            </button>
             <input
               ref={fileInputRef}
               type="file"
@@ -192,11 +232,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
 
           {/* notes */}
           <section>
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-t3">
+            <h3 className="mb-1.5 text-xs font-medium text-t3">
               Notes {task.notes.length > 0 && `(${task.notes.length})`}
             </h3>
             <div className="flex gap-2">
               <Input
+                className="h-7 border-0 bg-transparent px-0 text-xs hover:text-accent focus:ring-0"
                 placeholder="Add a note…"
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
@@ -205,8 +246,8 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                 }}
               />
               <Button
-                variant="default"
-                size="icon"
+                variant="text"
+                size="iconXs"
                 aria-label="Add note"
                 disabled={!noteDraft.trim()}
                 onClick={submitNote}
@@ -216,9 +257,9 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
             </div>
             <ul className="mt-3 space-y-2.5">
               {task.notes.map((note) => (
-                <li key={note.id} className="rounded-md bg-surface2 px-3 py-2">
-                  <p className="whitespace-pre-wrap text-sm text-t1">{note.text}</p>
-                  <p className="mt-1 text-[11px] text-t3">{relativeTime(note.createdAt)}</p>
+                <li key={note.id} className="py-1.5">
+                  <p className="whitespace-pre-wrap text-xs text-t1">{note.text}</p>
+                  <p className="mt-0.5 text-xs text-t3">{relativeTime(note.createdAt)}</p>
                 </li>
               ))}
               {task.notes.length === 0 && (
@@ -231,10 +272,10 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
 
           {/* Danger zone — deliberately separated from the header Close control. */}
           <section>
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-t3">
+            <h3 className="mb-1 text-xs font-medium text-t3">
               Danger zone
             </h3>
-            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
+            <Button variant="text" size="sm" className="px-0 text-danger hover:text-danger" onClick={() => setConfirmDelete(true)}>
               <Trash2 />
               Delete task
             </Button>
@@ -242,7 +283,7 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
         </div>
       </div>
 
-      <div className="border-t border-line px-4 py-2 text-[11px] text-t3">
+      <div className="border-t border-line px-3 py-1.5 text-xs text-t3">
         Created {relativeTime(task.createdAt)} · updated {relativeTime(task.updatedAt)}
       </div>
 

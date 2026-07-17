@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
-import type { Photo, Task } from '../types';
+import { DEFAULT_TASK_COLOR, type Photo, type Task } from '../types';
 import { uid } from '../lib/utils';
 import { deletePhotoBlob, savePhotoBlob } from '../lib/photos';
 
@@ -35,6 +35,7 @@ interface ProjectState {
   lightboxPhotoId: string | null;
   focusRequest: FocusRequest | null;
   design: string;
+  lastTaskColor: string;
 
   loadDocument(meta: { fileName: string; fingerprint: string; pageCount: number }): Promise<void>;
   setPage(page: number): void;
@@ -48,7 +49,8 @@ interface ProjectState {
   selectTask(id: string | null): void;
   focusTask(id: string): void;
   setAddPinMode(on: boolean): void;
-  toggleTaskList(): void;
+  showTaskList(): void;
+  closeTaskList(): void;
   toggleSidebar(): void;
   setLightbox(photoId: string | null): void;
   setDesign(id: string): void;
@@ -83,6 +85,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   lightboxPhotoId: null,
   focusRequest: null,
   design: localStorage.getItem('fp:design') ?? 'blueprint',
+  lastTaskColor: localStorage.getItem('fp:last-task-color') ?? DEFAULT_TASK_COLOR,
 
   async loadDocument({ fileName, fingerprint, pageCount }) {
     const persisted = await idbGet<PersistedProject>(projectKey(fingerprint));
@@ -120,6 +123,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       status: 'open',
       priority: 2,
       category: 'general',
+      color: get().lastTaskColor,
       assignee: '',
       dueDate: null,
       notes: [],
@@ -137,6 +141,10 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   updateTask(id, patch) {
+    if (patch.color) {
+      localStorage.setItem('fp:last-task-color', patch.color);
+      set({ lastTaskColor: patch.color });
+    }
     set((s) => {
       const task = s.tasks[id];
       if (!task) return s;
@@ -245,8 +253,12 @@ export const useProject = create<ProjectState>((set, get) => ({
     set({ addPinMode: on });
   },
 
-  toggleTaskList() {
-    set((s) => ({ taskListOpen: !s.taskListOpen }));
+  showTaskList() {
+    set({ taskListOpen: true, selectedTaskId: null });
+  },
+
+  closeTaskList() {
+    set({ taskListOpen: false });
   },
 
   toggleSidebar() {

@@ -48,6 +48,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const worldRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<{ cancel(): void } | null>(null);
+  const motionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragRef = useRef<{
     sx: number;
     sy: number;
@@ -60,7 +61,28 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const [pageBase, setPageBase] = useState<PageBase | null>(null);
   const [view, setView] = useState<View>({ scale: 1, offset: { x: 0, y: 0 } });
   const [panning, setPanning] = useState(false);
+  const [smoothView, setSmoothView] = useState(false);
   const renderScale = useDebounced(view.scale, 120);
+
+  const stopSmoothView = useCallback(() => {
+    if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
+    motionTimerRef.current = null;
+    setSmoothView(false);
+  }, []);
+
+  const animateView = useCallback((update: (current: View) => View) => {
+    if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
+    setSmoothView(true);
+    setView(update);
+    motionTimerRef.current = setTimeout(() => {
+      setSmoothView(false);
+      motionTimerRef.current = null;
+    }, 240);
+  }, []);
+
+  useEffect(() => () => {
+    if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
+  }, []);
 
   const fit = useCallback((pb: PageBase) => {
     const el = containerRef.current;
@@ -71,11 +93,11 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
       0.1,
       8,
     );
-    setView({
+    animateView(() => ({
       scale: s,
       offset: { x: (el.clientWidth - pb.w * s) / 2, y: (el.clientHeight - pb.h * s) / 2 },
-    });
-  }, []);
+    }));
+  }, [animateView]);
 
   // Load page dimensions and fit on page change.
   useEffect(() => {
@@ -126,13 +148,14 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      stopSmoothView();
       const rect = el.getBoundingClientRect();
       const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018));
       setView((v) => zoomAt(v, e.clientX - rect.left, e.clientY - rect.top, factor));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, []);
+  }, [stopSmoothView]);
 
   // Center the viewport on a pin when the task list asks for it.
   useEffect(() => {
@@ -140,24 +163,25 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     const task = useProject.getState().tasks[focusRequest.taskId];
     const el = containerRef.current;
     if (!task || !el || task.page !== currentPage) return;
-    setView((v) => ({
+    animateView((v) => ({
       ...v,
       offset: {
         x: el.clientWidth / 2 - task.x * pageBase.w * v.scale,
         y: el.clientHeight / 2 - task.y * pageBase.h * v.scale,
       },
     }));
-  }, [focusRequest, pageBase, currentPage]);
+  }, [focusRequest, pageBase, currentPage, animateView]);
 
   const zoomBy = (factor: number) => {
     const el = containerRef.current;
     if (!el) return;
-    setView((v) => zoomAt(v, el.clientWidth / 2, el.clientHeight / 2, factor));
+    animateView((v) => zoomAt(v, el.clientWidth / 2, el.clientHeight / 2, factor));
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // Left button (0) = pan / place-pin / select. Middle button (1) = pan in ANY mode.
     if (e.button !== 0 && e.button !== 1) return;
+    stopSmoothView();
     e.currentTarget.setPointerCapture(e.pointerId);
     const middle = e.button === 1;
     dragRef.current = {
@@ -229,7 +253,11 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
       {pageBase && (
         <div
           ref={worldRef}
-          className="absolute top-0 left-0"
+          className={cn(
+            'absolute top-0 left-0',
+            smoothView &&
+              'transition-[transform,width,height] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+          )}
           style={{
             transform: `translate(${view.offset.x}px, ${view.offset.y}px)`,
             width: pageBase.w * view.scale,

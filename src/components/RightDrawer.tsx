@@ -47,11 +47,16 @@ export function RightDrawer() {
         'lg:static lg:z-20 lg:w-[var(--fp-drawer-width)] lg:max-w-none'
       }
     >
-      {showProps && renderTaskId ? (
-        <TaskPanelBody key={renderTaskId} taskId={renderTaskId} />
-      ) : (
-        <TaskListBody />
-      )}
+      <div
+        key={showProps && renderTaskId ? `props-${renderTaskId}` : 'list'}
+        className="fp-drawer-view flex min-h-0 flex-1 flex-col"
+      >
+        {showProps && renderTaskId ? (
+          <TaskPanelBody taskId={renderTaskId} />
+        ) : (
+          <TaskListBody />
+        )}
+      </div>
     </aside>
   );
 }

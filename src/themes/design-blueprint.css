@@ -60,7 +60,7 @@
   --fp-pin-size: 28px;
   --fp-pin-radius: 50% 50% 50% 0;   /* teardrop map marker */
   --fp-panel-width: 384px;
-  --fp-toolbar-height: 52px;
+  --fp-toolbar-height: 44px;
 
   /* Signature: a faint drafting grid — minor 24px + major 120px,
      crossed, in a barely-there cool blue-gray. The white sheet
@@ -76,8 +76,6 @@
 
   /* Animation knobs → point at the prefixed keyframes below */
   --fp-anim-pin-drop: blueprint-pin-drop 140ms cubic-bezier(0.3, 0.9, 0.25, 1) both;
-  --fp-anim-panel-in: blueprint-panel-in 130ms cubic-bezier(0.25, 0.85, 0.3, 1) both;
-  --fp-anim-panel-out: blueprint-panel-out 120ms cubic-bezier(0.4, 0, 0.6, 1) both;
 }
 
 /* ---- Scoped component refinements ------------------------------------ */
