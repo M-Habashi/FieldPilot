@@ -37,8 +37,8 @@ export function Dropdown({ trigger, align = 'right', children, className }: Drop
       {open && (
         <div
           className={cn(
-            'absolute top-full mt-1.5 z-50 min-w-48 rounded-lg border border-line bg-surface p-1 shadow-e3',
-            align === 'right' ? 'right-0' : 'left-0',
+            'fp-dropdown-menu absolute top-full mt-1.5 z-50 min-w-48 rounded-lg border border-line bg-surface p-1 shadow-e3',
+            align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
             className,
           )}
         >

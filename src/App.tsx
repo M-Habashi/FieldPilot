@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { openPdf, type PDFDocumentProxy } from './lib/pdf';
 import { importProject } from './lib/transfer';
 import { useProject } from './store/project';
-import { Toolbar } from './components/Toolbar';
+import { AppHeader, Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { Viewer } from './components/Viewer';
@@ -105,31 +105,36 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-app font-sans text-t1">
-      <Toolbar hasDoc={doc !== null} onOpenPdf={(f) => void openPdfFile(f)} onImportJson={(f) => void onImportJson(f)} />
-      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <AppHeader />
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Below the identity bar, the sidebar owns one uninterrupted column.
+            Expanded content overlays the workspace and never reflows the PDF. */}
         <Sidebar />
-        {/* The rail reserves only its collapsed footprint. Expanded content
-            overlays the viewer, so opening it never reflows or moves the PDF. */}
         <div className="w-14 shrink-0" aria-hidden />
-        <main className="relative min-w-0 flex-1 overflow-hidden">
-          {doc ? (
-            <Viewer doc={doc} />
-          ) : (
-            <EmptyState loading={loading} error={error} onOpen={(f) => void openPdfFile(f)} onLoadDemo={() => void loadDemo()} />
-          )}
-          {doc && error && (
-            <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-md bg-danger px-3 py-2 text-xs font-medium text-white shadow-e2">
-              {error}
-              <button type="button" className="ml-3 underline cursor-pointer" onClick={() => setError(null)}>
-                Dismiss
-              </button>
-            </div>
-          )}
-        </main>
-        {/* Single shared drawer: Tasks list and Task Properties swap inside it. */}
-        {doc && <RightDrawer />}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Toolbar hasDoc={doc !== null} onOpenPdf={(f) => void openPdfFile(f)} onImportJson={(f) => void onImportJson(f)} />
+          <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            <main className="relative min-w-0 flex-1 overflow-hidden">
+              {doc ? (
+                <Viewer doc={doc} />
+              ) : (
+                <EmptyState loading={loading} error={error} onOpen={(f) => void openPdfFile(f)} onLoadDemo={() => void loadDemo()} />
+              )}
+              {doc && error && (
+                <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-md bg-danger px-3 py-2 text-xs font-medium text-white shadow-e2">
+                  {error}
+                  <button type="button" className="ml-3 underline cursor-pointer" onClick={() => setError(null)}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </main>
+            {/* Single shared drawer: Tasks list and Task Properties swap inside it. */}
+            {doc && <RightDrawer />}
+          </div>
+          <StatusBar hasDoc={doc !== null} />
+        </div>
       </div>
-      <StatusBar hasDoc={doc !== null} />
       <Lightbox />
     </div>
   );

@@ -35,6 +35,8 @@ Last run: 2026-07-17 | Baseline: `a1400a5`
 - Exact 32px frames extracted unchanged from downloaded `apple_cursor` v2.0.1 regular Windows assets; source notice + GPL-3 license included.
 - Pan/Grabbing cursor assets preload in the document head so first contact never exposes the fallback cursor.
 - Chrome cold reload must fetch and decode both PNG cursor frames before rendering the viewer, preventing a first-entry cursor race.
+- Shell: full-width identity header retains logo/app/file name. Beneath it, the 56px rail is uninterrupted through toolbar/viewer/status; its top-edge toggle follows expanded width.
+- Expanding the left pane slides File/Add pin with its edge without moving the PDF. File, design, status, priority, and category menus share one animated dropdown treatment.
 
 ## Next run
 

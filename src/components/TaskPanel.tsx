@@ -105,46 +105,40 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-status">Status</Label>
               <Select
                 id="fp-status"
-                className="h-7 border-0 bg-transparent pl-0 text-xs hover:text-accent focus:ring-0"
                 value={task.status}
-                onChange={(e) => updateTask(task.id, { status: e.target.value as Status })}
-              >
-                {STATUS_ORDER.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUSES[s].label}
-                  </option>
-                ))}
-              </Select>
+                options={STATUS_ORDER.map((status) => ({
+                  value: status,
+                  label: STATUSES[status].label,
+                  color: STATUSES[status].color,
+                }))}
+                onValueChange={(value) => updateTask(task.id, { status: value as Status })}
+              />
             </div>
             <div>
               <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-priority">Priority</Label>
               <Select
                 id="fp-priority"
-                className="h-7 border-0 bg-transparent pl-0 text-xs hover:text-accent focus:ring-0"
-                value={task.priority}
-                onChange={(e) => updateTask(task.id, { priority: Number(e.target.value) as Priority })}
-              >
-                {([1, 2, 3] as Priority[]).map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITIES[p].label}
-                  </option>
-                ))}
-              </Select>
+                value={String(task.priority)}
+                options={([1, 2, 3] as Priority[]).map((priority) => ({
+                  value: String(priority),
+                  label: PRIORITIES[priority].label,
+                  color: PRIORITIES[priority].color,
+                }))}
+                onValueChange={(value) => updateTask(task.id, { priority: Number(value) as Priority })}
+              />
             </div>
             <div>
               <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-category">Category</Label>
               <Select
                 id="fp-category"
-                className="h-7 border-0 bg-transparent pl-0 text-xs hover:text-accent focus:ring-0"
                 value={task.category}
-                onChange={(e) => updateTask(task.id, { category: e.target.value })}
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </Select>
+                options={CATEGORIES.map((categoryOption) => ({
+                  value: categoryOption.id,
+                  label: categoryOption.label,
+                  color: categoryOption.color,
+                }))}
+                onValueChange={(value) => updateTask(task.id, { category: value })}
+              />
             </div>
             <div>
               <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-due">Due date</Label>

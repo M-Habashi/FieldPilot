@@ -249,6 +249,21 @@ body {
   cursor: url('/cursors/pin-dark.svg') 16 16, crosshair;
 }
 
+.fp-dropdown-menu {
+  animation: fp-dropdown-in var(--fp-dur-fast) var(--fp-motion-ease) both;
+}
+
+@keyframes fp-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Drawer fields use a text-editor treatment: focus is communicated by text
    color/caret rather than reintroducing a boxed control around the field. */
 .fp-panel input:focus-visible,

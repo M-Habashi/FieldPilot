@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { ChevronDown, Download, FileUp, FolderOpen, ListTodo, MapPin, Pin } from 'lucide-react';
 import { useProject } from '../store/project';
 import { exportProject } from '../lib/transfer';
+import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Dropdown, DropdownItem } from './ui/dropdown-menu';
 import { DesignSwitcher } from './DesignSwitcher';
@@ -12,124 +13,137 @@ interface ToolbarProps {
   onImportJson: (file: File) => void;
 }
 
-export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
+export function AppHeader() {
   const fileName = useProject((s) => s.fileName);
+
+  return (
+    <header className="fp-toolbar relative z-60 flex shrink-0 items-center gap-2 px-2.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex size-7 items-center justify-center rounded-md bg-accent text-on-accent">
+          <MapPin className="size-4" />
+        </span>
+        <span className="font-display text-sm font-bold tracking-tight text-t1">FieldPilot</span>
+      </div>
+
+      {fileName && (
+        <span
+          className="absolute left-1/2 hidden max-w-[50%] -translate-x-1/2 truncate text-xs text-t2 md:block"
+          title={fileName}
+        >
+          {fileName}
+        </span>
+      )}
+    </header>
+  );
+}
+
+export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
   const addPinMode = useProject((s) => s.addPinMode);
   const setAddPinMode = useProject((s) => s.setAddPinMode);
   const taskListOpen = useProject((s) => s.taskListOpen);
   const selectedTaskId = useProject((s) => s.selectedTaskId);
   const showTaskList = useProject((s) => s.showTaskList);
   const taskCount = useProject((s) => Object.keys(s.tasks).length);
+  const sidebarCollapsed = useProject((s) => s.sidebarCollapsed);
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <>
-      {/* Header bar: brand (left) + open file name (truly centered). Nothing else. */}
-      <header className="fp-toolbar relative z-40 flex shrink-0 items-center gap-2 px-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-md bg-accent text-on-accent">
-            <MapPin className="size-4" />
-          </span>
-          <span className="font-display text-sm font-bold tracking-tight text-t1">FieldPilot</span>
-        </div>
-
-        {fileName && (
-          <span
-            className="absolute left-1/2 hidden max-w-[50%] -translate-x-1/2 truncate text-xs text-t2 md:block"
-            title={fileName}
-          >
-            {fileName}
-          </span>
-        )}
-      </header>
-
-      {/* Action bar: file menu + plan tools + design switcher. */}
-      <div className="fp-actionbar z-40 flex shrink-0 items-center gap-1 px-2.5 text-xs">
-        <Dropdown
-          align="left"
-          trigger={
-            <Button variant="text" size="sm">
-              <span>File</span>
-              <ChevronDown />
-            </Button>
-          }
-        >
-          {(close) => (
-            <>
-              <DropdownItem
-                className="text-t2 hover:text-t1"
-                onClick={() => {
-                  pdfInputRef.current?.click();
-                  close();
-                }}
-              >
-                <FolderOpen />
-                Open PDF
-              </DropdownItem>
-              <DropdownItem
-                className="text-t2 hover:text-t1"
-                disabled={!hasDoc}
-                onClick={() => {
-                  jsonInputRef.current?.click();
-                  close();
-                }}
-              >
-                <FileUp />
-                Import tasks
-              </DropdownItem>
-              <DropdownItem
-                className="text-t2 hover:text-t1"
-                disabled={!hasDoc}
-                onClick={() => {
-                  const s = useProject.getState();
-                  void exportProject({
-                    fileName: s.fileName,
-                    fingerprint: s.fingerprint,
-                    nextSeq: s.nextSeq,
-                    tasks: s.tasks,
-                  });
-                  close();
-                }}
-              >
-                <Download />
-                Export tasks
-              </DropdownItem>
-            </>
+      {/* One compact workspace bar. Left padding leaves room for the sidebar
+          edge toggle that sits at this intersection. */}
+      <header className="fp-actionbar z-40 flex shrink-0 items-center text-xs" aria-label="FieldPilot tools">
+        <div
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-1 pr-2.5 transition-[padding-left] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+            sidebarCollapsed ? 'pl-9' : 'pl-[180px]',
           )}
-        </Dropdown>
-
-        <Button
-          variant="text"
-          size="sm"
-          data-active={addPinMode}
-          className={addPinMode ? 'text-accent hover:text-accent-hover' : undefined}
-          aria-pressed={addPinMode}
-          disabled={!hasDoc}
-          onClick={() => setAddPinMode(!addPinMode)}
-          title="Add pin (P)"
         >
-          <Pin />
-          <span className="hidden sm:inline">Add pin</span>
-        </Button>
-        <div className="ml-auto flex items-center gap-1">
+          <Dropdown
+            align="left"
+            trigger={
+              <Button variant="text" size="sm">
+                <span>File</span>
+                <ChevronDown />
+              </Button>
+            }
+          >
+            {(close) => (
+              <>
+                <DropdownItem
+                  className="text-t2 hover:text-t1"
+                  onClick={() => {
+                    pdfInputRef.current?.click();
+                    close();
+                  }}
+                >
+                  <FolderOpen />
+                  Open PDF
+                </DropdownItem>
+                <DropdownItem
+                  className="text-t2 hover:text-t1"
+                  disabled={!hasDoc}
+                  onClick={() => {
+                    jsonInputRef.current?.click();
+                    close();
+                  }}
+                >
+                  <FileUp />
+                  Import tasks
+                </DropdownItem>
+                <DropdownItem
+                  className="text-t2 hover:text-t1"
+                  disabled={!hasDoc}
+                  onClick={() => {
+                    const s = useProject.getState();
+                    void exportProject({
+                      fileName: s.fileName,
+                      fingerprint: s.fingerprint,
+                      nextSeq: s.nextSeq,
+                      tasks: s.tasks,
+                    });
+                    close();
+                  }}
+                >
+                  <Download />
+                  Export tasks
+                </DropdownItem>
+              </>
+            )}
+          </Dropdown>
+
           <Button
             variant="text"
             size="sm"
-            data-active={taskListOpen && selectedTaskId === null}
-            className={taskListOpen && selectedTaskId === null ? 'text-accent hover:text-accent-hover' : undefined}
+            data-active={addPinMode}
+            className={addPinMode ? 'text-accent hover:text-accent-hover' : undefined}
+            aria-pressed={addPinMode}
             disabled={!hasDoc}
-            onClick={showTaskList}
-            title="Show tasks"
+            onClick={() => setAddPinMode(!addPinMode)}
+            title="Add pin (P)"
           >
-            <ListTodo />
-            <span className="hidden sm:inline">Tasks</span>
-            {taskCount > 0 && <span className="font-mono text-[10px]">{taskCount}</span>}
+            <Pin />
+            <span className="hidden sm:inline">Add pin</span>
           </Button>
-          <DesignSwitcher />
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="text"
+              size="sm"
+              data-active={taskListOpen && selectedTaskId === null}
+              className={taskListOpen && selectedTaskId === null ? 'text-accent hover:text-accent-hover' : undefined}
+              disabled={!hasDoc}
+              onClick={showTaskList}
+              title="Show tasks"
+            >
+              <ListTodo />
+              <span className="hidden sm:inline">Tasks</span>
+              {taskCount > 0 && <span className="font-mono text-[10px]">{taskCount}</span>}
+            </Button>
+            <DesignSwitcher />
+          </div>
         </div>
-      </div>
+      </header>
 
       <input
         ref={pdfInputRef}
