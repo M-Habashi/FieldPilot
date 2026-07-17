@@ -1,0 +1,12 @@
+macOS cursor assets from ful1e5/apple_cursor v2.0.1
+https://github.com/ful1e5/apple_cursor
+
+Exact embedded 32x32 PNG frames extracted unchanged from macOS-White-Regular-Windows.zip:
+- Pan.cur (hotspot 16,10) -> macos-pan-32.png
+- Grabbing.cur (hotspot 17,10) -> macos-grabbing-32.png
+
+App cursor derivatives scaled to 24x24 (75%):
+- macos-pan-24.png (hotspot 12,8)
+- macos-grabbing-24.png (hotspot 13,8)
+
+License: GNU GPL v3.0; see LICENSE.apple_cursor.txt.

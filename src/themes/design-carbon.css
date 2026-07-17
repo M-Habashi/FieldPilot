@@ -132,12 +132,6 @@
   box-shadow: 2px 2px 0 rgb(16 18 22 / 0.34);
 }
 
-/* Signature: selected pin gets a HARD caution-yellow ring, not a glow */
-[data-design='carbon'] .fp-pin-selected .fp-pin-marker {
-  transform: rotate(-45deg) scale(1.16);
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 5px var(--fp-caution);
-}
-
 /* ============ keyframes (global — carbon- prefixed) ============ */
 
 /* Pin drop: a snap scale-in, no bounce/overshoot */

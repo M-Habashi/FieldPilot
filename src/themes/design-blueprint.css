@@ -95,14 +95,6 @@
   border-right: 1px solid var(--fp-border-strong);
 }
 
-/* Selected pin: ring in the accent, not the pin color — a survey mark */
-[data-design='blueprint'] .fp-pin-selected .fp-pin-marker {
-  box-shadow:
-    0 0 0 2px #fff,
-    0 0 0 4px var(--fp-accent),
-    var(--fp-shadow-e2);
-}
-
 /* ---- Keyframes (global; blueprint- prefixed) ------------------------- */
 
 /* Pin drop: short vertical drop with a single-frame overshoot, no bounce */

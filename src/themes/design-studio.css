@@ -118,14 +118,6 @@
   box-shadow: var(--fp-shadow-e2);
 }
 
-/* Signature: selected pin glows with a soft high-vis orange halo */
-[data-design='studio'] .fp-pin-selected .fp-pin-marker {
-  box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--fp-accent) 26%, transparent),
-    0 0 18px color-mix(in srgb, var(--fp-accent) 34%, transparent),
-    var(--fp-shadow-e3);
-}
-
 /* Empty state: warm vellum card */
 [data-design='studio'] .fp-empty {
   box-shadow: var(--fp-shadow-e1);

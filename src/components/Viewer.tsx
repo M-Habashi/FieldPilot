@@ -194,7 +194,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
       moved: middle,
       button: e.button,
     };
-    if (middle) setPanning(true);
+    if (middle || !addPinMode) setPanning(true);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -237,7 +237,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
       ref={containerRef}
       className={cn(
         'fp-canvas-stage relative h-full w-full overflow-hidden touch-none select-none',
-        panning ? 'cursor-grabbing' : addPinMode ? 'cursor-crosshair' : 'cursor-grab',
+        panning ? 'fp-cursor-panning' : addPinMode ? 'fp-cursor-pin' : 'fp-cursor-pan',
       )}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

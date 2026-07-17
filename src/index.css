@@ -142,7 +142,9 @@ body {
     width: 100%;
     height: 100%;
     background: var(--pin-color, var(--fp-accent));
-    border: 2px solid #fff;
+    /* Neutral outline is always present so pins retain contrast on pale plans,
+       regardless of their task color or selection state. */
+    border: 2px solid var(--fp-text-2);
     border-radius: var(--fp-pin-radius);
     transform: rotate(-45deg);
     box-shadow: var(--fp-shadow-e2);
@@ -224,6 +226,27 @@ body {
     backdrop-filter: blur(6px);
     animation: fp-fade-in var(--fp-dur-fast) var(--fp-ease) both;
   }
+}
+
+/* The button's hit-area is rectangular, but the visible pin is not. This must
+   remain outside the components layer so it outranks the global focus rule. */
+.fp-pin:focus-visible {
+  box-shadow: none;
+}
+
+/* App-owned cursors keep their dark core and white safety edge on both the
+   white plan sheet and the blue-grey canvas. */
+.fp-cursor-pan {
+  cursor: url('/cursors/macos-pan-24.png') 12 8, grab;
+}
+
+.fp-cursor-panning,
+.fp-cursor-pan:active {
+  cursor: url('/cursors/macos-grabbing-24.png') 13 8, grabbing;
+}
+
+.fp-cursor-pin {
+  cursor: url('/cursors/pin-dark.svg') 16 16, crosshair;
 }
 
 /* Drawer fields use a text-editor treatment: focus is communicated by text

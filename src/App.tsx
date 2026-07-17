@@ -83,8 +83,11 @@ export default function App() {
           s.setAddPinMode(false);
           return;
         }
-        // Priority 2: otherwise close the properties panel / deselect.
-        if (s.selectedTaskId) s.selectTask(null);
+        // Priority 2: otherwise close Properties or clear a first-click pin
+        // preview. Remove focus from the pin hit-area as well; leaving it there
+        // makes the global rectangular focus ring appear after Escape.
+        if (s.selectedTaskId || s.pinTooltipTaskId) s.selectTask(null);
+        if (target.closest('.fp-pin')) target.blur();
         return;
       }
       if (typing || !doc) return;
