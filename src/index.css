@@ -52,6 +52,9 @@ body {
   background: var(--fp-bg-app);
   color: var(--fp-text-1);
   overscroll-behavior: none;
+  /* The app owns its own internal scrolling; the document itself never scrolls,
+     so there is no browser-level horizontal or vertical overflow scrollbar. */
+  overflow: hidden;
 }
 
 :focus-visible {
@@ -94,8 +97,10 @@ body {
     background-image: var(--fp-canvas-texture);
   }
 
+  /* Shared right drawer (Tasks + Properties). Width is set by the component
+     (responsive: fixed on wide screens, capped-full-width overlay on narrow),
+     so it is intentionally not fixed here. */
   .fp-panel {
-    width: var(--fp-panel-width);
     background: var(--fp-bg-surface);
     border-left: 1px solid var(--fp-border);
     box-shadow: var(--fp-shadow-e3);
@@ -108,11 +113,6 @@ body {
 
   .fp-panel[data-state='closing'] {
     animation: var(--fp-anim-panel-out, fp-panel-out var(--fp-dur-med) var(--fp-ease) both);
-  }
-
-  .fp-tasklist {
-    background: var(--fp-bg-surface);
-    border-left: 1px solid var(--fp-border);
   }
 
   .fp-pin {

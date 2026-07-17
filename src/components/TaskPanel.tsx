@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ImagePlus, Send, Trash2, X } from 'lucide-react';
 import type { Priority, Status, Task } from '../types';
 import { CATEGORIES, PRIORITIES, STATUSES, STATUS_ORDER, categoryById } from '../types';
@@ -13,37 +13,12 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { ConfirmDialog } from './ui/dialog';
 import { usePhotoUrl } from './usePhotoUrl';
-import { usePresence } from './usePresence';
 
 /**
- * Presence wrapper: keeps the panel mounted through its exit animation so it
- * slides both IN (on select) and OUT (on deselect / delete). The last selected
- * task id is retained during the close so content stays visible while it leaves.
+ * Task detail content for the shared right drawer. Presence/positioning is owned
+ * by the drawer shell (RightDrawer); this renders only the properties content.
  */
-export function TaskPanel() {
-  const selectedTaskId = useProject((s) => s.selectedTaskId);
-  const { mounted, state, onAnimationEnd } = usePresence(selectedTaskId !== null);
-  const [renderId, setRenderId] = useState(selectedTaskId);
-
-  useEffect(() => {
-    if (selectedTaskId) setRenderId(selectedTaskId);
-  }, [selectedTaskId]);
-
-  if (!mounted || !renderId) return null;
-
-  return (
-    <aside
-      data-state={state}
-      onAnimationEnd={onAnimationEnd}
-      className="fp-panel absolute inset-y-0 right-0 z-30 flex max-w-full flex-col"
-      aria-label="Task details"
-    >
-      <TaskPanelBody key={renderId} taskId={renderId} />
-    </aside>
-  );
-}
-
-function TaskPanelBody({ taskId }: { taskId: string }) {
+export function TaskPanelBody({ taskId }: { taskId: string }) {
   const task = useProject((s) => s.tasks[taskId]) as Task | undefined;
   const updateTask = useProject((s) => s.updateTask);
   const deleteTask = useProject((s) => s.deleteTask);
@@ -77,32 +52,29 @@ function TaskPanelBody({ taskId }: { taskId: string }) {
         <span className="font-mono text-xs text-t3">#{task.seq}</span>
         <span className="text-xs text-t3">· sheet {task.page}</span>
         <div className="ml-auto flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="iconSm"
-            aria-label="Delete task"
-            className="hover:bg-danger-soft hover:text-danger"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 />
-          </Button>
           <Button variant="ghost" size="iconSm" aria-label="Close panel" onClick={() => selectTask(null)}>
             <X />
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="@container min-h-0 flex-1 overflow-y-auto">
         <div className="space-y-4 px-4 py-4">
-          <input
-            className="w-full bg-transparent font-display text-lg font-semibold text-t1 outline-none placeholder:text-t3"
-            placeholder="Untitled task"
-            value={task.title}
-            autoFocus={task.title === ''}
-            onChange={(e) => updateTask(task.id, { title: e.target.value })}
-          />
+          <div>
+            <label htmlFor="fp-title" className="mb-1 block text-[11px] font-medium text-t3">
+              Title
+            </label>
+            <input
+              id="fp-title"
+              className="w-full rounded-xs border-b border-line bg-transparent pb-1 font-display text-lg font-semibold text-t1 outline-none transition-colors duration-(--fp-dur-fast) placeholder:font-normal placeholder:text-t3 hover:border-line-strong focus:border-accent"
+              placeholder="Name this task…"
+              value={task.title}
+              autoFocus={task.title === ''}
+              onChange={(e) => updateTask(task.id, { title: e.target.value })}
+            />
+          </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 @[340px]:grid-cols-2">
             <div>
               <Label htmlFor="fp-status">Status</Label>
               <Select
@@ -154,7 +126,7 @@ function TaskPanelBody({ taskId }: { taskId: string }) {
                 onChange={(e) => updateTask(task.id, { dueDate: e.target.value || null })}
               />
             </div>
-            <div className="col-span-2">
+            <div className="@[340px]:col-span-2">
               <Label htmlFor="fp-assignee">Assignee</Label>
               <Input
                 id="fp-assignee"
@@ -163,7 +135,7 @@ function TaskPanelBody({ taskId }: { taskId: string }) {
                 onChange={(e) => updateTask(task.id, { assignee: e.target.value })}
               />
             </div>
-            <div className="col-span-2">
+            <div className="@[340px]:col-span-2">
               <Label htmlFor="fp-desc">Description</Label>
               <Textarea
                 id="fp-desc"
@@ -254,6 +226,19 @@ function TaskPanelBody({ taskId }: { taskId: string }) {
               )}
             </ul>
           </section>
+
+          <Separator />
+
+          {/* Danger zone — deliberately separated from the header Close control. */}
+          <section>
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-t3">
+              Danger zone
+            </h3>
+            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
+              <Trash2 />
+              Delete task
+            </Button>
+          </section>
         </div>
       </div>
 
@@ -301,10 +286,12 @@ function PhotoTile({
       ) : (
         <div className="h-full w-full animate-pulse bg-surface2" />
       )}
+      {/* Always visible (not hover-only) so removal is reachable by touch and
+          keyboard; hover/focus just deepens it. */}
       <button
         type="button"
         aria-label={`Remove photo ${name}`}
-        className="absolute right-1 top-1 hidden size-6 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white hover:bg-danger group-hover:flex"
+        className="absolute right-1 top-1 flex size-6 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white opacity-90 transition hover:bg-danger hover:opacity-100 focus-visible:opacity-100"
         onClick={onRemove}
       >
         <X className="size-3.5" />

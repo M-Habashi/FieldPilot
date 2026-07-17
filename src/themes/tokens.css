@@ -66,6 +66,9 @@
   --fp-pin-size: 30px;
   --fp-pin-radius: 50% 50% 50% 0;   /* teardrop by default (rotated -45deg box) */
   --fp-panel-width: 384px;
+  /* Shared right-drawer width — Tasks and Properties share ONE frame, so this
+     is intentionally uniform across designs (do NOT override per-theme). */
+  --fp-drawer-width: 384px;
   --fp-toolbar-height: 52px;
   --fp-canvas-texture: none;         /* optional background-image for the canvas backdrop */
   --fp-focus-ring: 0 0 0 2px var(--fp-bg-surface), 0 0 0 4px var(--fp-accent);
@@ -80,8 +83,9 @@
    .fp-actionbar      action bar below the header (buttons, design switcher)
    .fp-statusbar      full-width bottom bar (sheet nav + hints)
    .fp-sidebar        left collapsible icon rail
-   .fp-panel          right task-detail panel (slide-in / slide-out)
-   .fp-tasklist       right task list pane (collapsible)
+   .fp-panel          shared right drawer — Tasks + Task Properties (slide
+                      in / out). Width is uniform (--fp-drawer-width); do
+                      not set per-theme widths on it.
    .fp-task-row       row inside the task list
    .fp-pin            pin hit-area wrapper (positioned)
    .fp-pin-marker     visible pin shape; CSS var --pin-color set inline

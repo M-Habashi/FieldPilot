@@ -6,8 +6,7 @@ import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { Viewer } from './components/Viewer';
-import { TaskPanel } from './components/TaskPanel';
-import { TaskList } from './components/TaskList';
+import { RightDrawer } from './components/RightDrawer';
 import { EmptyState } from './components/EmptyState';
 import { Lightbox } from './components/Lightbox';
 
@@ -102,9 +101,9 @@ export default function App() {
   }, [doc]);
 
   return (
-    <div className="flex h-full flex-col bg-app font-sans text-t1">
+    <div className="flex h-full flex-col overflow-hidden bg-app font-sans text-t1">
       <Toolbar hasDoc={doc !== null} onOpenPdf={(f) => void openPdfFile(f)} onImportJson={(f) => void onImportJson(f)} />
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <Sidebar />
         <main className="relative min-w-0 flex-1 overflow-hidden">
           {doc ? (
@@ -121,10 +120,8 @@ export default function App() {
             </div>
           )}
         </main>
-        {doc && <TaskList />}
-        {/* Properties panel overlays the tasks pane (higher z-index), anchored to
-            the right of the whole middle row so it covers the pane, not just the canvas. */}
-        {doc && <TaskPanel />}
+        {/* Single shared drawer: Tasks list and Task Properties swap inside it. */}
+        {doc && <RightDrawer />}
       </div>
       <StatusBar hasDoc={doc !== null} />
       <Lightbox />

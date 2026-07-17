@@ -77,7 +77,9 @@ export const useProject = create<ProjectState>((set, get) => ({
   selectedTaskId: null,
   addPinMode: false,
   taskListOpen: false,
-  sidebarCollapsed: false,
+  // Default to the narrow icon rail; the single "Plans" item doesn't justify
+  // the wide sidebar. Users expand it explicitly via the chevron.
+  sidebarCollapsed: true,
   lightboxPhotoId: null,
   focusRequest: null,
   design: localStorage.getItem('fp:design') ?? 'blueprint',

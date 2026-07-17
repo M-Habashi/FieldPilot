@@ -1,8 +1,9 @@
 import { useRef } from 'react';
-import { Download, FileUp, FolderOpen, ListTodo, MapPin, Pin } from 'lucide-react';
+import { ChevronDown, Download, FileUp, FolderOpen, ListTodo, MapPin, Pin } from 'lucide-react';
 import { useProject } from '../store/project';
 import { exportProject } from '../lib/transfer';
 import { Button } from './ui/button';
+import { Dropdown, DropdownItem } from './ui/dropdown-menu';
 import { DesignSwitcher } from './DesignSwitcher';
 
 interface ToolbarProps {
@@ -43,40 +44,60 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
         )}
       </header>
 
-      {/* Action bar: visible file/tool actions + design switcher. */}
+      {/* Action bar: file menu + plan tools + design switcher. */}
       <div className="fp-actionbar z-40 flex shrink-0 items-center gap-1.5 px-3">
-        <Button variant="secondary" size="sm" onClick={() => pdfInputRef.current?.click()}>
-          <FolderOpen />
-          <span className="hidden sm:inline">Open PDF</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!hasDoc}
-          onClick={() => jsonInputRef.current?.click()}
-          title="Import tasks (JSON)"
+        <Dropdown
+          align="left"
+          trigger={
+            <Button variant="ghost" size="sm">
+              <span>File</span>
+              <ChevronDown />
+            </Button>
+          }
         >
-          <FileUp />
-          <span className="hidden sm:inline">Import</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!hasDoc}
-          title="Export tasks (JSON)"
-          onClick={() => {
-            const s = useProject.getState();
-            void exportProject({
-              fileName: s.fileName,
-              fingerprint: s.fingerprint,
-              nextSeq: s.nextSeq,
-              tasks: s.tasks,
-            });
-          }}
-        >
-          <Download />
-          <span className="hidden sm:inline">Export</span>
-        </Button>
+          {(close) => (
+            <>
+              <DropdownItem
+                className="text-t2 hover:text-t1"
+                onClick={() => {
+                  pdfInputRef.current?.click();
+                  close();
+                }}
+              >
+                <FolderOpen />
+                Open PDF
+              </DropdownItem>
+              <DropdownItem
+                className="text-t2 hover:text-t1"
+                disabled={!hasDoc}
+                onClick={() => {
+                  jsonInputRef.current?.click();
+                  close();
+                }}
+              >
+                <FileUp />
+                Import tasks
+              </DropdownItem>
+              <DropdownItem
+                className="text-t2 hover:text-t1"
+                disabled={!hasDoc}
+                onClick={() => {
+                  const s = useProject.getState();
+                  void exportProject({
+                    fileName: s.fileName,
+                    fingerprint: s.fingerprint,
+                    nextSeq: s.nextSeq,
+                    tasks: s.tasks,
+                  });
+                  close();
+                }}
+              >
+                <Download />
+                Export tasks
+              </DropdownItem>
+            </>
+          )}
+        </Dropdown>
 
         <div className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden />
 

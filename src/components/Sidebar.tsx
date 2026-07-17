@@ -1,52 +1,44 @@
-import { ChevronLeft, Layers, User } from 'lucide-react';
+import { ChevronRight, Layers } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useProject } from '../store/project';
 
-const EXPANDED_WIDTH = 200;
-const COLLAPSED_WIDTH = 56;
-
+/**
+ * Left rail. Two genuinely distinct states (no clipped wide sidebar):
+ *  - collapsed → a narrow 56px icon-only rail (labels hidden, icons centered)
+ *  - expanded  → a 200px rail with icon + label
+ * A compact chevron button sits at the rail's bottom edge to toggle.
+ */
 export function Sidebar() {
   const collapsed = useProject((s) => s.sidebarCollapsed);
   const toggleSidebar = useProject((s) => s.toggleSidebar);
 
   return (
     <aside
-      className="fp-sidebar z-20 shrink-0 overflow-hidden transition-[width] duration-(--fp-dur-med) ease-(--fp-ease)"
-      style={{ width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}
+      className={cn(
+        'fp-sidebar z-20 flex shrink-0 flex-col transition-[width] duration-(--fp-dur-med) ease-(--fp-ease)',
+        collapsed ? 'w-14' : 'w-50',
+      )}
       aria-label="Primary"
     >
-      {/* Fixed inner width so labels never reflow-squish while the rail collapses. */}
-      <div className="flex h-full flex-col" style={{ width: EXPANDED_WIDTH }}>
-        <nav className="flex-1 px-2 py-3">
-          <SidebarItem icon={<Layers />} label="Plans" active collapsed={collapsed} />
-        </nav>
+      <nav className="flex-1 space-y-1 p-2">
+        <SidebarItem icon={<Layers />} label="Plans" active collapsed={collapsed} />
+      </nav>
 
+      <div className={cn('p-2', collapsed ? 'flex justify-center' : 'flex justify-end')}>
         <button
           type="button"
           onClick={toggleSidebar}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand' : 'Collapse'}
-          className="mx-2 mb-2 flex h-9 items-center gap-3 rounded-md px-3 text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 cursor-pointer"
+          className="flex size-8 items-center justify-center rounded-md text-t3 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 cursor-pointer"
         >
-          <ChevronLeft
+          <ChevronRight
             className={cn(
               'size-4 shrink-0 transition-transform duration-(--fp-dur-med) ease-(--fp-ease)',
-              collapsed && 'rotate-180',
+              !collapsed && 'rotate-180',
             )}
           />
-          <span className="whitespace-nowrap text-xs font-medium">Collapse</span>
         </button>
-
-        {/* User badge — static display, pinned to the bottom. */}
-        <div className="flex items-center gap-3 border-t border-line px-4 py-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
-            <User className="size-4" />
-          </span>
-          <span className="min-w-0 whitespace-nowrap">
-            <span className="block truncate text-xs font-medium text-t1">Site user</span>
-            <span className="block truncate text-[11px] text-t3">On this device</span>
-          </span>
-        </div>
       </div>
     </aside>
   );
@@ -66,14 +58,15 @@ function SidebarItem({
   return (
     <span
       className={cn(
-        'flex h-10 items-center gap-3 rounded-md px-3.5 text-sm font-medium [&_svg]:size-5 [&_svg]:shrink-0',
+        'flex h-10 items-center rounded-md text-sm font-medium [&_svg]:size-5 [&_svg]:shrink-0',
+        collapsed ? 'justify-center px-0' : 'gap-3 px-3.5',
         active ? 'bg-accent-soft text-accent' : 'text-t2',
       )}
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
     >
       {icon}
-      <span className="whitespace-nowrap">{label}</span>
+      {!collapsed && <span className="truncate whitespace-nowrap">{label}</span>}
     </span>
   );
 }

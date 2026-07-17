@@ -254,19 +254,27 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
         Click the sheet to place a pin — Esc to finish
       </div>
 
-      <div className="absolute bottom-4 right-4 flex items-center gap-0.5 rounded-lg border border-line bg-surface p-1 shadow-e2">
-        <Button variant="ghost" size="iconSm" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.3)}>
+      {/* Compact, low-weight zoom control. It stops pointer events from reaching
+          the stage: without this the stage's onPointerDown captures the pointer,
+          which redirects the pointerup and swallows these buttons' clicks — the
+          reason zoom/fit previously did nothing. */}
+      <div
+        className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-md border border-line/70 bg-surface/85 p-0.5 shadow-e1 backdrop-blur-sm"
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+      >
+        <Button variant="ghost" size="iconXs" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.3)}>
           <Minus />
         </Button>
-        <span className="w-12 text-center font-mono text-xs text-t2 tabular-nums">
+        <span className="w-10 text-center font-mono text-[11px] text-t2 tabular-nums">
           {Math.round(view.scale * 100)}%
         </span>
-        <Button variant="ghost" size="iconSm" aria-label="Zoom in" onClick={() => zoomBy(1.3)}>
+        <Button variant="ghost" size="iconXs" aria-label="Zoom in" onClick={() => zoomBy(1.3)}>
           <Plus />
         </Button>
         <Button
           variant="ghost"
-          size="iconSm"
+          size="iconXs"
           aria-label="Fit to screen"
           onClick={() => pageBase && fit(pageBase)}
         >
