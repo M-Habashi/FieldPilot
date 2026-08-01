@@ -1,11 +1,26 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Check } from 'lucide-react';
 import type { Task } from '../types';
 import { pinColor } from '../types';
 import { clamp, cn } from '../lib/utils';
 import { useProject } from '../store/project';
 
-export function PinLayer() {
+const TOUCH_DRAG_ARM_DELAY = 300;
+const TOUCH_DRAG_THRESHOLD = 10;
+
+interface PinLayerProps {
+  isOverCancelZone: (clientX: number, clientY: number) => boolean;
+  onTouchDragStart: (taskId: string, originX: number, originY: number) => void;
+  onTouchDragMove: (taskId: string, clientX: number, clientY: number) => void;
+  onTouchDragEnd: (taskId: string) => void;
+}
+
+export function PinLayer({
+  isOverCancelZone,
+  onTouchDragStart,
+  onTouchDragMove,
+  onTouchDragEnd,
+}: PinLayerProps) {
   const tasks = useProject((s) => s.tasks);
   const currentPage = useProject((s) => s.currentPage);
   const selectedTaskId = useProject((s) => s.selectedTaskId);
@@ -17,33 +32,107 @@ export function PinLayer() {
   return (
     <div data-pin-layer className="pointer-events-none absolute inset-0">
       {pins.map((task) => (
-        <Pin key={task.id} task={task} selected={task.id === selectedTaskId} />
+        <Pin
+          key={task.id}
+          task={task}
+          selected={task.id === selectedTaskId}
+          isOverCancelZone={isOverCancelZone}
+          onTouchDragStart={onTouchDragStart}
+          onTouchDragMove={onTouchDragMove}
+          onTouchDragEnd={onTouchDragEnd}
+        />
       ))}
     </div>
   );
 }
 
-function Pin({ task, selected }: { task: Task; selected: boolean }) {
+interface PinProps extends PinLayerProps {
+  task: Task;
+  selected: boolean;
+}
+
+function Pin({
+  task,
+  selected,
+  isOverCancelZone,
+  onTouchDragStart,
+  onTouchDragMove,
+  onTouchDragEnd,
+}: PinProps) {
   const selectTask = useProject((s) => s.selectTask);
   const moveTask = useProject((s) => s.moveTask);
-  const dragRef = useRef<{ sx: number; sy: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    sx: number;
+    sy: number;
+    moved: boolean;
+    armed: boolean;
+    touch: boolean;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const touchArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const done = task.status === 'done' || task.status === 'verified';
+
+  useEffect(() => {
+    return () => {
+      if (touchArmTimerRef.current) clearTimeout(touchArmTimerRef.current);
+    };
+  }, []);
+
+  const clearTouchArmTimer = () => {
+    if (!touchArmTimerRef.current) return;
+    clearTimeout(touchArmTimerRef.current);
+    touchArmTimerRef.current = null;
+  };
 
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { sx: e.clientX, sy: e.clientY, moved: false };
+    clearTouchArmTimer();
+    const touch = e.pointerType === 'touch';
+    const drag = {
+      sx: e.clientX,
+      sy: e.clientY,
+      moved: false,
+      armed: !touch,
+      touch,
+      originX: task.x,
+      originY: task.y,
+    };
+    dragRef.current = drag;
+
+    if (touch) {
+      touchArmTimerRef.current = setTimeout(() => {
+        const current = dragRef.current;
+        if (!current || current !== drag || current.moved) return;
+        current.armed = true;
+        onTouchDragStart(task.id, current.originX, current.originY);
+        globalThis.navigator.vibrate?.(15);
+      }, TOUCH_DRAG_ARM_DELAY);
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
     const d = dragRef.current;
     if (!d) return;
-    if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 4) {
+
+    const threshold = d.touch ? TOUCH_DRAG_THRESHOLD : 4;
+    if (d.touch && !d.armed) {
+      if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > threshold) {
+        d.moved = true;
+        clearTouchArmTimer();
+      }
+      return;
+    }
+
+    if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > threshold) {
       d.moved = true;
     }
     if (!d.moved) return;
+
+    if (d.touch) onTouchDragMove(task.id, e.clientX, e.clientY);
     const layer = e.currentTarget.closest('[data-pin-layer]');
     if (!layer) return;
     const rect = layer.getBoundingClientRect();
@@ -58,9 +147,30 @@ function Pin({ task, selected }: { task: Task; selected: boolean }) {
     e.stopPropagation();
     const d = dragRef.current;
     dragRef.current = null;
-    if (!d || d.moved) return;
+    clearTouchArmTimer();
+    if (!d) return;
+
+    if (d.touch && d.armed) {
+      if (isOverCancelZone(e.clientX, e.clientY)) {
+        moveTask(task.id, d.originX, d.originY);
+      }
+      onTouchDragEnd(task.id);
+    }
+
+    if (d.moved) return;
 
     selectTask(task.id);
+  };
+
+  const onPointerCancel = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    clearTouchArmTimer();
+    if (!d) return;
+    if (d.touch && d.armed) {
+      if (d.moved) moveTask(task.id, d.originX, d.originY);
+      onTouchDragEnd(task.id);
+    }
   };
 
   return (
@@ -72,6 +182,7 @@ function Pin({ task, selected }: { task: Task; selected: boolean }) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <span
         className="fp-pin-marker"

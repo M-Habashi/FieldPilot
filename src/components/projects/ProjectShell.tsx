@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { Bell, BellDot, Check, ChevronDown, Inbox, Loader2, LogOut, MailOpen } from 'lucide-react';
+import { Bell, BellDot, Check, Inbox, Loader2, LogOut, MailOpen } from 'lucide-react';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
 import { Brand } from '../Brand';
@@ -19,7 +19,7 @@ interface InvitationNotification {
 }
 
 interface ProjectShellProps {
-  user: { name?: string; email?: string } | null | undefined;
+  user: { name?: string; email?: string; image?: string } | null | undefined;
   invitations: InvitationNotification[] | undefined;
   onShowProjects: () => void;
   onAcceptInvitation: (invitationId: Id<'projectInvitations'>) => Promise<void>;
@@ -38,6 +38,11 @@ export function ProjectShell({
   const [acceptingId, setAcceptingId] = useState<Id<'projectInvitations'> | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const displayName = user?.name?.trim() || user?.email?.split('@')[0] || 'FieldPilot user';
+
+  const handleSignOut = () => {
+    window.location.hash = '/';
+    void signOut();
+  };
 
   useEffect(() => {
     const notice = window.sessionStorage.getItem('fp:auth-notice');
@@ -208,9 +213,14 @@ export function ProjectShell({
           <Dropdown
             className="w-64 p-0"
             trigger={
-              <Button variant="ghost" size="md" className="max-w-56 gap-2">
+              <Button
+                variant="ghost"
+                size="md"
+                className="max-w-56 gap-2"
+                aria-label={`Account menu for ${displayName}`}
+              >
                 <span className="hidden max-w-40 truncate sm:inline">{displayName}</span>
-                <ChevronDown className="text-t3" />
+                <UserAvatar name={user?.name} email={user?.email} image={user?.image} />
               </Button>
             }
           >
@@ -219,7 +229,7 @@ export function ProjectShell({
               {user?.email && <p className="mt-1 truncate text-xs text-t2">{user.email}</p>}
             </div>
             <div className="p-1.5">
-              <DropdownItem className="rounded-md py-2" onClick={() => void signOut()}>
+              <DropdownItem className="rounded-md py-2" onClick={handleSignOut}>
                 <LogOut />
                 Sign out
               </DropdownItem>
@@ -230,6 +240,46 @@ export function ProjectShell({
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
   );
+}
+
+function UserAvatar({ name, email, image }: { name?: string; email?: string; image?: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initials = getUserInitials(name, email);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [image]);
+
+  return (
+    <span
+      className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line-strong bg-accent-soft font-mono text-[10px] font-semibold text-accent"
+      aria-hidden="true"
+    >
+      {image && !imageFailed ? (
+        <img
+          src={image}
+          alt=""
+          className="size-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        initials
+      )}
+    </span>
+  );
+}
+
+function getUserInitials(name?: string, email?: string) {
+  const source = name?.trim() || email?.split('@')[0]?.trim() || '';
+  const words = source
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+
+  if (words.length === 0) return 'FP';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words.at(-1)?.[0] ?? ''}`.toUpperCase();
 }
 
 function formatRelativeTime(timestamp: number) {

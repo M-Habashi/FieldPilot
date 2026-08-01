@@ -19,6 +19,11 @@ export function AppHeader({ onLogoClick }: { onLogoClick?: () => void } = {}) {
   const fileName = useProject((s) => s.fileName);
   const { signOut } = useAuthActions();
 
+  const handleSignOut = () => {
+    window.location.hash = '/';
+    void signOut();
+  };
+
   return (
     <header className="fp-toolbar relative z-60 flex shrink-0 items-center gap-2 px-2.5">
       {onLogoClick ? (
@@ -45,7 +50,7 @@ export function AppHeader({ onLogoClick }: { onLogoClick?: () => void } = {}) {
         size="sm"
         className="ml-auto"
         aria-label="Sign out"
-        onClick={() => void signOut()}
+        onClick={handleSignOut}
       >
         <LogOut />
         <span className="hidden sm:inline">Sign out</span>
@@ -60,8 +65,10 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson, allowLocalFiles = tru
   const taskListOpen = useProject((s) => s.taskListOpen);
   const selectedTaskId = useProject((s) => s.selectedTaskId);
   const showTaskList = useProject((s) => s.showTaskList);
+  const closeTaskList = useProject((s) => s.closeTaskList);
   const taskCount = useProject((s) => Object.keys(s.tasks).length);
   const sidebarCollapsed = useProject((s) => s.sidebarCollapsed);
+  const taskListActive = taskListOpen && selectedTaskId === null;
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
@@ -150,14 +157,11 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson, allowLocalFiles = tru
             <Button
               variant="text"
               size="sm"
-              data-active={taskListOpen && selectedTaskId === null}
-              className={
-                taskListOpen && selectedTaskId === null
-                  ? 'text-accent hover:text-accent-hover'
-                  : undefined
-              }
+              data-active={taskListActive}
+              className={taskListActive ? 'text-accent hover:text-accent-hover' : undefined}
+              aria-pressed={taskListActive}
               disabled={!hasDoc}
-              onClick={showTaskList}
+              onClick={() => (taskListActive ? closeTaskList() : showTaskList())}
             >
               <ListTodo />
               <span className="hidden sm:inline">Tasks</span>

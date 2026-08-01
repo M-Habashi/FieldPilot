@@ -58,9 +58,9 @@ export function LandingPage() {
                 className="mkt-rise mt-5 font-display text-5xl font-bold leading-[1.02] tracking-[-0.03em] sm:text-6xl"
                 style={{ '--rise-delay': '140ms' } as CSSProperties}
               >
-                Plans move.
+                Plans move
                 <br />
-                Work follows.
+                Work follows
               </h1>
               <p
                 className="mkt-rise mt-5 max-w-md text-base leading-relaxed text-t2 sm:text-lg"

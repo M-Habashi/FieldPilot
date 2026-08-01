@@ -10,7 +10,7 @@ import {
   categoryById,
   pinColor,
 } from '../types';
-import { relativeTime } from '../lib/utils';
+import { isMobileViewport, relativeTime } from '../lib/utils';
 import { useProject } from '../store/project';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -31,6 +31,7 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
   const deleteTask = useProject((s) => s.deleteTask);
   const selectTask = useProject((s) => s.selectTask);
   const focusTask = useProject((s) => s.focusTask);
+  const closeTaskList = useProject((s) => s.closeTaskList);
   const addNote = useProject((s) => s.addNote);
   const addPhotos = useProject((s) => s.addPhotos);
   const removePhoto = useProject((s) => s.removePhoto);
@@ -56,6 +57,14 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
   const submitNote = () => {
     addNote(task.id, noteDraft);
     setNoteDraft('');
+  };
+
+  const locateTask = () => {
+    focusTask(task.id);
+    if (isMobileViewport()) {
+      selectTask(null);
+      closeTaskList();
+    }
   };
 
   return (
@@ -97,7 +106,7 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                 variant="text"
                 size="iconXs"
                 aria-label={`Locate ${task.title || `task ${task.seq}`} on plan`}
-                onClick={() => focusTask(task.id)}
+                onClick={locateTask}
               >
                 <LocateFixed />
               </Button>

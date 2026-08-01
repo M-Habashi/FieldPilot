@@ -18,14 +18,14 @@ const COPY: Record<
   { heading: string; sub: string; submit: string; switchLabel: string; switchHref: string }
 > = {
   login: {
-    heading: 'Good to see you.',
+    heading: 'Good to see you',
     sub: 'Your projects are right where you left them.',
     submit: 'Log in',
     switchLabel: 'Sign up',
     switchHref: '#/signup',
   },
   signup: {
-    heading: 'Sign up.',
+    heading: 'Sign up',
     sub: 'Drop your first plan and put the crew on the same sheet.',
     submit: 'Create account',
     switchLabel: 'Log in',
@@ -362,11 +362,11 @@ export function AuthPage({
 
   const heading =
     step === 'verify'
-      ? 'Check your email.'
+      ? 'Check your email'
       : step === 'reset-request'
-        ? 'Reset your password.'
+        ? 'Reset your password'
         : step === 'reset-code'
-          ? 'Choose a new password.'
+          ? 'Choose a new password'
           : copy.heading;
 
   const sub =

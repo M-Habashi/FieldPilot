@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Maximize, Minus, Plus } from 'lucide-react';
+import { CircleX, Maximize, Minus, Plus } from 'lucide-react';
 import type { PDFDocumentProxy, PDFPageProxy } from '../lib/pdf';
 import { cappedRasterScale } from '../lib/canvas';
 import { clamp, cn } from '../lib/utils';
@@ -15,6 +15,13 @@ interface View {
 interface PageBase {
   w: number;
   h: number;
+}
+
+interface TouchPinDrag {
+  taskId: string;
+  originX: number;
+  originY: number;
+  overCancelZone: boolean;
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -42,6 +49,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const currentPage = useProject((s) => s.currentPage);
   const addPinMode = useProject((s) => s.addPinMode);
   const addTask = useProject((s) => s.addTask);
+  const moveTask = useProject((s) => s.moveTask);
   const selectTask = useProject((s) => s.selectTask);
   const focusRequest = useProject((s) => s.focusRequest);
 
@@ -63,7 +71,45 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const [view, setView] = useState<View>({ scale: 1, offset: { x: 0, y: 0 } });
   const [panning, setPanning] = useState(false);
   const [smoothView, setSmoothView] = useState(false);
+  const [touchPinDrag, setTouchPinDrag] = useState<TouchPinDrag | null>(null);
+  const cancelPinRef = useRef<HTMLButtonElement>(null);
   const renderScale = useDebounced(view.scale, 120);
+
+  const isOverCancelZone = useCallback((clientX: number, clientY: number) => {
+    const rect = cancelPinRef.current?.getBoundingClientRect();
+    return (
+      !!rect &&
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    );
+  }, []);
+
+  const onTouchDragStart = useCallback((taskId: string, originX: number, originY: number) => {
+    setTouchPinDrag({ taskId, originX, originY, overCancelZone: false });
+  }, []);
+
+  const onTouchDragMove = useCallback(
+    (taskId: string, clientX: number, clientY: number) => {
+      setTouchPinDrag((drag) => {
+        if (!drag || drag.taskId !== taskId) return drag;
+        const overCancelZone = isOverCancelZone(clientX, clientY);
+        return drag.overCancelZone === overCancelZone ? drag : { ...drag, overCancelZone };
+      });
+    },
+    [isOverCancelZone],
+  );
+
+  const onTouchDragEnd = useCallback((taskId: string) => {
+    setTouchPinDrag((drag) => (drag?.taskId === taskId ? null : drag));
+  }, []);
+
+  const cancelTouchDrag = useCallback(() => {
+    if (!touchPinDrag) return;
+    moveTask(touchPinDrag.taskId, touchPinDrag.originX, touchPinDrag.originY);
+    setTouchPinDrag(null);
+  }, [moveTask, touchPinDrag]);
 
   const stopSmoothView = useCallback(() => {
     if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
@@ -277,8 +323,32 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
           }}
         >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full bg-white shadow-e2" />
-          <PinLayer />
+          <PinLayer
+            isOverCancelZone={isOverCancelZone}
+            onTouchDragStart={onTouchDragStart}
+            onTouchDragMove={onTouchDragMove}
+            onTouchDragEnd={onTouchDragEnd}
+          />
         </div>
+      )}
+
+      {touchPinDrag && (
+        <button
+          ref={cancelPinRef}
+          type="button"
+          aria-label="Cancel pin movement"
+          aria-pressed={touchPinDrag.overCancelZone}
+          className={cn(
+            'pointer-events-auto absolute top-3 left-1/2 z-50 flex size-11 -translate-x-1/2 items-center justify-center rounded-full border shadow-e3 transition-[background-color,border-color,color,transform] duration-(--fp-dur-fast)',
+            touchPinDrag.overCancelZone
+              ? 'scale-105 border-danger bg-danger text-white'
+              : 'border-line-strong bg-surface text-t2',
+          )}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={cancelTouchDrag}
+        >
+          <CircleX className="size-5" />
+        </button>
       )}
 
       <div

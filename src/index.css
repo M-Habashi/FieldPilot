@@ -115,7 +115,11 @@ body {
   }
 
   .fp-drawer-view {
-    width: min(100vw, var(--fp-drawer-width));
+    /* Match the drawer's available width. A viewport-based width could be
+       wider than the content column left beside the mobile rail, which made
+       the panel clip its fields at narrow widths. */
+    width: 100%;
+    min-width: 0;
     flex: none;
     animation: fp-drawer-view-in var(--fp-motion-duration) var(--fp-motion-ease) both;
   }

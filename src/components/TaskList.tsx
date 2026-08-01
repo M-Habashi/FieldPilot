@@ -1,5 +1,6 @@
 import { Check, LocateFixed, MapPin, Plus, X } from 'lucide-react';
 import { PRIORITIES, STATUSES, categoryById, pinColor } from '../types';
+import { isMobileViewport } from '../lib/utils';
 import { useProject } from '../store/project';
 import { Button } from './ui/button';
 
@@ -14,6 +15,14 @@ export function TaskListBody() {
   const focusTask = useProject((s) => s.focusTask);
   const closeTaskList = useProject((s) => s.closeTaskList);
   const setAddPinMode = useProject((s) => s.setAddPinMode);
+
+  const locateTask = (taskId: string) => {
+    focusTask(taskId);
+    if (isMobileViewport()) {
+      selectTask(null);
+      closeTaskList();
+    }
+  };
 
   const all = Object.values(tasks).sort((a, b) => a.seq - b.seq);
 
@@ -92,7 +101,7 @@ export function TaskListBody() {
                       type="button"
                       aria-label={`Locate ${task.title || `task ${task.seq}`} on plan`}
                       className="ml-1 flex size-6 shrink-0 cursor-pointer items-center justify-center text-t3 transition-colors duration-(--fp-dur-fast) hover:text-accent"
-                      onClick={() => focusTask(task.id)}
+                      onClick={() => locateTask(task.id)}
                     >
                       <LocateFixed className="size-3.5" />
                     </button>
