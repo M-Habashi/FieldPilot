@@ -1,11 +1,7 @@
 import type { CSSProperties } from 'react';
 import { Navbar } from './Navbar';
 import { HeroMockup } from './HeroMockup';
-
-const CTA_PRIMARY =
-  'inline-flex h-11 items-center justify-center rounded-md bg-accent px-6 text-sm font-semibold text-on-accent shadow-e1 transition-[background,transform] hover:bg-accent-hover active:scale-[0.97]';
-const CTA_SECONDARY =
-  'inline-flex h-11 items-center justify-center rounded-md border border-line-strong bg-surface px-6 text-sm font-semibold text-t1 shadow-e1 transition-[background,transform] hover:bg-surface2 active:scale-[0.97]';
+import { Button } from '../ui/button';
 
 function Polaroid({
   src,
@@ -52,12 +48,12 @@ export function LandingPage() {
           <div className="grid min-h-0 flex-1 items-center gap-12 pt-10 lg:grid-cols-[1fr_1.05fr] lg:gap-8 lg:pt-4">
             {/* Copy */}
             <div>
-              <span
-                className="mkt-rise inline-block rounded-xs border border-accent/40 bg-accent-soft px-2.5 py-1 font-mono text-[11px] font-semibold tracking-[0.18em] text-accent"
+              <img
+                src="/images/landing/built-for-engineers-stamp.png"
+                alt="Built for engineers"
+                className="mkt-rise block h-11 w-56 object-cover object-center"
                 style={{ '--rise-delay': '60ms' } as CSSProperties}
-              >
-                BUILT FOR THE CREW
-              </span>
+              />
               <h1
                 className="mkt-rise mt-5 font-display text-5xl font-bold leading-[1.02] tracking-[-0.03em] sm:text-6xl"
                 style={{ '--rise-delay': '140ms' } as CSSProperties}
@@ -77,16 +73,33 @@ export function LandingPage() {
                 className="mkt-rise mt-8 flex flex-wrap gap-3"
                 style={{ '--rise-delay': '300ms' } as CSSProperties}
               >
-                <a href="#/signup" className={CTA_PRIMARY}>
-                  Start a project
-                </a>
-                <a
-                  href="#/login"
-                  className={CTA_SECONDARY}
-                  title="Sign in to explore the demo workspace"
+                <Button
+                  variant="text"
+                  size="sm"
+                  className="group h-auto gap-2 p-0 font-sans text-base font-semibold text-accent hover:text-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+                  onClick={() => {
+                    window.location.hash = '/login';
+                  }}
                 >
-                  Explore the demo
-                </a>
+                  <span>Bring plans to life</span>
+                  <svg
+                    aria-hidden="true"
+                    width="100%"
+                    height="100%"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="mkt-arrow !h-6 !w-6 shrink-0 text-accent transition-transform duration-200 group-hover:translate-x-1"
+                  >
+                    <path
+                      d="M4 12H20M20 12L14 6M20 12L14 18"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </Button>
               </div>
             </div>
 

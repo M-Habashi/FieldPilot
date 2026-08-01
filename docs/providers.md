@@ -4,18 +4,16 @@ This file is the authoritative list of external service providers used or being 
 FieldPilot. Any provider addition, replacement, or removal must update this document in the same
 change.
 
-Last reviewed: 2026-07-31
+Last reviewed: 2026-08-01
 
 ## Current decision
 
-Vercel, Convex, and Google OAuth are sufficient for the architecture scaffold and private alpha.
-FieldPilot does not need a separate API server, PostgreSQL database, cache, WebSocket provider, or
-transactional email provider at this stage.
+Vercel, Convex, Google OAuth, and Resend support the architecture scaffold and private alpha.
+FieldPilot does not need a separate API server, PostgreSQL database, cache, or WebSocket provider.
 
 Before production file migration, the team must decide whether project drawings require expiring,
 revocable download URLs. If they do, Cloudflare R2 becomes a required provider. Before invitations,
-password recovery, or email notifications ship, a transactional email provider also becomes
-required.
+additional notification types ship, their delivery and retention requirements must be reviewed.
 
 ## Selected providers
 
@@ -24,7 +22,8 @@ required.
 | [GitHub](https://github.com/)                             | Selected; already connected      | Source control and deployment trigger                                                                | Source code, issues, and pull-request metadata                                    |
 | [Vercel](https://vercel.com/)                             | Selected                         | Build and host the React/Vite frontend, including preview deployments                                | Compiled frontend assets, build logs, and deployment environment variables        |
 | [Convex](https://www.convex.dev/)                         | Selected; development configured | Database, server functions, realtime subscriptions, scheduled work, auth sessions, and authorization | Application records, user identities, function logs, and—if chosen—uploaded files |
-| [Google Identity](https://developers.google.com/identity) | Selected; development configured | End-user identity provider for Google-only private-alpha sign-in                                     | OAuth consent, account identity, and sign-in events                               |
+| [Google Identity](https://developers.google.com/identity) | Selected; development configured | End-user identity provider for Google OAuth sign-in                                                  | OAuth consent, account identity, and sign-in events                               |
+| [Resend](https://resend.com/)                             | Selected; configuration required | Deliver email-verification and password-reset codes                                                  | Recipient email, message content, and delivery events                             |
 
 ### Vercel
 
@@ -54,9 +53,13 @@ required.
   assumption. See [Convex authentication](https://docs.convex.dev/auth/overview).
 - Provider secrets used by Convex actions belong in Convex deployment environment variables, not
   Vercel's client-visible variables.
-- Convex Auth is configured with Google as the only private-alpha sign-in provider. Authorship and
-  ownership identifiers are derived from its authenticated server context, never accepted from the
-  client.
+- Convex Auth is configured with Google and a password provider. Email/password accounts must enter
+  a six-digit email code before a session or demo project is created.
+- A password signup is rejected when the normalized email already belongs to Google. If an
+  unfinished email signup later uses a verified Google identity, the existing user record is reused
+  instead of creating a duplicate.
+- Authorship and ownership identifiers are derived from authenticated server context, never
+  accepted from the client.
 
 ### Google Identity
 
@@ -72,6 +75,16 @@ required.
 - Create a separate OAuth client for production with the final Vercel origin. Do not reuse the
   development secret across environments.
 
+### Resend
+
+- Resend is called only from Convex actions; its API key is never sent to the browser.
+- Set `AUTH_RESEND_KEY` and `AUTH_EMAIL_FROM` separately on every Convex deployment. The sender in
+  `AUTH_EMAIL_FROM` must use a domain verified in Resend.
+- Verification and password-reset codes are six digits and expire after 15 minutes. Convex Auth
+  applies rate limits to failed code and password attempts.
+- Until both environment variables are configured, Google authentication continues to work but
+  email verification and password-reset delivery return a clear configuration error.
+
 ## Conditional providers
 
 These providers are not needed for the scaffold. The listed product capability is the trigger for
@@ -80,7 +93,6 @@ adopting one.
 | Provider                                                                    | Status                                             | Adoption trigger                                                                                              | Responsibility                                                                                 |
 | --------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | [Cloudflare R2](https://www.cloudflare.com/developer-platform/products/r2/) | Decision required before production file migration | Private drawings or photos require expiring and revocable URLs, or file egress economics favor object storage | Store PDF plans, photos, and other binary attachments; Convex retains metadata and object keys |
-| [Resend](https://resend.com/)                                               | Deferred                                           | Project invitations, email verification/recovery, magic links, or email notifications                         | Transactional outbound email                                                                   |
 
 ### File-storage decision gate
 
@@ -99,13 +111,6 @@ Therefore:
   Convex functions.
 - Store provider-neutral attachment metadata in Convex so changing binary storage does not rewrite
   task and note records.
-
-### Email decision gate
-
-- OAuth-only sign-in does not require a transactional email provider.
-- Magic links, one-time codes, verified email/password recovery, invitations, and notifications do.
-- If Resend is adopted, its API key belongs in Convex environment variables. Convex actions send the
-  messages; the browser never calls Resend directly.
 
 ## Evaluated alternatives—not selected
 

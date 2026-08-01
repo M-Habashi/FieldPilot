@@ -5,8 +5,16 @@ import { usePhotoUrl } from '../hooks/usePhotoUrl';
 
 export function Lightbox() {
   const photoId = useProject((s) => s.lightboxPhotoId);
+  const remoteUrl = useProject((s) => {
+    if (!s.lightboxPhotoId) return undefined;
+    for (const task of Object.values(s.tasks)) {
+      const photo = task.photos.find((candidate) => candidate.id === s.lightboxPhotoId);
+      if (photo) return photo.url;
+    }
+    return undefined;
+  });
   const setLightbox = useProject((s) => s.setLightbox);
-  const url = usePhotoUrl(photoId);
+  const url = usePhotoUrl(photoId, remoteUrl);
 
   useEffect(() => {
     if (!photoId) return;

@@ -3,10 +3,9 @@
 Open-source construction field management — an alternative to Fieldwire. Load a PDF plan set,
 drop pins on the sheets, and track tasks with properties, notes, and photos attached to each pin.
 
-The current build has a Google-only private-alpha sign-in backed by Convex. The plan viewer still
-uses the Phase 1 local data path: pins and photos persist in browser storage, keyed to the PDF's
-fingerprint. Moving that project data into the deployed Convex schema is the next Phase 2 step. See
-[PLAN.md](PLAN.md) for the full roadmap.
+The current build supports Google OAuth and verified email/password sign-in through Convex Auth.
+Projects, uploaded plans, pins, task fields, and notes are stored in Convex and shared with project
+members according to their role. See [PLAN.md](PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -35,7 +34,7 @@ PDF plan set.
 ## Tech
 
 React 19 + TypeScript + Vite, Tailwind CSS v4, PDF.js, Zustand, IndexedDB (`idb-keyval`), Convex,
-and Convex Auth with Google OAuth.
+Convex Auth, Google OAuth, and Resend.
 
 The selected hosted architecture and every current or conditional external provider are documented
 in [`docs/providers.md`](docs/providers.md). The ownership model and implemented Convex schema are in

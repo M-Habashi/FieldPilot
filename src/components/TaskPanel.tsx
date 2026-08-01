@@ -260,6 +260,7 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                   key={photo.id}
                   id={photo.id}
                   name={photo.name}
+                  remoteUrl={photo.url}
                   onOpen={() => setLightbox(photo.id)}
                   onRemove={() => void removePhoto(task.id, photo.id)}
                 />
@@ -370,15 +371,17 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
 function PhotoTile({
   id,
   name,
+  remoteUrl,
   onOpen,
   onRemove,
 }: {
   id: string;
   name: string;
+  remoteUrl?: string;
   onOpen: () => void;
   onRemove: () => void;
 }) {
-  const url = usePhotoUrl(id);
+  const url = usePhotoUrl(id, remoteUrl);
   return (
     <div className="group relative aspect-square overflow-hidden rounded-md border border-line bg-surface2">
       {url ? (

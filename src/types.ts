@@ -8,11 +8,12 @@ export interface Note {
   createdAt: number;
 }
 
-/** Photo metadata; the image blob lives in IndexedDB under `fp:img:<id>`. */
+/** Photo metadata. Remote project photos include their short-lived Convex storage URL. */
 export interface Photo {
   id: string;
   name: string;
   createdAt: number;
+  url?: string;
 }
 
 export interface Task {

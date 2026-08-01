@@ -9,6 +9,8 @@ export const projectRole = v.union(
   v.literal('viewer'),
 );
 
+export const invitationStatus = v.union(v.literal('pending'), v.literal('accepted'));
+
 export const taskStatus = v.union(
   v.literal('open'),
   v.literal('in-progress'),
@@ -24,6 +26,7 @@ export default defineSchema({
   projects: defineTable({
     name: v.string(),
     code: v.optional(v.string()),
+    isDemo: v.optional(v.boolean()),
     createdBy: v.id('users'),
     nextTaskSeq: v.number(),
     createdAt: v.number(),
@@ -42,12 +45,29 @@ export default defineSchema({
     .index('by_user', ['userId'])
     .index('by_project_user', ['projectId', 'userId']),
 
+  projectInvitations: defineTable({
+    projectId: v.id('projects'),
+    email: v.string(),
+    invitedBy: v.id('users'),
+    status: invitationStatus,
+    createdAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+    acceptedBy: v.optional(v.id('users')),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_email_status', ['email', 'status'])
+    .index('by_project_email_status', ['projectId', 'email', 'status']),
+
   sheets: defineTable({
     projectId: v.id('projects'),
     name: v.string(),
     number: v.string(),
     discipline: v.optional(v.string()),
     sourceFileRef: v.string(),
+    sourceStorageId: v.optional(v.id('_storage')),
+    sourceFileName: v.optional(v.string()),
+    sourceFileSize: v.optional(v.number()),
+    sourceContentType: v.optional(v.string()),
     pageIndex: v.number(),
     width: v.number(),
     height: v.number(),

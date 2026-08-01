@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { Brand } from '../Brand';
 
 /**
  * Landing page top navigation. Section links are placeholders until the
@@ -10,10 +11,10 @@ export function Navbar() {
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6 lg:px-10">
         <a
           href="#/"
-          className="font-display text-lg font-bold tracking-tight text-t1 mkt-rise"
+          className="inline-flex mkt-rise"
           style={{ '--rise-delay': '0ms' } as CSSProperties}
         >
-          FieldPilot
+          <Brand size="lg" className="font-extrabold" />
         </a>
 
         {/* Placeholder sections — no target pages yet. */}
@@ -33,7 +34,7 @@ export function Navbar() {
 
         <a
           href="#/login"
-          className="inline-flex h-9 items-center rounded-md border border-line-strong px-4 text-sm font-semibold text-t1 shadow-e1 transition-[background,transform] hover:bg-surface2 active:scale-[0.97] mkt-rise"
+          className="inline-flex h-9 items-center rounded-md border border-accent bg-accent px-4 text-sm font-semibold text-on-accent shadow-e1 transition-[background,transform] hover:bg-accent-hover active:scale-[0.97] mkt-rise"
           style={{ '--rise-delay': '240ms' } as CSSProperties}
         >
           Log in

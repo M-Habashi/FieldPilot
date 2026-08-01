@@ -32,7 +32,7 @@ export function Dropdown({ trigger, align = 'right', children, className }: Drop
   const close = React.useCallback(() => setOpen(false), []);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative z-50">
       <div onClick={() => setOpen((v) => !v)}>{trigger}</div>
       {open && (
         <div

@@ -10,8 +10,12 @@
 
 import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
+import type * as authEmail from "../authEmail.js";
 import type * as http from "../http.js";
+import type * as invitations from "../invitations.js";
+import type * as lib_authUser from "../lib/authUser.js";
 import type * as lib_authz from "../lib/authz.js";
+import type * as lib_demoProject from "../lib/demoProject.js";
 import type * as notes from "../notes.js";
 import type * as projects from "../projects.js";
 import type * as sheets from "../sheets.js";
@@ -27,8 +31,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   attachments: typeof attachments;
   auth: typeof auth;
+  authEmail: typeof authEmail;
   http: typeof http;
+  invitations: typeof invitations;
+  "lib/authUser": typeof lib_authUser;
   "lib/authz": typeof lib_authz;
+  "lib/demoProject": typeof lib_demoProject;
   notes: typeof notes;
   projects: typeof projects;
   sheets: typeof sheets;

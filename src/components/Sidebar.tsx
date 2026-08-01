@@ -9,7 +9,7 @@ import { useProject } from '../store/project';
  * A compact chevron sits just outside the rail's top edge and follows that
  * edge as the sidebar expands.
  */
-export function Sidebar() {
+export function Sidebar({ onShowPlans }: { onShowPlans?: () => void } = {}) {
   const collapsed = useProject((s) => s.sidebarCollapsed);
   const toggleSidebar = useProject((s) => s.toggleSidebar);
 
@@ -23,7 +23,13 @@ export function Sidebar() {
       aria-label="Primary"
     >
       <nav className="flex-1 space-y-1 p-2">
-        <SidebarItem icon={<Layers />} label="Plans" active collapsed={collapsed} />
+        <SidebarItem
+          icon={<Layers />}
+          label="Plans"
+          active
+          collapsed={collapsed}
+          onClick={onShowPlans}
+        />
       </nav>
 
       <button
@@ -49,24 +55,44 @@ function SidebarItem({
   label,
   active,
   collapsed,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
   collapsed: boolean;
+  onClick?: () => void;
 }) {
-  return (
+  const className = cn(
+    'flex h-10 w-full items-center rounded-md text-sm font-medium [&_svg]:size-5 [&_svg]:shrink-0',
+    collapsed ? 'justify-center px-0' : 'gap-3 px-3.5',
+    active ? 'bg-accent-soft text-accent' : 'text-t2',
+    onClick && 'cursor-pointer',
+  );
+  const content = (
+    <>
+      {icon}
+      {!collapsed && <span className="truncate whitespace-nowrap">{label}</span>}
+    </>
+  );
+
+  return onClick ? (
+    <button
+      type="button"
+      className={className}
+      title={collapsed ? label : undefined}
+      aria-current={active ? 'page' : undefined}
+      onClick={onClick}
+    >
+      {content}
+    </button>
+  ) : (
     <span
-      className={cn(
-        'flex h-10 items-center rounded-md text-sm font-medium [&_svg]:size-5 [&_svg]:shrink-0',
-        collapsed ? 'justify-center px-0' : 'gap-3 px-3.5',
-        active ? 'bg-accent-soft text-accent' : 'text-t2',
-      )}
+      className={className}
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
     >
-      {icon}
-      {!collapsed && <span className="truncate whitespace-nowrap">{label}</span>}
+      {content}
     </span>
   );
 }

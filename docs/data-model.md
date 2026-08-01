@@ -1,8 +1,9 @@
 # Ownership, authorization, and Convex schema
 
-Status: the schema, Google authentication, authorization helpers, and initial queries/mutations are
-deployed to the Convex development environment. The viewer still uses local persistence until the
-Phase 2 client-data migration is implemented.
+Status: the schema, Google and verified email/password authentication, authorization helpers,
+project pages, and plan workspace are deployed to the Convex development environment. The selected
+project PDF and all of its pins, task fields, notes, and photo metadata now load from and autosave to
+Convex; Zustand holds only the active workspace's responsive UI state.
 
 ## Terminology
 
@@ -17,7 +18,7 @@ Phase 2 client-data migration is implemented.
 Access is inherited through the project relationship:
 
 ```text
-User ──< ProjectMember >── Project
+User ──< ProjectMember >── Project ──< ProjectInvitation
                               └── Sheet
                                    └── Task
                                         ├── Note
@@ -56,6 +57,7 @@ fields.
   name?: string
   email?: string
   image?: string
+  emailVerificationTime?: number
 }
 ```
 
@@ -67,6 +69,7 @@ Do not use an email address as a foreign key. All references use `Id<'users'>`.
 {
   name: string
   code?: string
+  isDemo?: boolean
   createdBy: Id<'users'>
   nextTaskSeq: number
   createdAt: number
@@ -80,6 +83,10 @@ Indexes: `by_createdBy`, optionally a search index on `name` when the dashboard 
 `nextTaskSeq` is incremented in the same Convex mutation that inserts a task. Concurrent mutations
 are retried transactionally, so sequence allocation remains server-owned and unique within a
 project. Deleted sequence numbers are never reused.
+
+`isDemo` marks the single idempotent onboarding project created for an account. The bundled demo
+plan is linked to that project and repeated onboarding or administrative backfills do not create
+duplicates.
 
 ### `projectMembers`
 
@@ -97,8 +104,29 @@ Indexes: `by_project`, `by_user`, and compound `by_project_user`. Mutations enfo
 per user/project and at least one owner. Ownership transfer changes the old and new owner roles in a
 single mutation.
 
-An invitation table can be added with the invitation workflow; it should store a normalized email,
-project, intended role, inviter, expiry, and a hashed one-time token—not a plaintext token.
+Accepted-member counts come from `projectMembers`; pending invitations never inflate that count.
+Non-owner members may remove their own membership with the leave mutation. Owners cannot leave
+their project.
+
+### `projectInvitations`
+
+```ts
+{
+  projectId: Id<'projects'>
+  email: string
+  invitedBy: Id<'users'>
+  status: 'pending' | 'accepted'
+  createdAt: number
+  acceptedAt?: number
+  acceptedBy?: Id<'users'>
+}
+```
+
+Indexes: `by_project`, compound `by_email_status`, and compound
+`by_project_email_status`. Emails are normalized for invitation delivery only and are never used as
+foreign keys. The authenticated recipient sees pending invitations for their verified account email
+in notifications. Acceptance validates that email again, inserts a `member` membership if needed,
+and marks the invitation accepted in the same transaction.
 
 ### `sheets`
 
@@ -109,6 +137,10 @@ project, intended role, inviter, expiry, and a hashed one-time token—not a pla
   number: string
   discipline?: string
   sourceFileRef: string
+  sourceStorageId?: Id<'_storage'>
+  sourceFileName?: string
+  sourceFileSize?: number
+  sourceContentType?: string
   pageIndex: number
   width: number
   height: number
@@ -121,9 +153,14 @@ project, intended role, inviter, expiry, and a hashed one-time token—not a pla
 
 Indexes: `by_project`, compound `by_project_number`, and compound `by_project_sourceFileRef`.
 
-`sourceFileRef` is intentionally provider-neutral in this design draft. The concrete schema may use
-a Convex storage ID or an R2 object key after the file-storage decision in
-[`providers.md`](providers.md).
+Uploaded PDFs are stored in Convex Storage. Every page becomes a sheet record and shares the same
+`sourceStorageId`; the original file name, size, and content type are preserved as metadata. The
+bundled demo plan continues to use its public asset path in `sourceFileRef`. The project UI groups
+all sheet records with the same `sourceFileRef` into one PDF card; PDF-level edit and remove
+mutations update or delete the entire group.
+
+All project members can read plan metadata. Only owners and admins can create, edit, or remove a
+plan. Removing a plan also removes its related tasks, notes, and attachment records.
 
 ### `tasks`
 
@@ -235,7 +272,8 @@ The existing Zustand action names provide a useful migration seam, but Zustand b
 only. Convex owns persistent operations such as:
 
 - `projects.create`, `projects.update`, `projects.archive`
-- `members.add`, `members.changeRole`, `members.remove`, `members.transferOwnership`
+- `projects.rename`, `projects.remove`, `projects.leave`
+- `invitations.create`, `invitations.accept`
 - `sheets.createFromPdf`, `sheets.update`, `sheets.archive`
 - `tasks.create`, `tasks.update`, `tasks.move`, `tasks.remove`
 - `notes.create`, `notes.update`, `notes.remove`

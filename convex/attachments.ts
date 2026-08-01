@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { requireProjectMember, requireUser } from './lib/authz';
 
@@ -50,5 +51,20 @@ export const completeUpload = mutation({
       uploadedBy,
       createdAt: Date.now(),
     });
+  },
+});
+
+export const remove = mutation({
+  args: { attachmentId: v.id('attachments') },
+  handler: async (ctx, { attachmentId }) => {
+    const attachment = await ctx.db.get(attachmentId);
+    if (attachment === null) throw new Error('Attachment not found');
+    await requireProjectMember(ctx, attachment.projectId);
+    try {
+      await ctx.storage.delete(attachment.storageRef as Id<'_storage'>);
+    } catch {
+      // Remove stale attachment metadata even if the blob was already deleted.
+    }
+    await ctx.db.delete(attachmentId);
   },
 });

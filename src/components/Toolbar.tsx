@@ -1,15 +1,7 @@
 import { useRef } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
-import {
-  ChevronDown,
-  Download,
-  FileUp,
-  FolderOpen,
-  ListTodo,
-  LogOut,
-  MapPin,
-  Pin,
-} from 'lucide-react';
+import { ChevronDown, Download, FileUp, FolderOpen, ListTodo, LogOut, Pin } from 'lucide-react';
+import { Brand } from './Brand';
 import { useProject } from '../store/project';
 import { exportProject } from '../lib/transfer';
 import { cn } from '../lib/utils';
@@ -21,20 +13,27 @@ interface ToolbarProps {
   hasDoc: boolean;
   onOpenPdf: (file: File) => void;
   onImportJson: (file: File) => void;
+  allowLocalFiles?: boolean;
 }
 
-export function AppHeader() {
+export function AppHeader({ onLogoClick }: { onLogoClick?: () => void } = {}) {
   const fileName = useProject((s) => s.fileName);
   const { signOut } = useAuthActions();
 
   return (
     <header className="fp-toolbar relative z-60 flex shrink-0 items-center gap-2 px-2.5">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-md bg-accent text-on-accent">
-          <MapPin className="size-4" />
-        </span>
-        <span className="font-display text-sm font-bold tracking-tight text-t1">FieldPilot</span>
-      </div>
+      {onLogoClick ? (
+        <button
+          type="button"
+          className="cursor-pointer"
+          aria-label="Back to project plans"
+          onClick={onLogoClick}
+        >
+          <Brand size="sm" />
+        </button>
+      ) : (
+        <Brand size="sm" />
+      )}
 
       {fileName && (
         <span
@@ -60,7 +59,7 @@ export function AppHeader() {
   );
 }
 
-export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
+export function Toolbar({ hasDoc, onOpenPdf, onImportJson, allowLocalFiles = true }: ToolbarProps) {
   const addPinMode = useProject((s) => s.addPinMode);
   const setAddPinMode = useProject((s) => s.setAddPinMode);
   const taskListOpen = useProject((s) => s.taskListOpen);
@@ -99,6 +98,7 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
               <>
                 <DropdownItem
                   className="text-t2 hover:text-t1"
+                  disabled={!allowLocalFiles}
                   onClick={() => {
                     pdfInputRef.current?.click();
                     close();
@@ -109,7 +109,7 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
                 </DropdownItem>
                 <DropdownItem
                   className="text-t2 hover:text-t1"
-                  disabled={!hasDoc}
+                  disabled={!hasDoc || !allowLocalFiles}
                   onClick={() => {
                     jsonInputRef.current?.click();
                     close();

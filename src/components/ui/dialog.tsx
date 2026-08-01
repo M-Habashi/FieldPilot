@@ -21,6 +21,9 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const titleId = React.useId();
+  const descriptionId = React.useId();
+
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -41,11 +44,19 @@ export function ConfirmDialog({
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
         className="w-full max-w-sm rounded-lg border border-line bg-surface p-5 shadow-e3"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-display text-base font-semibold text-t1">{title}</h2>
-        {description && <p className="mt-1.5 text-sm text-t2">{description}</p>}
+        <h2 id={titleId} className="font-display text-base font-semibold text-t1">
+          {title}
+        </h2>
+        {description && (
+          <p id={descriptionId} className="mt-1.5 text-sm text-t2">
+            {description}
+          </p>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
