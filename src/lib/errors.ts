@@ -20,5 +20,8 @@ export function userFacingError(error: unknown) {
   if (/^TooManyFailedAttempts$/iu.test(message)) {
     return 'Too many attempts. Try again later or reset your password.';
   }
+  if (/This email is already registered with Google/iu.test(message)) {
+    return 'This email uses Google. Sign in with Google.';
+  }
   return message;
 }

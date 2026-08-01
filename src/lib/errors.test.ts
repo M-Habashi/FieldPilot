@@ -26,4 +26,12 @@ describe('userFacingError', () => {
       'Too many attempts. Try again later or reset your password.',
     );
   });
+
+  it('translates an existing Google account into a concise signup action', () => {
+    const error = new Error(
+      'Uncaught Error: This email is already registered with Google. Continue with Google.',
+    );
+
+    expect(userFacingError(error)).toBe('This email uses Google. Sign in with Google.');
+  });
 });
