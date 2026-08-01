@@ -182,8 +182,10 @@ const TOOL_RAIL = [MousePointer2, MapPin, Square, Layers, PenTool];
 const PINS = [
   { n: 1, left: '41%', top: '47%', color: 'var(--fp-danger)', delay: '950ms' },
   { n: 2, left: '55%', top: '26%', color: 'var(--fp-accent)', delay: '1150ms' },
-  { n: 3, left: '77%', top: '56%', color: 'var(--fp-ok)', delay: '1350ms' },
+  { n: 3, left: '73%', top: '56%', color: 'var(--fp-ok)', delay: '1350ms' },
 ];
+
+const PLAN_FILE_NAME = 'A-204_2F.pdf';
 
 const TASK_ROWS: Array<[string, React.ReactNode]> = [
   [
@@ -205,118 +207,122 @@ const TASK_ROWS: Array<[string, React.ReactNode]> = [
  */
 export function HeroMockup() {
   return (
-    <div className="relative mkt-hero-in lg:w-full lg:max-w-[500px] lg:justify-self-end">
-      <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-e3">
-        {/* Window chrome */}
-        <div className="flex h-10 items-center gap-3 border-b border-line bg-surface px-3">
-          <span className="flex gap-1.5">
-            <span className="size-2.5 rounded-full bg-[#ff5f57]" />
-            <span className="size-2.5 rounded-full bg-[#febc2e]" />
-            <span className="size-2.5 rounded-full bg-[#28c840]" />
-          </span>
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-t1">
-            A-204_Second_Floor_Plan.pdf
-            <ChevronDown className="size-3.5 text-t3" />
-          </span>
-          <span className="ml-auto flex items-center gap-3 text-t3">
-            <Search className="size-3.5" />
-            <LayoutGrid className="size-3.5" />
-            <MoreVertical className="size-3.5" />
-          </span>
-        </div>
-
-        {/* Viewer body */}
-        <div className="flex">
-          <div className="flex w-9 flex-col items-center gap-1 border-r border-line bg-surface py-2">
-            {TOOL_RAIL.map((Icon, i) => (
-              <span
-                key={i}
-                className={
-                  i === 1
-                    ? 'flex size-6 items-center justify-center rounded-xs bg-accent text-on-accent'
-                    : 'flex size-6 items-center justify-center text-t3'
-                }
-              >
-                <Icon className="size-3.5" />
-              </span>
-            ))}
-          </div>
-
-          <div className="relative min-w-0 flex-1">
-            <PlanSheet />
-            {PINS.map((pin) => (
-              <span
-                key={pin.n}
-                className="mkt-pin-drop absolute flex size-6 -translate-x-1/2 -translate-y-full rotate-[-45deg] items-center justify-center rounded-[50%_50%_50%_0] border-2 border-t2 font-mono text-[11px] font-bold text-white shadow-e2"
-                style={
-                  {
-                    left: pin.left,
-                    top: pin.top,
-                    backgroundColor: pin.color,
-                    color: pin.color,
-                    '--pin-delay': pin.delay,
-                  } as CSSProperties
-                }
-              >
-                <span className="rotate-45 text-white">{pin.n}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Status bar */}
-        <div className="flex h-8 items-center justify-center gap-4 border-t border-line bg-surface text-[11px] text-t2">
-          <span className="inline-flex items-center gap-1.5">
-            <FileText className="size-3" /> 1 / 1
-          </span>
-          <Minus className="size-3" />
-          <span className="font-mono">100%</span>
-          <Plus className="size-3" />
-          <Maximize2 className="size-3" />
-        </div>
-      </div>
-
-      {/* Overlapping task card */}
-      <div className="mkt-card-in absolute -right-3 top-16 z-10 hidden w-[264px] rounded-lg border border-line bg-surface p-4 shadow-e3 sm:block xl:-right-8">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="flex size-5 items-center justify-center rounded-full bg-accent font-mono text-[10px] font-bold text-on-accent">
-              1
+    <div className="mkt-hero-viewport relative mkt-hero-in w-full min-w-0 lg:max-w-[500px] lg:justify-self-end">
+      <div className="mkt-hero-scale mkt-plan-shift relative lg:w-full">
+        <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-e3">
+          {/* Window chrome */}
+          <div className="flex h-10 items-center gap-3 border-b border-line bg-surface px-3">
+            <span className="flex gap-1.5">
+              <span className="size-2.5 rounded-full bg-[#ff5f57]" />
+              <span className="size-2.5 rounded-full bg-[#febc2e]" />
+              <span className="size-2.5 rounded-full bg-[#28c840]" />
             </span>
-            <p className="text-sm font-semibold text-t1">Frame opening at A-204</p>
+            <span className="flex min-w-0 flex-1 items-center gap-1 text-xs font-medium text-t1">
+              <span className="min-w-0 truncate whitespace-nowrap" title={PLAN_FILE_NAME}>
+                {PLAN_FILE_NAME}
+              </span>
+              <ChevronDown className="size-3.5 text-t3" />
+            </span>
+            <span className="ml-auto flex shrink-0 items-center gap-3 text-t3">
+              <Search className="size-3.5" />
+              <LayoutGrid className="size-3.5" />
+              <MoreVertical className="size-3.5" />
+            </span>
           </div>
-          <MoreVertical className="size-4 shrink-0 text-t3" />
+
+          {/* Viewer body */}
+          <div className="flex">
+            <div className="flex w-9 flex-col items-center gap-1 border-r border-line bg-surface py-2">
+              {TOOL_RAIL.map((Icon, i) => (
+                <span
+                  key={i}
+                  className={
+                    i === 1
+                      ? 'flex size-6 items-center justify-center rounded-xs bg-accent text-on-accent'
+                      : 'flex size-6 items-center justify-center text-t3'
+                  }
+                >
+                  <Icon className="size-3.5" />
+                </span>
+              ))}
+            </div>
+
+            <div className="relative min-w-0 flex-1">
+              <PlanSheet />
+              {PINS.map((pin) => (
+                <span
+                  key={pin.n}
+                  className="mkt-pin-drop absolute flex size-6 -translate-x-1/2 -translate-y-full rotate-[-45deg] items-center justify-center rounded-[50%_50%_50%_0] border-2 border-t2 font-mono text-[11px] font-bold text-white shadow-e2"
+                  style={
+                    {
+                      left: pin.left,
+                      top: pin.top,
+                      backgroundColor: pin.color,
+                      color: pin.color,
+                      '--pin-delay': pin.delay,
+                    } as CSSProperties
+                  }
+                >
+                  <span className="rotate-45 text-white">{pin.n}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Status bar */}
+          <div className="flex h-8 items-center justify-center gap-4 border-t border-line bg-surface text-[11px] text-t2">
+            <span className="inline-flex items-center gap-1.5">
+              <FileText className="size-3" /> 1 / 1
+            </span>
+            <Minus className="size-3" />
+            <span className="font-mono">100%</span>
+            <Plus className="size-3" />
+            <Maximize2 className="size-3" />
+          </div>
         </div>
 
-        <span className="mt-3 inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs font-medium text-t2">
-          Open <ChevronDown className="size-3 text-t3" />
-        </span>
-
-        <dl className="mt-3 space-y-1.5 text-xs">
-          {TASK_ROWS.map(([label, value]) => (
-            <div key={label} className="grid grid-cols-[84px_1fr] gap-2">
-              <dt className="text-t3">{label}</dt>
-              <dd className="font-medium text-t1">{value}</dd>
+        {/* Overlapping task card */}
+        <div className="mkt-card-in mkt-details-shift absolute -right-3 top-16 z-10 block w-[264px] rounded-lg border border-line bg-surface p-4 shadow-e3 xl:-right-8">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex size-5 items-center justify-center rounded-full bg-ok font-mono text-[10px] font-bold text-on-accent">
+                3
+              </span>
+              <p className="text-sm font-semibold text-t1">Frame opening at A-204</p>
             </div>
-          ))}
-        </dl>
+            <MoreVertical className="size-4 shrink-0 text-t3" />
+          </div>
 
-        <p className="mt-3 text-xs leading-relaxed text-t2">
-          Install header per detail 5/A-502 and shim per spec.
-        </p>
+          <span className="mt-3 inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-xs font-medium text-t2">
+            Open <ChevronDown className="size-3 text-t3" />
+          </span>
 
-        <p className="mt-3 text-[11px] font-semibold text-t3">2 photos</p>
-        <div className="mt-1.5 flex gap-2">
-          <img
-            src="/images/landing/framing-corridor.png"
-            alt="Framing corridor photo attached to the task"
-            className="h-14 w-16 rounded-xs border border-line object-cover"
-          />
-          <img
-            src="/images/landing/jobsite-rebar.png"
-            alt="Jobsite rebar photo attached to the task"
-            className="h-14 w-16 rounded-xs border border-line object-cover"
-          />
+          <dl className="mt-3 space-y-1.5 text-xs">
+            {TASK_ROWS.map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[84px_1fr] gap-2">
+                <dt className="text-t3">{label}</dt>
+                <dd className="font-medium text-t1">{value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <p className="mt-3 text-xs leading-relaxed text-t2">
+            Install header per detail 5/A-502 and shim per spec.
+          </p>
+
+          <p className="mt-3 text-[11px] font-semibold text-t3">2 photos</p>
+          <div className="mt-1.5 flex gap-2">
+            <img
+              src="/images/landing/framing-corridor.png"
+              alt="Framing corridor photo attached to the task"
+              className="h-14 w-16 rounded-xs border border-line object-cover"
+            />
+            <img
+              src="/images/landing/jobsite-rebar.png"
+              alt="Jobsite rebar photo attached to the task"
+              className="h-14 w-16 rounded-xs border border-line object-cover"
+            />
+          </div>
         </div>
       </div>
     </div>

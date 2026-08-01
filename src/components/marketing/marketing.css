@@ -53,6 +53,51 @@
   }
 }
 
+/* On phones, preserve the plan + details-card composition by scaling the
+   existing desktop-sized stage into the available column. */
+@media (max-width: 639px) {
+  .mkt-hero-viewport {
+    height: 200px;
+  }
+
+  .mkt-hero-scale {
+    width: 500px;
+    transform: scale(0.48);
+    transform-origin: top left;
+  }
+
+  .mkt-details-shift {
+    translate: 176px 0;
+  }
+}
+
+@media (max-width: 359px) {
+  .mkt-hero-viewport {
+    height: 168px;
+  }
+
+  .mkt-hero-scale {
+    transform: scale(0.4);
+  }
+
+  .mkt-details-shift {
+    translate: 168px 0;
+  }
+}
+
+/* On wide hero layouts, keep the final pin visible beside the details card.
+   The 40px / 160px split leaves a comfortable right gutter at the reference
+   desktop width while keeping the mockup and card visually related. */
+@media (min-width: 1440px) {
+  .mkt-plan-shift {
+    translate: -40px 0;
+  }
+
+  .mkt-details-shift {
+    translate: 160px 0;
+  }
+}
+
 /* Numbered pins dropping onto the mock plan. */
 .mkt-pin-drop {
   animation: mkt-pin-drop 460ms cubic-bezier(0.3, 1.1, 0.35, 1) both;
