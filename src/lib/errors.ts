@@ -14,8 +14,11 @@ export function userFacingError(error: unknown) {
       .trim();
 
   if (!message) return GENERIC_ERROR;
-  if (/^InvalidAccountId$/iu.test(message)) {
-    return 'Enter a valid email address, like name@example.com.';
+  if (/^(InvalidAccountId|InvalidSecret)$/iu.test(message)) {
+    return 'The email or password is incorrect.';
+  }
+  if (/^TooManyFailedAttempts$/iu.test(message)) {
+    return 'Too many attempts. Try again later or reset your password.';
   }
   return message;
 }

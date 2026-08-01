@@ -14,9 +14,16 @@ describe('userFacingError', () => {
     expect(userFacingError('failure')).toBe('Something went wrong. Please try again.');
   });
 
-  it('translates raw auth account errors into guidance', () => {
-    expect(userFacingError(new Error('InvalidAccountId'))).toBe(
-      'Enter a valid email address, like name@example.com.',
+  it.each(['InvalidAccountId', 'InvalidSecret'])(
+    'translates %s into a safe credentials message',
+    (code) => {
+      expect(userFacingError(new Error(code))).toBe('The email or password is incorrect.');
+    },
+  );
+
+  it('translates rate-limit errors into next-step guidance', () => {
+    expect(userFacingError(new Error('TooManyFailedAttempts'))).toBe(
+      'Too many attempts. Try again later or reset your password.',
     );
   });
 });

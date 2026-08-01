@@ -291,9 +291,7 @@ export function ProjectPlanWorkspace({
               ) : (
                 <div className="fp-canvas-stage flex h-full items-center justify-center p-6">
                   {documentError ? (
-                    <Notice tone="error" title="This plan could not be opened">
-                      {documentError}
-                    </Notice>
+                    <Notice tone="error">This plan could not be opened: {documentError}</Notice>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-t2">
                       <Loader2 className="size-4 animate-spin text-accent" />
@@ -306,10 +304,9 @@ export function ProjectPlanWorkspace({
                 <Notice
                   tone="error"
                   compact
-                  title="Changes not saved"
                   className="absolute left-1/2 top-4 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
                 >
-                  {syncError}
+                  Changes not saved: {syncError}
                 </Notice>
               )}
             </main>

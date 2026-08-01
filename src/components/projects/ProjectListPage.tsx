@@ -70,8 +70,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
       setRename(null);
       notify({
         tone: 'success',
-        title: 'Project renamed',
-        message: 'The new name is visible to everyone on the project.',
+        message: `Project renamed to ${name}.`,
       });
     } catch (error) {
       setRenameError(userFacingError(error));
@@ -91,8 +90,8 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
       </div>
 
       {renameError && (
-        <Notice tone="error" title="Couldn’t rename project" className="mt-5">
-          {renameError}
+        <Notice tone="error" className="mt-5">
+          Couldn’t rename project: {renameError}
         </Notice>
       )}
 
@@ -275,8 +274,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
           await createProject({ name });
           notify({
             tone: 'success',
-            title: 'Project created',
-            message: `${name.trim()} is ready for plans and members.`,
+            message: `${name.trim()} was created.`,
           });
         }}
       />
@@ -287,8 +285,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
           await inviteToProject({ projectId, email });
           notify({
             tone: 'success',
-            title: 'Invitation sent',
-            message: `${email.trim()} can now join the project.`,
+            message: `Invitation sent to ${email.trim()}.`,
           });
         }}
       />
@@ -299,8 +296,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
           await deleteProject({ projectId, confirmationName });
           notify({
             tone: 'success',
-            title: 'Project deleted',
-            message: 'The project and its data have been removed.',
+            message: 'The project and its data were deleted.',
           });
         }}
       />
@@ -319,15 +315,13 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
               setLeaveTarget(null);
               notify({
                 tone: 'success',
-                title: 'Left project',
-                message: `You no longer have access to ${projectName}.`,
+                message: `You left ${projectName}.`,
               });
             })
             .catch((error: unknown) => {
               notify({
                 tone: 'error',
-                title: 'Couldn’t leave project',
-                message: userFacingError(error),
+                message: `Couldn’t leave ${projectName}: ${userFacingError(error)}`,
               });
             });
         }}

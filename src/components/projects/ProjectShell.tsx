@@ -46,10 +46,9 @@ export function ProjectShell({
     const isPasswordUpdate = notice.startsWith('Password updated');
     notify({
       tone: 'success',
-      title: isPasswordUpdate ? 'Password updated' : 'Email verified',
       message: isPasswordUpdate
-        ? 'Your new password is active and you are signed in.'
-        : 'Your account is ready. Welcome to FieldPilot.',
+        ? 'Password updated. You are signed in.'
+        : 'Email verified. Your account is ready.',
     });
   }, [notify]);
 
@@ -60,8 +59,7 @@ export function ProjectShell({
       await onAcceptInvitation(invitationId);
       notify({
         tone: 'success',
-        title: 'Invitation accepted',
-        message: 'The project is now available in your project list.',
+        message: 'Invitation accepted. The project is now in your project list.',
       });
     } catch (error) {
       const message = userFacingError(error);
@@ -131,12 +129,11 @@ export function ProjectShell({
               {acceptError && (
                 <Notice
                   tone="error"
-                  title="Couldn’t accept invitation"
                   compact
                   className="mx-2 mb-2"
                   onDismiss={() => setAcceptError(null)}
                 >
-                  {acceptError}
+                  Couldn’t accept invitation: {acceptError}
                 </Notice>
               )}
               {invitations === undefined ? (

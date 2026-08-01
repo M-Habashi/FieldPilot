@@ -20,7 +20,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       className="pointer-events-auto w-full max-w-sm"
       style={{ animation: 'fp-toast-in var(--fp-motion-duration) var(--fp-motion-ease) both' }}
     >
-      <Notice tone={toast.tone} title={toast.title} onDismiss={onDismiss}>
+      <Notice tone={toast.tone} onDismiss={onDismiss}>
         {toast.message}
       </Notice>
     </div>

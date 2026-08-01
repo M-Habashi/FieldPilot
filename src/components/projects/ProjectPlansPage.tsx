@@ -135,8 +135,7 @@ export function ProjectPlansPage({
       }
       notify({
         tone: 'success',
-        title: fileCount === 1 ? 'Plan uploaded' : 'Plans uploaded',
-        message: `${fileCount} PDF ${fileCount === 1 ? 'is' : 'are'} now available in this project.`,
+        message: `${fileCount} PDF ${fileCount === 1 ? 'was' : 'were'} uploaded.`,
       });
     } catch (error) {
       setUploadError(userFacingError(error));
@@ -173,8 +172,8 @@ export function ProjectPlansPage({
       </nav>
 
       {uploadError && (
-        <Notice tone="error" title="Upload failed" className="mt-5">
-          {uploadError}
+        <Notice tone="error" className="mt-5">
+          Upload failed: {uploadError}
         </Notice>
       )}
 
@@ -355,8 +354,7 @@ export function ProjectPlansPage({
           await updatePdf({ sheetId, ...values });
           notify({
             tone: 'success',
-            title: 'Plan details saved',
-            message: 'The plan name, version, and discipline are up to date.',
+            message: 'Plan details saved.',
           });
         }}
       />
@@ -375,15 +373,13 @@ export function ProjectPlansPage({
               setRemoveTarget(null);
               notify({
                 tone: 'success',
-                title: 'Plan removed',
-                message: `${planName} and its pages are no longer in this project.`,
+                message: `${planName} was removed from the project.`,
               });
             })
             .catch((error: unknown) => {
               notify({
                 tone: 'error',
-                title: 'Couldn’t remove plan',
-                message: userFacingError(error),
+                message: `Couldn’t remove ${planName}: ${userFacingError(error)}`,
               });
             });
         }}

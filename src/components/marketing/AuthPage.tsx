@@ -59,12 +59,12 @@ const SSO_BUTTON =
 const PRIMARY_BUTTON =
   'inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-on-accent shadow-e1 transition-[background,transform] hover:bg-accent-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/u;
 
 function validateEmail(email: string) {
   if (!email) return 'Enter your email address.';
   if (!EMAIL_PATTERN.test(email)) {
-    return 'Enter a valid email address, like name@example.com.';
+    return 'Enter a valid email address.';
   }
   return null;
 }
@@ -146,6 +146,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }, [resendAvailableIn]);
 
   const busy = submitting !== null;
+  const clearError = () => {
+    if (error) setError(null);
+  };
 
   const signInWithGoogle = async () => {
     setSubmitting('google');
@@ -153,7 +156,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     try {
       await signIn('google');
     } catch {
-      setError('Google sign-in is unavailable right now. Check your connection and try again.');
+      setError('Google sign-in is unavailable. Try again.');
       setSubmitting(null);
     }
   };
@@ -247,7 +250,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const resendVerificationCode = async () => {
     if (resendAvailableIn > 0 || busy) return;
     if (!pendingPassword.current) {
-      setError('Return to sign in and enter your password to request another code.');
+      setError('Return to sign in before requesting another code.');
       return;
     }
 
@@ -418,6 +421,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   <form
                     noValidate
                     onSubmit={(event) => void submitCredentials(event)}
+                    onChange={clearError}
                     className="space-y-3.5"
                   >
                     {mode === 'signup' && (
@@ -472,16 +476,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <form
                   noValidate
                   onSubmit={(event) => void verifyEmail(event)}
+                  onChange={clearError}
                   className="space-y-4"
                 >
-                  <Notice tone="info" compact title="Verify your email to continue">
-                    <p>
-                      Your projects stay protected until you enter the code. It expires after 15
-                      minutes.
-                    </p>
-                    {codeResent && (
-                      <p className="mt-1 font-semibold text-accent">A new code was sent.</p>
-                    )}
+                  <Notice tone="info" compact>
+                    {codeResent
+                      ? 'A new code was sent. Enter it within 15 minutes.'
+                      : 'Enter the six-digit code within 15 minutes.'}
                   </Notice>
                   <div>
                     <Label htmlFor="verification-code">Verification code</Label>
@@ -527,6 +528,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <form
                   noValidate
                   onSubmit={(event) => void requestPasswordReset(event)}
+                  onChange={clearError}
                   className="space-y-4"
                 >
                   <div>
@@ -558,6 +560,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <form
                   noValidate
                   onSubmit={(event) => void completePasswordReset(event)}
+                  onChange={clearError}
                   className="space-y-3.5"
                 >
                   <div>
@@ -608,15 +611,17 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               )}
             </div>
 
-            {error && (
-              <Notice tone="error" compact title="Couldn’t complete that request" className="mt-4">
-                {error}
-              </Notice>
-            )}
+            <div className="mt-3 h-5 overflow-hidden" aria-live="polite" aria-atomic="true">
+              {error && (
+                <p role="alert" className="truncate text-xs font-medium leading-5 text-danger">
+                  {error}
+                </p>
+              )}
+            </div>
 
             {step === 'credentials' && (
               <div
-                className="mkt-rise mt-6 flex items-center justify-between text-xs"
+                className="mkt-rise mt-3 flex items-center justify-between text-xs"
                 style={{ '--rise-delay': '300ms' } as CSSProperties}
               >
                 {mode === 'login' ? (
