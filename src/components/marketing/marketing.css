@@ -103,19 +103,13 @@
   }
 }
 
-/* Gentle idle float for the polaroid photos. */
-.mkt-float {
-  animation: mkt-float 5.5s ease-in-out var(--float-delay, 0ms) infinite;
+/* Keep the field-note photos angled without the old floating motion. */
+.mkt-polaroid {
+  transform: rotate(var(--tilt, 0deg));
 }
 
-@keyframes mkt-float {
-  0%,
-  100% {
-    transform: rotate(var(--tilt, 0deg)) translateY(0);
-  }
-  50% {
-    transform: rotate(var(--tilt, 0deg)) translateY(-6px);
-  }
+.mkt-polaroid:hover {
+  transform: rotate(var(--tilt, 0deg)) scale(1.04);
 }
 
 /* Slow drafting-grid drift behind the hero (transform-based, composited). */

@@ -18,7 +18,7 @@ export function Navbar() {
 
         {/* Placeholder sections — no target pages yet. */}
         <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
-          {['How it works', 'For teams', 'Self-host', 'Resources'].map((label, i) => (
+          {['How it works', 'For teams', 'Resources'].map((label, i) => (
             <button
               key={label}
               type="button"

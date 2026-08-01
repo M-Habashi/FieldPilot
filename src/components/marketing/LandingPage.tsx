@@ -11,21 +11,19 @@ function Polaroid({
   src,
   caption,
   tilt,
-  delay,
   tapeTilt,
   alt,
 }: {
   src: string;
   caption: string;
   tilt: string;
-  delay: string;
   tapeTilt: string;
   alt: string;
 }) {
   return (
     <figure
-      className="mkt-float relative w-36 shrink-0 rounded-sm border border-line bg-surface p-2 pb-1 shadow-e2 transition-transform hover:z-10 hover:scale-[1.04] sm:w-44"
-      style={{ '--tilt': tilt, '--float-delay': delay } as CSSProperties}
+      className="mkt-polaroid relative w-36 shrink-0 rounded-sm border border-line bg-surface p-2 pb-1 shadow-e2 transition-transform hover:z-10 sm:w-44 lg:w-36"
+      style={{ '--tilt': tilt } as CSSProperties}
     >
       <span className="mkt-tape" style={{ '--tape-tilt': tapeTilt } as CSSProperties} />
       <img src={src} alt={alt} className="aspect-[4/3] w-full rounded-xs object-cover" />
@@ -38,8 +36,8 @@ function Polaroid({
 
 export function LandingPage() {
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden bg-app font-sans text-t1">
-      <div className="relative flex min-h-full flex-col">
+    <div className="h-full overflow-x-hidden overflow-y-auto bg-app font-sans text-t1 lg:overflow-hidden">
+      <div className="relative flex min-h-full flex-col lg:h-full lg:min-h-0">
         {/* Faint drafting grid drifting behind everything. */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           <div
@@ -50,8 +48,8 @@ export function LandingPage() {
 
         <Navbar />
 
-        <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 lg:px-10">
-          <div className="grid flex-1 items-center gap-12 pt-10 lg:grid-cols-[1fr_1.05fr] lg:gap-8 lg:pt-4">
+        <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-6 lg:px-10">
+          <div className="grid min-h-0 flex-1 items-center gap-12 pt-10 lg:grid-cols-[1fr_1.05fr] lg:gap-8 lg:pt-4">
             {/* Copy */}
             <div>
               <span
@@ -97,7 +95,7 @@ export function LandingPage() {
           </div>
 
           {/* Field notes strip: polaroids + sheet stamp above the torn plan */}
-          <div className="relative z-10 mt-6 flex items-end justify-between gap-6 pb-24 sm:pb-28 lg:mt-0">
+          <div className="relative z-10 mt-6 flex items-end justify-between gap-6 pb-24 sm:pb-28 lg:mt-0 lg:pb-0">
             <div className="flex items-end gap-4 sm:gap-6">
               <Polaroid
                 src="/images/landing/jobsite-rebar.png"
@@ -105,7 +103,6 @@ export function LandingPage() {
                 caption="5/14 — Level 2"
                 tilt="-4deg"
                 tapeTilt="-3deg"
-                delay="0ms"
               />
               <Polaroid
                 src="/images/landing/framing-corridor.png"
@@ -113,10 +110,10 @@ export function LandingPage() {
                 caption="Grid B2"
                 tilt="3deg"
                 tapeTilt="2deg"
-                delay="900ms"
               />
             </div>
-            <div className="mkt-rise hidden shrink-0 rounded-xs border border-accent/40 bg-surface/85 px-4 py-3 shadow-e1 backdrop-blur-sm md:block"
+            <div
+              className="mkt-rise hidden shrink-0 rounded-xs border border-accent/40 bg-surface/85 px-4 py-3 shadow-e1 backdrop-blur-sm md:block"
               style={{ '--rise-delay': '520ms' } as CSSProperties}
             >
               <p className="font-mono text-lg font-bold tracking-wide text-accent">A-204</p>
@@ -142,13 +139,6 @@ export function LandingPage() {
             <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-app to-transparent" />
           </div>
         </div>
-
-        <footer className="relative z-10 border-t border-line bg-surface/80 backdrop-blur-sm">
-          <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-6 text-xs text-t3 lg:px-10">
-            <p>FieldPilot — open-source field management for plans, pins, and punch work.</p>
-            <p className="hidden font-mono sm:block">MIT · self-hostable</p>
-          </div>
-        </footer>
       </div>
     </div>
   );

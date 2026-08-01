@@ -28,19 +28,43 @@ function PlanSheet() {
       {GRID_COLS.map((c, i) => (
         <g key={c}>
           <circle cx={150 + i * 90} cy="30" r="9" className="fill-surface stroke-line-strong" />
-          <text x={150 + i * 90} y="34" textAnchor="middle" className="fill-t2 font-mono text-[10px]">
+          <text
+            x={150 + i * 90}
+            y="34"
+            textAnchor="middle"
+            className="fill-t2 font-mono text-[10px]"
+          >
             {c}
           </text>
-          <line x1={150 + i * 90} y1="42" x2={150 + i * 90} y2="360" className="stroke-line" strokeDasharray="3 4" />
+          <line
+            x1={150 + i * 90}
+            y1="42"
+            x2={150 + i * 90}
+            y2="360"
+            className="stroke-line"
+            strokeDasharray="3 4"
+          />
         </g>
       ))}
       {GRID_ROWS.map((r, i) => (
         <g key={r}>
           <circle cx="60" cy={110 + i * 100} r="9" className="fill-surface stroke-line-strong" />
-          <text x="60" y={114 + i * 100} textAnchor="middle" className="fill-t2 font-mono text-[10px]">
+          <text
+            x="60"
+            y={114 + i * 100}
+            textAnchor="middle"
+            className="fill-t2 font-mono text-[10px]"
+          >
             {r}
           </text>
-          <line x1="72" y1={110 + i * 100} x2="500" y2={110 + i * 100} className="stroke-line" strokeDasharray="3 4" />
+          <line
+            x1="72"
+            y1={110 + i * 100}
+            x2="500"
+            y2={110 + i * 100}
+            className="stroke-line"
+            strokeDasharray="3 4"
+          />
         </g>
       ))}
 
@@ -51,10 +75,22 @@ function PlanSheet() {
       <text x="285" y="52" textAnchor="middle" className="fill-t3 font-mono text-[9px]">
         16&prime;-0&Prime;
       </text>
-      <text x="44" y="160" textAnchor="middle" className="fill-t3 font-mono text-[9px]" transform="rotate(-90 44 160)">
+      <text
+        x="44"
+        y="160"
+        textAnchor="middle"
+        className="fill-t3 font-mono text-[9px]"
+        transform="rotate(-90 44 160)"
+      >
         20&prime;-0&Prime;
       </text>
-      <text x="44" y="260" textAnchor="middle" className="fill-t3 font-mono text-[9px]" transform="rotate(-90 44 260)">
+      <text
+        x="44"
+        y="260"
+        textAnchor="middle"
+        className="fill-t3 font-mono text-[9px]"
+        transform="rotate(-90 44 260)"
+      >
         40&prime;-0&Prime;
       </text>
 
@@ -92,7 +128,15 @@ function PlanSheet() {
       <text x="396" y="132" textAnchor="middle" className="fill-t2 font-mono text-[10px]">
         201
       </text>
-      <line x1="340" y1="76" x2="340" y2="180" className="stroke-accent/45" strokeWidth="1.2" strokeDasharray="6 3" />
+      <line
+        x1="340"
+        y1="76"
+        x2="340"
+        y2="180"
+        className="stroke-accent/45"
+        strokeWidth="1.2"
+        strokeDasharray="6 3"
+      />
       <line x1="340" y1="180" x2="454" y2="180" className="stroke-accent/45" strokeWidth="1.2" />
 
       {/* Corridor */}
@@ -161,7 +205,7 @@ const TASK_ROWS: Array<[string, React.ReactNode]> = [
  */
 export function HeroMockup() {
   return (
-    <div className="relative mkt-hero-in">
+    <div className="relative mkt-hero-in lg:w-full lg:max-w-[500px] lg:justify-self-end">
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-e3">
         {/* Window chrome */}
         <div className="flex h-10 items-center gap-3 border-b border-line bg-surface px-3">
