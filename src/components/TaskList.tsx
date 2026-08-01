@@ -69,14 +69,22 @@ export function TaskListBody() {
                       <span className="min-w-0 flex-1">
                         <span
                           className={`block truncate text-xs ${
-                            done ? 'text-t3 line-through' : selected ? 'font-semibold text-accent' : 'text-current'
+                            done
+                              ? 'text-t3 line-through'
+                              : selected
+                                ? 'font-semibold text-accent'
+                                : 'text-current'
                           }`}
                         >
                           {task.title || 'Untitled task'}
                         </span>
                         <span className="mt-0.5 block truncate text-[11px] text-t3 group-hover:text-t2">
-                          <span style={{ color: STATUSES[task.status].color }}>{STATUSES[task.status].label}</span>
-                          {' · '}{PRIORITIES[task.priority].short} · {categoryById(task.category).label} · sheet {task.page}
+                          <span style={{ color: STATUSES[task.status].color }}>
+                            {STATUSES[task.status].label}
+                          </span>
+                          {' · '}
+                          {PRIORITIES[task.priority].short} · {categoryById(task.category).label} ·
+                          sheet {task.page}
                         </span>
                       </span>
                     </button>

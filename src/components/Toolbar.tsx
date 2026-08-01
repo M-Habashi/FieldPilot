@@ -1,5 +1,15 @@
 import { useRef } from 'react';
-import { ChevronDown, Download, FileUp, FolderOpen, ListTodo, MapPin, Pin } from 'lucide-react';
+import { useAuthActions } from '@convex-dev/auth/react';
+import {
+  ChevronDown,
+  Download,
+  FileUp,
+  FolderOpen,
+  ListTodo,
+  LogOut,
+  MapPin,
+  Pin,
+} from 'lucide-react';
 import { useProject } from '../store/project';
 import { exportProject } from '../lib/transfer';
 import { cn } from '../lib/utils';
@@ -15,6 +25,7 @@ interface ToolbarProps {
 
 export function AppHeader() {
   const fileName = useProject((s) => s.fileName);
+  const { signOut } = useAuthActions();
 
   return (
     <header className="fp-toolbar relative z-60 flex shrink-0 items-center gap-2 px-2.5">
@@ -33,6 +44,18 @@ export function AppHeader() {
           {fileName}
         </span>
       )}
+
+      <Button
+        variant="text"
+        size="sm"
+        className="ml-auto"
+        aria-label="Sign out"
+        title="Sign out"
+        onClick={() => void signOut()}
+      >
+        <LogOut />
+        <span className="hidden sm:inline">Sign out</span>
+      </Button>
     </header>
   );
 }
@@ -53,7 +76,10 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
     <>
       {/* One compact workspace bar. Left padding leaves room for the sidebar
           edge toggle that sits at this intersection. */}
-      <header className="fp-actionbar z-40 flex shrink-0 items-center text-xs" aria-label="FieldPilot tools">
+      <header
+        className="fp-actionbar z-40 flex shrink-0 items-center text-xs"
+        aria-label="FieldPilot tools"
+      >
         <div
           className={cn(
             'flex min-w-0 flex-1 items-center gap-1 pr-2.5 transition-[padding-left] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
@@ -131,7 +157,11 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson }: ToolbarProps) {
               variant="text"
               size="sm"
               data-active={taskListOpen && selectedTaskId === null}
-              className={taskListOpen && selectedTaskId === null ? 'text-accent hover:text-accent-hover' : undefined}
+              className={
+                taskListOpen && selectedTaskId === null
+                  ? 'text-accent hover:text-accent-hover'
+                  : undefined
+              }
               disabled={!hasDoc}
               onClick={showTaskList}
               title="Show tasks"

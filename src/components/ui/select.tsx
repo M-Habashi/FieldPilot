@@ -34,7 +34,12 @@ export function Select({ id, value, options, onValueChange, className }: SelectP
             className,
           )}
         >
-          {selected?.color && <span className="size-1.5 shrink-0 rounded-full" style={{ background: selected.color }} />}
+          {selected?.color && (
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: selected.color }}
+            />
+          )}
           <span className="min-w-0 flex-1 truncate">{selected?.label}</span>
           <ChevronDown className="size-3.5 shrink-0 text-t3" />
         </button>
@@ -55,7 +60,12 @@ export function Select({ id, value, options, onValueChange, className }: SelectP
               <span className="flex size-3.5 shrink-0 items-center justify-center">
                 {option.value === value && <Check className="text-accent" />}
               </span>
-              {option.color && <span className="size-1.5 shrink-0 rounded-full" style={{ background: option.color }} />}
+              {option.color && (
+                <span
+                  className="size-1.5 shrink-0 rounded-full"
+                  style={{ background: option.color }}
+                />
+              )}
               <span>{option.label}</span>
             </DropdownItem>
           ))}

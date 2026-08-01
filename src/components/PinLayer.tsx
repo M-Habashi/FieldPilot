@@ -29,7 +29,15 @@ export function PinLayer() {
   );
 }
 
-function Pin({ task, selected, tooltipOpen }: { task: Task; selected: boolean; tooltipOpen: boolean }) {
+function Pin({
+  task,
+  selected,
+  tooltipOpen,
+}: {
+  task: Task;
+  selected: boolean;
+  tooltipOpen: boolean;
+}) {
   const selectedTaskId = useProject((s) => s.selectedTaskId);
   const selectTask = useProject((s) => s.selectTask);
   const showPinTooltip = useProject((s) => s.showPinTooltip);
@@ -102,7 +110,10 @@ function Pin({ task, selected, tooltipOpen }: { task: Task; selected: boolean; t
           {task.title || 'Untitled task'}
         </span>
       )}
-      <span className="fp-pin-marker" style={{ '--pin-color': pinColor(task) } as React.CSSProperties}>
+      <span
+        className="fp-pin-marker"
+        style={{ '--pin-color': pinColor(task) } as React.CSSProperties}
+      >
         <span className="fp-pin-label">
           {done ? <Check size={13} strokeWidth={3.5} /> : task.seq}
         </span>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useProject } from '../store/project';
-import { usePresence } from './usePresence';
+import { usePresence } from '../hooks/usePresence';
 import { TaskListBody } from './TaskList';
 import { TaskPanelBody } from './TaskPanel';
 
@@ -58,11 +58,7 @@ export function RightDrawer() {
         key={showProps ? 'props' : 'list'}
         className="fp-drawer-view flex min-h-0 flex-1 flex-col"
       >
-        {showProps && visibleTaskId ? (
-          <TaskPanelBody taskId={visibleTaskId} />
-        ) : (
-          <TaskListBody />
-        )}
+        {showProps && visibleTaskId ? <TaskPanelBody taskId={visibleTaskId} /> : <TaskListBody />}
       </div>
     </aside>
   );

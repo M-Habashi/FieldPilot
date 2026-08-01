@@ -4,18 +4,30 @@
   "version": "0.1.0",
   "description": "Open-source construction field management — plans, pins, tasks.",
   "type": "module",
+  "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "build": "pnpm typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b && tsc -p convex/tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"convex/**/*.ts\" \"*.{js,ts,json,md}\" \"docs/**/*.md\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"convex/**/*.ts\" \"*.{js,ts,json,md}\" \"docs/**/*.md\"",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "check": "pnpm lint && pnpm typecheck && pnpm test:run && pnpm format:check"
   },
   "dependencies": {
+    "@auth/core": "0.41.1",
+    "@convex-dev/auth": "^0.0.94",
     "@fontsource-variable/inter": "^5.2.5",
     "@fontsource-variable/jetbrains-mono": "^5.2.5",
     "@fontsource-variable/manrope": "^5.2.5",
     "@fontsource-variable/source-serif-4": "^5.2.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "convex": "^1.43.0",
     "idb-keyval": "^6.2.2",
     "lucide-react": "^0.525.0",
     "pdfjs-dist": "^5.3.31",
@@ -25,12 +37,21 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.1.11",
+    "@types/node": "^26.1.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.8.0",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4.1.11",
     "typescript": "~5.8.3",
-    "vite": "^7.0.0"
+    "typescript-eslint": "^8.65.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.1.10"
   }
 }

@@ -6,9 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function uid(): string {
-  return (
-    Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
-  );
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
 export function relativeTime(ts: number): string {

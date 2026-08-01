@@ -25,9 +25,11 @@ export default function App() {
     setError(null);
     try {
       const opened = await openPdf(buf);
-      await useProject
-        .getState()
-        .loadDocument({ fileName: name, fingerprint: opened.fingerprint, pageCount: opened.pageCount });
+      await useProject.getState().loadDocument({
+        fileName: name,
+        fingerprint: opened.fingerprint,
+        pageCount: opened.pageCount,
+      });
       setDoc(opened.doc);
     } catch {
       setError('That file could not be opened as a PDF plan. Try another file.');
@@ -112,18 +114,31 @@ export default function App() {
         <Sidebar />
         <div className="w-14 shrink-0" aria-hidden />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <Toolbar hasDoc={doc !== null} onOpenPdf={(f) => void openPdfFile(f)} onImportJson={(f) => void onImportJson(f)} />
+          <Toolbar
+            hasDoc={doc !== null}
+            onOpenPdf={(f) => void openPdfFile(f)}
+            onImportJson={(f) => void onImportJson(f)}
+          />
           <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <main className="relative min-w-0 flex-1 overflow-hidden">
               {doc ? (
                 <Viewer doc={doc} />
               ) : (
-                <EmptyState loading={loading} error={error} onOpen={(f) => void openPdfFile(f)} onLoadDemo={() => void loadDemo()} />
+                <EmptyState
+                  loading={loading}
+                  error={error}
+                  onOpen={(f) => void openPdfFile(f)}
+                  onLoadDemo={() => void loadDemo()}
+                />
               )}
               {doc && error && (
                 <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-md bg-danger px-3 py-2 text-xs font-medium text-white shadow-e2">
                   {error}
-                  <button type="button" className="ml-3 underline cursor-pointer" onClick={() => setError(null)}>
+                  <button
+                    type="button"
+                    className="ml-3 underline cursor-pointer"
+                    onClick={() => setError(null)}
+                  >
                     Dismiss
                   </button>
                 </div>

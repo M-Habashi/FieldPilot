@@ -13,7 +13,9 @@ export function DesignSwitcher() {
       trigger={
         <Button variant="text" size="sm" aria-label="Switch design">
           <Palette />
-          <span className="hidden sm:inline">{DESIGNS.find((d) => d.id === design)?.label ?? 'Design'}</span>
+          <span className="hidden sm:inline">
+            {DESIGNS.find((d) => d.id === design)?.label ?? 'Design'}
+          </span>
         </Button>
       }
     >

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Maximize, Minus, Plus } from 'lucide-react';
-import type { PDFDocumentProxy } from '../lib/pdf';
+import type { PDFDocumentProxy, PDFPageProxy } from '../lib/pdf';
 import { clamp, cn } from '../lib/utils';
 import { useProject } from '../store/project';
 import { PinLayer } from './PinLayer';
@@ -48,7 +48,6 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const renderTaskRef = useRef<{ cancel(): void } | null>(null);
   const motionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragRef = useRef<{
     sx: number;
@@ -60,6 +59,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   } | null>(null);
 
   const [pageBase, setPageBase] = useState<PageBase | null>(null);
+  const [page, setPage] = useState<PDFPageProxy | null>(null);
   const [view, setView] = useState<View>({ scale: 1, offset: { x: 0, y: 0 } });
   const [panning, setPanning] = useState(false);
   const [smoothView, setSmoothView] = useState(false);
@@ -81,33 +81,42 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     }, 240);
   }, []);
 
-  useEffect(() => () => {
-    if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
+    },
+    [],
+  );
 
-  const fit = useCallback((pb: PageBase) => {
-    const el = containerRef.current;
-    if (!el) return;
-    const pad = 48;
-    const s = clamp(
-      Math.min((el.clientWidth - pad) / pb.w, (el.clientHeight - pad) / pb.h),
-      0.1,
-      8,
-    );
-    animateView(() => ({
-      scale: s,
-      offset: { x: (el.clientWidth - pb.w * s) / 2, y: (el.clientHeight - pb.h * s) / 2 },
-    }));
-  }, [animateView]);
+  const fit = useCallback(
+    (pb: PageBase) => {
+      const el = containerRef.current;
+      if (!el) return;
+      const pad = 48;
+      const s = clamp(
+        Math.min((el.clientWidth - pad) / pb.w, (el.clientHeight - pad) / pb.h),
+        0.1,
+        8,
+      );
+      animateView(() => ({
+        scale: s,
+        offset: { x: (el.clientWidth - pb.w * s) / 2, y: (el.clientHeight - pb.h * s) / 2 },
+      }));
+    },
+    [animateView],
+  );
 
   // Load page dimensions and fit on page change.
   useEffect(() => {
     let cancelled = false;
+    setPage(null);
+    setPageBase(null);
     void (async () => {
-      const page = await doc.getPage(currentPage);
+      const nextPage = await doc.getPage(currentPage);
       if (cancelled) return;
-      const vp = page.getViewport({ scale: 1 });
+      const vp = nextPage.getViewport({ scale: 1 });
       const pb = { w: vp.width, h: vp.height };
+      setPage(nextPage);
       setPageBase(pb);
       fit(pb);
     })();
@@ -118,30 +127,26 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
 
   // Rasterize the page whenever the (debounced) scale settles.
   useEffect(() => {
-    if (!pageBase) return;
-    let cancelled = false;
+    if (!page) return;
+    let renderTask: { cancel(): void; promise: Promise<void> } | null = null;
     void (async () => {
-      const page = await doc.getPage(currentPage);
-      if (cancelled) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const dpr = window.devicePixelRatio || 1;
       const vp = page.getViewport({ scale: renderScale * dpr });
       canvas.width = Math.floor(vp.width);
       canvas.height = Math.floor(vp.height);
-      renderTaskRef.current?.cancel();
-      const task = page.render({ canvas, viewport: vp });
-      renderTaskRef.current = task;
+      renderTask = page.render({ canvas, viewport: vp });
       try {
-        await task.promise;
+        await renderTask.promise;
       } catch {
         // render cancelled by a newer one — expected during zoom
       }
     })();
     return () => {
-      cancelled = true;
+      renderTask?.cancel();
     };
-  }, [doc, currentPage, renderScale, pageBase]);
+  }, [page, renderScale]);
 
   // Wheel / pinch zoom around the cursor.
   useEffect(() => {
@@ -266,10 +271,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
             height: pageBase.h * view.scale,
           }}
         >
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 h-full w-full bg-white shadow-e2"
-          />
+          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full bg-white shadow-e2" />
           <PinLayer />
         </div>
       )}

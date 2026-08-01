@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useProject } from '../store/project';
-import { usePhotoUrl } from './usePhotoUrl';
+import { usePhotoUrl } from '../hooks/usePhotoUrl';
 
 export function Lightbox() {
   const photoId = useProject((s) => s.lightboxPhotoId);

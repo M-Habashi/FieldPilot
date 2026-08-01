@@ -19,7 +19,7 @@ import { Label } from './ui/label';
 import { Select } from './ui/select';
 import { Separator } from './ui/separator';
 import { ConfirmDialog } from './ui/dialog';
-import { usePhotoUrl } from './usePhotoUrl';
+import { usePhotoUrl } from '../hooks/usePhotoUrl';
 
 /**
  * Task detail content for the shared right drawer. Presence/positioning is owned
@@ -67,7 +67,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
         <span className="font-mono text-t3">#{task.seq}</span>
         <span className="text-t3">· sheet {task.page}</span>
         <div className="ml-auto flex items-center gap-1">
-          <Button variant="text" size="iconXs" aria-label="Close panel" onClick={() => selectTask(null)}>
+          <Button
+            variant="text"
+            size="iconXs"
+            aria-label="Close panel"
+            onClick={() => selectTask(null)}
+          >
             <X />
           </Button>
         </div>
@@ -102,7 +107,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
 
           <div className="grid grid-cols-1 gap-x-3 gap-y-2 @[340px]:grid-cols-2">
             <div>
-              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-status">Status</Label>
+              <Label
+                className="mb-0.5 text-xs font-normal normal-case tracking-normal"
+                htmlFor="fp-status"
+              >
+                Status
+              </Label>
               <Select
                 id="fp-status"
                 value={task.status}
@@ -115,7 +125,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               />
             </div>
             <div>
-              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-priority">Priority</Label>
+              <Label
+                className="mb-0.5 text-xs font-normal normal-case tracking-normal"
+                htmlFor="fp-priority"
+              >
+                Priority
+              </Label>
               <Select
                 id="fp-priority"
                 value={String(task.priority)}
@@ -124,11 +139,18 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                   label: PRIORITIES[priority].label,
                   color: PRIORITIES[priority].color,
                 }))}
-                onValueChange={(value) => updateTask(task.id, { priority: Number(value) as Priority })}
+                onValueChange={(value) =>
+                  updateTask(task.id, { priority: Number(value) as Priority })
+                }
               />
             </div>
             <div>
-              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-category">Category</Label>
+              <Label
+                className="mb-0.5 text-xs font-normal normal-case tracking-normal"
+                htmlFor="fp-category"
+              >
+                Category
+              </Label>
               <Select
                 id="fp-category"
                 value={task.category}
@@ -141,7 +163,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               />
             </div>
             <div>
-              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-due">Due date</Label>
+              <Label
+                className="mb-0.5 text-xs font-normal normal-case tracking-normal"
+                htmlFor="fp-due"
+              >
+                Due date
+              </Label>
               <Input
                 id="fp-due"
                 type="date"
@@ -151,8 +178,14 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               />
             </div>
             <div className="@[340px]:col-span-2">
-              <Label className="mb-1 text-xs font-normal normal-case tracking-normal">Pin color</Label>
-              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Pin color">
+              <Label className="mb-1 text-xs font-normal normal-case tracking-normal">
+                Pin color
+              </Label>
+              <div
+                className="flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label="Pin color"
+              >
                 {TASK_COLORS.map((color) => {
                   const selected = pinColor(task) === color.value;
                   return (
@@ -167,7 +200,9 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                       }`}
                       style={{
                         background: color.value,
-                        ...(selected ? { '--tw-ring-color': color.value } as React.CSSProperties : {}),
+                        ...(selected
+                          ? ({ '--tw-ring-color': color.value } as React.CSSProperties)
+                          : {}),
                       }}
                       onClick={() => updateTask(task.id, { color: color.value })}
                     />
@@ -179,7 +214,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               </div>
             </div>
             <div className="@[340px]:col-span-2">
-              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-assignee">Assignee</Label>
+              <Label
+                className="mb-0.5 text-xs font-normal normal-case tracking-normal"
+                htmlFor="fp-assignee"
+              >
+                Assignee
+              </Label>
               <Input
                 id="fp-assignee"
                 className="h-7 border-0 bg-transparent px-0 text-xs hover:text-accent focus:ring-0"
@@ -189,7 +229,12 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
               />
             </div>
             <div className="@[340px]:col-span-2">
-              <Label className="mb-0.5 text-xs font-normal normal-case tracking-normal" htmlFor="fp-desc">Description</Label>
+              <Label
+                className="mb-0.5 text-xs font-normal normal-case tracking-normal"
+                htmlFor="fp-desc"
+              >
+                Description
+              </Label>
               <Textarea
                 id="fp-desc"
                 className="min-h-14 border-0 bg-transparent px-0 py-1 text-xs hover:text-accent focus:ring-0"
@@ -277,7 +322,9 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                 </li>
               ))}
               {task.notes.length === 0 && (
-                <li className="text-xs text-t3">No notes yet — log progress, blockers, decisions.</li>
+                <li className="text-xs text-t3">
+                  No notes yet — log progress, blockers, decisions.
+                </li>
               )}
             </ul>
           </section>
@@ -286,10 +333,13 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
 
           {/* Danger zone — deliberately separated from the header Close control. */}
           <section>
-            <h3 className="mb-1 text-xs font-medium text-t3">
-              Danger zone
-            </h3>
-            <Button variant="text" size="sm" className="px-0 text-danger hover:text-danger" onClick={() => setConfirmDelete(true)}>
+            <h3 className="mb-1 text-xs font-medium text-t3">Danger zone</h3>
+            <Button
+              variant="text"
+              size="sm"
+              className="px-0 text-danger hover:text-danger"
+              onClick={() => setConfirmDelete(true)}
+            >
               <Trash2 />
               Delete task
             </Button>
