@@ -48,7 +48,7 @@ export function LandingPage() {
 
         <Navbar />
 
-        <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-6 lg:px-10">
+        <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-6 lg:px-10 lg:pb-8">
           <div className="grid min-h-0 flex-1 items-center gap-12 pt-10 lg:grid-cols-[1fr_1.05fr] lg:gap-8 lg:pt-4">
             {/* Copy */}
             <div>
