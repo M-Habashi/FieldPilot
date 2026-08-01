@@ -10,6 +10,9 @@ import { Notice } from '../ui/notice';
 export type AuthMode = 'login' | 'signup';
 type AuthStep = 'credentials' | 'verify' | 'reset-request' | 'reset-code';
 
+export const GOOGLE_AUTH_CALLBACK_ROUTE = '/auth/callback';
+const GOOGLE_AUTH_REDIRECT_TO = `/#${GOOGLE_AUTH_CALLBACK_ROUTE}`;
+
 const COPY: Record<
   AuthMode,
   { heading: string; sub: string; submit: string; switchLabel: string; switchHref: string }
@@ -115,14 +118,20 @@ function PasswordField({
   );
 }
 
-export function AuthPage({ mode }: { mode: AuthMode }) {
+export function AuthPage({
+  mode,
+  initialError = null,
+}: {
+  mode: AuthMode;
+  initialError?: string | null;
+}) {
   const { signIn } = useAuthActions();
   const copy = COPY[mode];
   const [step, setStep] = useState<AuthStep>('credentials');
   const [pendingEmail, setPendingEmail] = useState('');
   const [submitting, setSubmitting] = useState<'google' | 'email' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [resendAvailableIn, setResendAvailableIn] = useState(0);
   const [codeResent, setCodeResent] = useState(false);
   const pendingPassword = useRef('');
@@ -130,11 +139,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   useEffect(() => {
     setStep('credentials');
     setPendingEmail('');
-    setError(null);
+    setError(initialError);
     setResendAvailableIn(0);
     setCodeResent(false);
     pendingPassword.current = '';
-  }, [mode]);
+  }, [initialError, mode]);
 
   useEffect(() => {
     if (resendAvailableIn <= 0) return;
@@ -154,7 +163,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setSubmitting('google');
     setError(null);
     try {
-      await signIn('google');
+      await signIn('google', { redirectTo: GOOGLE_AUTH_REDIRECT_TO });
     } catch {
       setError('Google sign-in is unavailable. Try again.');
       setSubmitting(null);
