@@ -1,0 +1,179 @@
+/* ============================================================
+   Marketing pages (landing + auth) — animations & helpers.
+   Uses the active design's --fp-* tokens so the pages follow
+   the selected theme like the rest of the app.
+   ============================================================ */
+
+/* Staggered entrance: rise + fade. Drive stagger with --rise-delay. */
+.mkt-rise {
+  animation: mkt-rise 640ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+@keyframes mkt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The hero app mockup: settle in with a slight scale. */
+.mkt-hero-in {
+  animation: mkt-hero-in 780ms cubic-bezier(0.22, 0.9, 0.3, 1) 240ms both;
+}
+
+@keyframes mkt-hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Task card overlapping the mockup: slide in from the right. */
+.mkt-card-in {
+  animation: mkt-card-in 620ms cubic-bezier(0.22, 0.9, 0.3, 1) 700ms both;
+}
+
+@keyframes mkt-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Numbered pins dropping onto the mock plan. */
+.mkt-pin-drop {
+  animation: mkt-pin-drop 460ms cubic-bezier(0.3, 1.1, 0.35, 1) both;
+  animation-delay: var(--pin-delay, 900ms);
+}
+
+@keyframes mkt-pin-drop {
+  0% {
+    opacity: 0;
+    translate: 0 -16px;
+    scale: 0.5;
+  }
+  70% {
+    opacity: 1;
+    translate: 0 2px;
+    scale: 1.06;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+/* Soft pulsing ring behind the "active" pin. */
+.mkt-pin-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  opacity: 0;
+  animation: mkt-pin-pulse 2.4s ease-out 1.6s infinite;
+}
+
+@keyframes mkt-pin-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.7);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+/* Gentle idle float for the polaroid photos. */
+.mkt-float {
+  animation: mkt-float 5.5s ease-in-out var(--float-delay, 0ms) infinite;
+}
+
+@keyframes mkt-float {
+  0%,
+  100% {
+    transform: rotate(var(--tilt, 0deg)) translateY(0);
+  }
+  50% {
+    transform: rotate(var(--tilt, 0deg)) translateY(-6px);
+  }
+}
+
+/* Slow drafting-grid drift behind the hero (transform-based, composited). */
+.mkt-grid-drift {
+  animation: mkt-grid-drift 60s linear infinite alternate;
+}
+
+@keyframes mkt-grid-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-48px, -24px, 0);
+  }
+}
+
+/* Auth page collage: settle from a slight zoom. */
+.mkt-img-in {
+  animation: mkt-img-in 1100ms cubic-bezier(0.22, 0.9, 0.3, 1) 120ms both;
+}
+
+@keyframes mkt-img-in {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Route swap between landing / login / signup. */
+.mkt-page-in {
+  animation: mkt-page-in 320ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+@keyframes mkt-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Washi-tape strip on top of the polaroids. */
+.mkt-tape {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 86px;
+  height: 22px;
+  transform: translateX(-50%) rotate(var(--tape-tilt, -2deg));
+  background: color-mix(in srgb, var(--fp-accent-soft) 72%, transparent);
+  border-inline: 1px dashed color-mix(in srgb, var(--fp-border-strong) 60%, transparent);
+  box-shadow: 0 1px 2px rgb(16 27 46 / 0.08);
+  backdrop-filter: blur(1px);
+}

@@ -8,7 +8,8 @@ import '@fontsource-variable/jetbrains-mono';
 import '@fontsource-variable/source-serif-4';
 import './index.css';
 import App from './App';
-import { AuthLoadingScreen, SignInScreen } from './components/AuthScreen';
+import { AuthLoadingScreen } from './components/AuthScreen';
+import { MarketingApp } from './components/marketing/MarketingApp';
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 if (!convexUrl) throw new Error('VITE_CONVEX_URL is not configured');
@@ -34,7 +35,7 @@ createRoot(document.getElementById('root')!).render(
         <AuthLoadingScreen />
       </AuthLoading>
       <Unauthenticated>
-        <SignInScreen />
+        <MarketingApp />
       </Unauthenticated>
       <Authenticated>
         <App />

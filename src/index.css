@@ -4,6 +4,7 @@
 @import './themes/design-blueprint.css';
 @import './themes/design-studio.css';
 @import './themes/design-carbon.css';
+@import './components/marketing/marketing.css';
 
 /* Map raw --fp-* tokens to Tailwind semantic utilities.
    `inline` keeps the var() reference so per-design overrides win. */
