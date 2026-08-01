@@ -180,9 +180,9 @@ function PlanSheet() {
 const TOOL_RAIL = [MousePointer2, MapPin, Square, Layers, PenTool];
 
 const PINS = [
-  { n: 1, left: '41%', top: '47%', color: 'var(--fp-danger)', delay: '950ms', pulse: true },
-  { n: 2, left: '55%', top: '26%', color: 'var(--fp-accent)', delay: '1150ms', pulse: false },
-  { n: 3, left: '77%', top: '56%', color: 'var(--fp-ok)', delay: '1350ms', pulse: false },
+  { n: 1, left: '41%', top: '47%', color: 'var(--fp-danger)', delay: '950ms' },
+  { n: 2, left: '55%', top: '26%', color: 'var(--fp-accent)', delay: '1150ms' },
+  { n: 3, left: '77%', top: '56%', color: 'var(--fp-ok)', delay: '1350ms' },
 ];
 
 const TASK_ROWS: Array<[string, React.ReactNode]> = [
@@ -247,9 +247,7 @@ export function HeroMockup() {
             {PINS.map((pin) => (
               <span
                 key={pin.n}
-                className={`mkt-pin-drop absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white font-mono text-[11px] font-bold text-white shadow-e2 ${
-                  pin.pulse ? 'mkt-pin-pulse' : ''
-                }`}
+                className="mkt-pin-drop absolute flex size-6 -translate-x-1/2 -translate-y-full rotate-[-45deg] items-center justify-center rounded-[50%_50%_50%_0] border-2 border-t2 font-mono text-[11px] font-bold text-white shadow-e2"
                 style={
                   {
                     left: pin.left,
@@ -260,7 +258,7 @@ export function HeroMockup() {
                   } as CSSProperties
                 }
               >
-                <span className="text-white">{pin.n}</span>
+                <span className="rotate-45 text-white">{pin.n}</span>
               </span>
             ))}
           </div>
