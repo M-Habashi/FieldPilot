@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Bell, Check, ChevronDown, LogOut } from 'lucide-react';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -34,7 +34,21 @@ export function ProjectShell({
   const { signOut } = useAuthActions();
   const [acceptingId, setAcceptingId] = useState<Id<'projectInvitations'> | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const displayName = user?.name?.trim() || user?.email?.split('@')[0] || 'FieldPilot user';
+
+  useEffect(() => {
+    const notice = window.sessionStorage.getItem('fp:auth-notice');
+    if (!notice) return;
+    window.sessionStorage.removeItem('fp:auth-notice');
+    setAuthNotice(notice);
+  }, []);
+
+  useEffect(() => {
+    if (!authNotice) return;
+    const timeout = window.setTimeout(() => setAuthNotice(null), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [authNotice]);
 
   async function accept(invitationId: Id<'projectInvitations'>) {
     setAcceptingId(invitationId);
@@ -141,6 +155,15 @@ export function ProjectShell({
           </Dropdown>
         </div>
       </header>
+      {authNotice && (
+        <div
+          role="status"
+          className="fixed left-1/2 top-18 z-70 flex -translate-x-1/2 items-center gap-2 rounded-md border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-t1 shadow-e3"
+        >
+          <Check className="size-4 text-accent" />
+          {authNotice}
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
   );

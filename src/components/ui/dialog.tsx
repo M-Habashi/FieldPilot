@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -23,15 +24,8 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const titleId = React.useId();
   const descriptionId = React.useId();
-
-  React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  useModalFocus(open, dialogRef, onCancel);
 
   if (!open) return null;
 
@@ -42,7 +36,9 @@ export function ConfirmDialog({
       onClick={onCancel}
     >
       <div
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}

@@ -121,7 +121,7 @@ export function ProjectPlansPage({
           pdfPage.cleanup();
         }
 
-        const uploadUrl = await generateUploadUrl({ projectId: project._id });
+        const { uploadUrl, uploadClaimId } = await generateUploadUrl({ projectId: project._id });
         const response = await fetch(uploadUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/pdf' },
@@ -131,6 +131,7 @@ export function ProjectPlansPage({
         const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
         await completePdfUpload({
           projectId: project._id,
+          uploadClaimId,
           storageId,
           fileName: file.name,
           pages,

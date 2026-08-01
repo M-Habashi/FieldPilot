@@ -12,7 +12,9 @@ function createTest() {
 type TestInstance = ReturnType<typeof createTest>;
 
 async function seedUser(t: TestInstance, name: string, email: string) {
-  return await t.run(async (ctx) => await ctx.db.insert('users', { name, email }));
+  return await t.run(async (ctx) =>
+    ctx.db.insert('users', { name, email: email.trim().toLowerCase() }),
+  );
 }
 
 async function seedMembership(
@@ -20,7 +22,7 @@ async function seedMembership(
   projectId: Id<'projects'>,
   userId: Id<'users'>,
   addedBy: Id<'users'>,
-  role: 'admin' | 'member',
+  role: 'admin' | 'member' | 'viewer',
 ) {
   await t.run(async (ctx) => {
     await ctx.db.insert('projectMembers', {
@@ -122,6 +124,99 @@ describe('projects, memberships, and invitations', () => {
 });
 
 describe('plan metadata permissions and cleanup', () => {
+  it('lets viewers read project content but rejects every content write', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Role Owner', 'role-owner@example.com');
+    const viewerId = await seedUser(t, 'Role Viewer', 'role-viewer@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const viewer = t.withIdentity({ subject: viewerId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Role Project' });
+    await seedMembership(t, projectId, viewerId, ownerId, 'viewer');
+    const sheetId = await owner.mutation(api.sheets.create, {
+      projectId,
+      name: 'Role Plan',
+      number: 'R-001',
+      sourceFileRef: '/demo/role-plan.pdf',
+      pageIndex: 0,
+      width: 1000,
+      height: 1000,
+    });
+    const taskId = await owner.mutation(api.tasks.create, {
+      projectId,
+      sheetId,
+      x: 0.5,
+      y: 0.5,
+    });
+
+    expect(await viewer.query(api.tasks.listByPdf, { sheetId })).toHaveLength(1);
+    await expect(
+      viewer.mutation(api.tasks.create, { projectId, sheetId, x: 0.2, y: 0.2 }),
+    ).rejects.toThrow('Insufficient project permissions');
+    await expect(
+      viewer.mutation(api.tasks.update, { taskId, title: 'Viewer edit' }),
+    ).rejects.toThrow('Insufficient project permissions');
+    await expect(viewer.mutation(api.tasks.remove, { taskId })).rejects.toThrow(
+      'Insufficient project permissions',
+    );
+    await expect(
+      viewer.mutation(api.notes.create, { taskId, text: 'Viewer note' }),
+    ).rejects.toThrow('Insufficient project permissions');
+    await expect(viewer.mutation(api.attachments.generateUploadUrl, { projectId })).rejects.toThrow(
+      'Insufficient project permissions',
+    );
+  });
+
+  it('rejects claiming a project plan as an attachment', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Storage Owner', 'storage-owner@example.com');
+    const memberId = await seedUser(t, 'Storage Member', 'storage-member@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const member = t.withIdentity({ subject: memberId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Protected Storage' });
+    await seedMembership(t, projectId, memberId, ownerId, 'member');
+
+    const planUpload = await owner.mutation(api.sheets.generateUploadUrl, { projectId });
+    const planStorageId = await t.run(
+      async (ctx) =>
+        await ctx.storage.store(new Blob(['%PDF-1.7 protected'], { type: 'application/pdf' })),
+    );
+    const [sheetId] = await owner.mutation(api.sheets.completePdfUpload, {
+      projectId,
+      uploadClaimId: planUpload.uploadClaimId,
+      storageId: planStorageId,
+      fileName: 'Protected.pdf',
+      pages: [{ name: 'Protected', number: 'P-001', pageIndex: 0, width: 1000, height: 1000 }],
+    });
+    const taskId = await member.mutation(api.tasks.create, {
+      projectId,
+      sheetId,
+      x: 0.5,
+      y: 0.5,
+    });
+    const attachmentUpload = await member.mutation(api.attachments.generateUploadUrl, {
+      projectId,
+    });
+
+    await expect(
+      member.mutation(api.attachments.completeUpload, {
+        taskId,
+        kind: 'file',
+        uploadClaimId: attachmentUpload.uploadClaimId,
+        storageRef: planStorageId,
+        fileName: 'stolen-plan.pdf',
+        contentType: 'application/pdf',
+        size: 18,
+      }),
+    ).rejects.toThrow(/does not belong|already in use/);
+
+    await member.mutation(api.tasks.remove, { taskId });
+    await t.run(async (ctx) => {
+      expect(await ctx.db.system.get('_storage', planStorageId)).not.toBeNull();
+      expect(await ctx.db.get(sheetId)).not.toBeNull();
+      expect(await ctx.db.query('attachments').collect()).toEqual([]);
+    });
+  });
+
   it('uploads, updates, and removes a multi-page PDF as one plan', async () => {
     const t = createTest();
     const ownerId = await seedUser(t, 'Upload Owner', 'upload-owner@example.com');
@@ -137,9 +232,8 @@ describe('plan metadata permissions and cleanup', () => {
     await expect(member.mutation(api.sheets.generateUploadUrl, { projectId })).rejects.toThrow(
       'Insufficient project permissions',
     );
-    expect(await admin.mutation(api.sheets.generateUploadUrl, { projectId })).toContain(
-      '/api/storage/upload',
-    );
+    const planUpload = await admin.mutation(api.sheets.generateUploadUrl, { projectId });
+    expect(planUpload.uploadUrl).toContain('/api/storage/upload');
 
     const storageId = await t.run(
       async (ctx) =>
@@ -147,6 +241,7 @@ describe('plan metadata permissions and cleanup', () => {
     );
     const upload = {
       projectId,
+      uploadClaimId: planUpload.uploadClaimId,
       storageId,
       fileName: 'Level Plans.pdf',
       pages: [
@@ -223,12 +318,23 @@ describe('plan metadata permissions and cleanup', () => {
       name: 'Ground Floor Plan',
       number: 'A-101',
       discipline: 'Architectural',
-      sourceFileRef: 'storage:plan-a101',
+      sourceFileRef: '/demo/test-plan-a101.pdf',
       pageIndex: 0,
       width: 2400,
       height: 1800,
       version: 1,
     });
+    await expect(
+      owner.mutation(api.sheets.create, {
+        projectId,
+        name: 'External tracker',
+        number: 'A-102',
+        sourceFileRef: 'https://tracker.example/plan.pdf',
+        pageIndex: 1,
+        width: 2400,
+        height: 1800,
+      }),
+    ).rejects.toThrow('same-origin application path');
     const memberPlans = await member.query(api.sheets.listByProjectWithMetadata, { projectId });
     expect(memberPlans).toHaveLength(1);
     expect(memberPlans[0].plan).toMatchObject({
@@ -236,7 +342,7 @@ describe('plan metadata permissions and cleanup', () => {
       name: 'Ground Floor Plan',
       number: 'A-101',
       discipline: 'Architectural',
-      sourceFileRef: 'storage:plan-a101',
+      sourceFileRef: '/demo/test-plan-a101.pdf',
       pageIndex: 0,
       width: 2400,
       height: 1800,
@@ -244,7 +350,7 @@ describe('plan metadata permissions and cleanup', () => {
     });
     expect(memberPlans[0].createdByName).toBe('Plan Owner');
     const workspace = await member.query(api.sheets.getPdfWorkspace, { sheetId });
-    expect(workspace.pdfUrl).toBe('storage:plan-a101');
+    expect(workspace.pdfUrl).toBe('/demo/test-plan-a101.pdf');
     expect(workspace.pages.map((page) => page._id)).toEqual([sheetId]);
 
     await expect(
@@ -293,13 +399,19 @@ describe('plan metadata permissions and cleanup', () => {
       dueDate: '2026-08-15',
     });
     await member.mutation(api.notes.create, { taskId, text: 'Plan-linked note' });
+    const attachmentUpload = await member.mutation(api.attachments.generateUploadUrl, {
+      projectId,
+    });
+    const attachmentBlob = new Blob(['detail'], { type: 'application/pdf' });
+    const attachmentStorageId = await t.run(async (ctx) => await ctx.storage.store(attachmentBlob));
     await member.mutation(api.attachments.completeUpload, {
       taskId,
       kind: 'file',
-      storageRef: 'storage:attachment',
+      uploadClaimId: attachmentUpload.uploadClaimId,
+      storageRef: attachmentStorageId,
       fileName: 'detail.pdf',
       contentType: 'application/pdf',
-      size: 1234,
+      size: attachmentBlob.size,
     });
 
     const workspaceTasks = await member.query(api.tasks.listByPdf, { sheetId });
@@ -319,9 +431,11 @@ describe('plan metadata permissions and cleanup', () => {
         assigneeText: 'Site team',
         dueDate: '2026-08-15',
       },
-      notes: [{ text: 'Plan-linked note' }],
-      photos: [],
     });
+    expect(await member.query(api.notes.listByTask, { taskId })).toMatchObject([
+      { text: 'Plan-linked note' },
+    ]);
+    expect(await member.query(api.attachments.listByTask, { taskId })).toHaveLength(1);
 
     await admin.mutation(api.sheets.remove, { sheetId });
     expect(await member.query(api.sheets.listByProjectWithMetadata, { projectId })).toEqual([]);
@@ -352,7 +466,7 @@ describe('plan metadata permissions and cleanup', () => {
       projectId,
       name: 'Deletion Plan',
       number: 'D-001',
-      sourceFileRef: 'storage:delete-plan',
+      sourceFileRef: '/demo/delete-plan.pdf',
       pageIndex: 0,
       width: 1000,
       height: 1000,
@@ -364,13 +478,17 @@ describe('plan metadata permissions and cleanup', () => {
       y: 0.5,
     });
     await owner.mutation(api.notes.create, { taskId, text: 'Delete with project' });
+    const photoUpload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
+    const photoBlob = new Blob(['photo'], { type: 'image/jpeg' });
+    const photoStorageId = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
     await owner.mutation(api.attachments.completeUpload, {
       taskId,
       kind: 'photo',
-      storageRef: 'storage:delete-photo',
+      uploadClaimId: photoUpload.uploadClaimId,
+      storageRef: photoStorageId,
       fileName: 'photo.jpg',
       contentType: 'image/jpeg',
-      size: 4321,
+      size: photoBlob.size,
     });
 
     await expect(

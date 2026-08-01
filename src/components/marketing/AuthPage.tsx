@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { userFacingError } from '../../lib/errors';
@@ -17,11 +17,11 @@ const COPY: Record<
     heading: 'Good to see you.',
     sub: 'Your projects are right where you left them.',
     submit: 'Log in',
-    switchLabel: 'Create your workspace',
+    switchLabel: 'Sign up',
     switchHref: '#/signup',
   },
   signup: {
-    heading: 'Create your workspace.',
+    heading: 'Sign up.',
     sub: 'Drop your first plan and put the crew on the same sheet.',
     submit: 'Create account',
     switchLabel: 'Log in',
@@ -108,12 +108,27 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [submitting, setSubmitting] = useState<'google' | 'email' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resendAvailableIn, setResendAvailableIn] = useState(0);
+  const [codeResent, setCodeResent] = useState(false);
+  const pendingPassword = useRef('');
 
   useEffect(() => {
     setStep('credentials');
     setPendingEmail('');
     setError(null);
+    setResendAvailableIn(0);
+    setCodeResent(false);
+    pendingPassword.current = '';
   }, [mode]);
+
+  useEffect(() => {
+    if (resendAvailableIn <= 0) return;
+    const timeout = window.setTimeout(
+      () => setResendAvailableIn((seconds) => Math.max(0, seconds - 1)),
+      1_000,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [resendAvailableIn]);
 
   const busy = submitting !== null;
 
@@ -143,6 +158,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     values.delete('confirmPassword');
     values.set('email', email);
     values.set('flow', mode === 'signup' ? 'signUp' : 'signIn');
+    pendingPassword.current = String(values.get('password') ?? '');
     setSubmitting('email');
     setError(null);
 
@@ -150,6 +166,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       const result = await signIn('password', values);
       if (!result.signingIn) {
         setPendingEmail(email);
+        setResendAvailableIn(30);
+        setCodeResent(false);
         setStep('verify');
       }
     } catch (caught) {
@@ -169,7 +187,38 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
     try {
       const result = await signIn('password', values);
-      if (!result.signingIn) setError('That code is invalid or has expired.');
+      if (!result.signingIn) {
+        setError('That code is invalid or has expired.');
+      } else {
+        window.sessionStorage.setItem('fp:auth-notice', 'Email verified. Welcome to FieldPilot.');
+        pendingPassword.current = '';
+      }
+    } catch (caught) {
+      setError(userFacingError(caught));
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const resendVerificationCode = async () => {
+    if (resendAvailableIn > 0 || busy) return;
+    if (!pendingPassword.current) {
+      setError('Return to sign in and enter your password to request another code.');
+      return;
+    }
+
+    const values = new FormData();
+    values.set('flow', 'signIn');
+    values.set('email', pendingEmail);
+    values.set('password', pendingPassword.current);
+    setSubmitting('email');
+    setError(null);
+
+    try {
+      const result = await signIn('password', values);
+      if (result.signingIn) return;
+      setCodeResent(true);
+      setResendAvailableIn(30);
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
@@ -215,7 +264,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
     try {
       const result = await signIn('password', values);
-      if (!result.signingIn) setError('That code is invalid or has expired.');
+      if (!result.signingIn) {
+        setError('That code is invalid or has expired.');
+      } else {
+        window.sessionStorage.setItem('fp:auth-notice', 'Password updated. You are signed in.');
+      }
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
@@ -226,6 +279,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const returnToCredentials = () => {
     setStep('credentials');
     setError(null);
+    setResendAvailableIn(0);
+    setCodeResent(false);
+    pendingPassword.current = '';
   };
 
   const heading =
@@ -346,6 +402,16 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
               {step === 'verify' && (
                 <form onSubmit={(event) => void verifyEmail(event)} className="space-y-4">
+                  <div className="rounded-md border border-accent/25 bg-accent-soft px-3.5 py-3 text-xs leading-5 text-t2">
+                    <p className="font-semibold text-t1">Verify your email to continue</p>
+                    <p className="mt-0.5">
+                      Your projects stay protected until you enter the code. It expires after 15
+                      minutes.
+                    </p>
+                    {codeResent && (
+                      <p className="mt-1 font-semibold text-accent">A new code was sent.</p>
+                    )}
+                  </div>
                   <div>
                     <Label htmlFor="verification-code">Verification code</Label>
                     <Input
@@ -364,13 +430,25 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     {submitting === 'email' && <Loader2 className="size-4 animate-spin" />}
                     Verify email
                   </button>
-                  <button
-                    type="button"
-                    onClick={returnToCredentials}
-                    className="w-full cursor-pointer text-xs font-semibold text-t2 hover:text-t1"
-                  >
-                    Back to {mode === 'signup' ? 'sign up' : 'log in'}
-                  </button>
+                  <div className="flex items-center justify-between gap-4 text-xs">
+                    <button
+                      type="button"
+                      disabled={busy || resendAvailableIn > 0}
+                      onClick={() => void resendVerificationCode()}
+                      className="cursor-pointer font-semibold text-accent hover:underline disabled:cursor-not-allowed disabled:text-t3 disabled:no-underline"
+                    >
+                      {resendAvailableIn > 0
+                        ? `Resend code in ${resendAvailableIn}s`
+                        : 'Resend code'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={returnToCredentials}
+                      className="cursor-pointer font-semibold text-t2 hover:text-t1"
+                    >
+                      Use a different email
+                    </button>
+                  </div>
                 </form>
               )}
 

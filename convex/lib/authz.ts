@@ -3,6 +3,7 @@ import type { Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
 
 export type ProjectRole = 'owner' | 'admin' | 'member' | 'viewer';
+export const CONTENT_EDITOR_ROLES = ['owner', 'admin', 'member'] as const;
 type AuthzCtx = QueryCtx | MutationCtx;
 
 export async function requireUser(ctx: AuthzCtx): Promise<Id<'users'>> {

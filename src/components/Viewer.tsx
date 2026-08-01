@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Maximize, Minus, Plus } from 'lucide-react';
 import type { PDFDocumentProxy, PDFPageProxy } from '../lib/pdf';
+import { cappedRasterScale } from '../lib/canvas';
 import { clamp, cn } from '../lib/utils';
 import { useProject } from '../store/project';
 import { PinLayer } from './PinLayer';
@@ -133,7 +134,13 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const dpr = window.devicePixelRatio || 1;
-      const vp = page.getViewport({ scale: renderScale * dpr });
+      const baseViewport = page.getViewport({ scale: 1 });
+      const rasterScale = cappedRasterScale(
+        baseViewport.width,
+        baseViewport.height,
+        renderScale * dpr,
+      );
+      const vp = page.getViewport({ scale: rasterScale });
       canvas.width = Math.floor(vp.width);
       canvas.height = Math.floor(vp.height);
       renderTask = page.render({ canvas, viewport: vp });

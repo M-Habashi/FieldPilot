@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx } from './_generated/server';
 import { requireProjectMember, requireProjectRole, requireUser } from './lib/authz';
+import { consumeUploadClaim, issueUploadClaim } from './lib/uploads';
 
 export const listByProject = query({
   args: { projectId: v.id('projects') },
@@ -78,9 +79,17 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
     await requireProjectRole(ctx, args.projectId, ['owner', 'admin'], userId);
+    if (args.sourceStorageId !== undefined) {
+      throw new Error('Uploaded PDFs must be added through the plan upload flow');
+    }
+    const sourceFileRef = args.sourceFileRef.trim();
+    if (!sourceFileRef.startsWith('/') || sourceFileRef.startsWith('//')) {
+      throw new Error('Plan source must be a same-origin application path');
+    }
     const now = Date.now();
     return await ctx.db.insert('sheets', {
       ...args,
+      sourceFileRef,
       name: args.name.trim(),
       number: args.number.trim(),
       discipline: args.discipline?.trim() || undefined,
@@ -95,14 +104,16 @@ export const create = mutation({
 export const generateUploadUrl = mutation({
   args: { projectId: v.id('projects') },
   handler: async (ctx, { projectId }) => {
-    await requireProjectRole(ctx, projectId, ['owner', 'admin']);
-    return await ctx.storage.generateUploadUrl();
+    const userId = await requireUser(ctx);
+    await requireProjectRole(ctx, projectId, ['owner', 'admin'], userId);
+    return await issueUploadClaim(ctx, projectId, userId, 'plan');
   },
 });
 
 export const completePdfUpload = mutation({
   args: {
     projectId: v.id('projects'),
+    uploadClaimId: v.id('pendingUploads'),
     storageId: v.id('_storage'),
     fileName: v.string(),
     pages: v.array(
@@ -125,8 +136,13 @@ export const completePdfUpload = mutation({
     }
     if (args.pages.length === 0) throw new Error('The PDF does not contain any pages');
 
-    const storedFile = await ctx.db.system.get('_storage', args.storageId);
-    if (storedFile === null) throw new Error('Uploaded plan file was not found');
+    const storedFile = await consumeUploadClaim(ctx, {
+      uploadClaimId: args.uploadClaimId,
+      storageId: args.storageId,
+      projectId: args.projectId,
+      userId,
+      purpose: 'plan',
+    });
     if (storedFile.contentType !== undefined && storedFile.contentType !== 'application/pdf') {
       throw new Error('Only PDF plans can be uploaded');
     }
@@ -262,6 +278,15 @@ async function deleteSheetData(ctx: MutationCtx, sheetId: Id<'sheets'>) {
       ...notes.map((doc) => ctx.db.delete(doc._id)),
       ...attachments.map((doc) => ctx.db.delete(doc._id)),
     ]);
+    await Promise.all(
+      attachments.map(async (attachment) => {
+        try {
+          await ctx.storage.delete(attachment.storageRef);
+        } catch {
+          // Continue removing the plan when an older attachment blob is already absent.
+        }
+      }),
+    );
     await ctx.db.delete(task._id);
   }
   await ctx.db.delete(sheetId);

@@ -27,6 +27,17 @@ export function ProjectPlanWorkspace({
 }: ProjectPlanWorkspaceProps) {
   const workspace = useQuery(api.sheets.getPdfWorkspace, { sheetId });
   const taskRows = useQuery(api.tasks.listByPdf, { sheetId });
+  const selectedTaskId = useProject((state) => state.selectedTaskId);
+  const selectedRemoteTaskId =
+    selectedTaskId && !selectedTaskId.startsWith('local:') ? (selectedTaskId as Id<'tasks'>) : null;
+  const selectedNotes = useQuery(
+    api.notes.listByTask,
+    selectedRemoteTaskId ? { taskId: selectedRemoteTaskId } : 'skip',
+  );
+  const selectedPhotos = useQuery(
+    api.attachments.listPhotosByTask,
+    selectedRemoteTaskId ? { taskId: selectedRemoteTaskId } : 'skip',
+  );
   const createTask = useMutation(api.tasks.create);
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
@@ -38,7 +49,15 @@ export function ProjectPlanWorkspace({
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const remoteTasksRef = useRef<Record<string, Task> | null>(null);
+  const nextTaskSeqRef = useRef(project.nextTaskSeq);
   const syncError = useProject((state) => state.syncError);
+  nextTaskSeqRef.current = project.nextTaskSeq;
+
+  const workspacePdfUrl = workspace?.pdfUrl;
+  const workspaceFileName = workspace
+    ? (workspace.primary.sourceFileName ?? `${workspace.primary.name}.pdf`)
+    : undefined;
+  const workspaceSourceRef = workspace?.primary.sourceFileRef;
 
   const remoteSync = useMemo<RemoteProjectSync | null>(() => {
     if (!workspace) return null;
@@ -69,32 +88,33 @@ export function ProjectPlanWorkspace({
         });
       },
       async updateTask(taskId, patch) {
-        const page = pageSheet(patch.page);
         await updateTask({
           taskId: taskId as Id<'tasks'>,
-          sheetId: page._id,
-          x: patch.x,
-          y: patch.y,
-          title: patch.title,
-          description: patch.description,
-          status: patch.status,
-          priority: patch.priority,
-          category: patch.category,
-          color: patch.color,
-          assigneeText: patch.assignee || null,
-          dueDate: patch.dueDate,
+          ...(patch.page === undefined ? {} : { sheetId: pageSheet(patch.page)._id }),
+          ...(patch.x === undefined ? {} : { x: patch.x }),
+          ...(patch.y === undefined ? {} : { y: patch.y }),
+          ...(patch.title === undefined ? {} : { title: patch.title }),
+          ...(patch.description === undefined ? {} : { description: patch.description }),
+          ...(patch.status === undefined ? {} : { status: patch.status }),
+          ...(patch.priority === undefined ? {} : { priority: patch.priority }),
+          ...(patch.category === undefined ? {} : { category: patch.category }),
+          ...(patch.color === undefined ? {} : { color: patch.color }),
+          ...(patch.assignee === undefined ? {} : { assigneeText: patch.assignee || null }),
+          ...(patch.dueDate === undefined ? {} : { dueDate: patch.dueDate }),
         });
       },
       async deleteTask(taskId) {
         await removeTask({ taskId: taskId as Id<'tasks'> });
       },
       async addNote(taskId, text) {
-        await createNote({ taskId: taskId as Id<'tasks'>, text });
+        return await createNote({ taskId: taskId as Id<'tasks'>, text });
       },
       async addPhotos(taskId, files) {
         for (const file of files) {
           if (!file.type.startsWith('image/')) continue;
-          const uploadUrl = await generateAttachmentUploadUrl({ projectId: project._id });
+          const { uploadUrl, uploadClaimId } = await generateAttachmentUploadUrl({
+            projectId: project._id,
+          });
           const response = await fetch(uploadUrl, {
             method: 'POST',
             headers: { 'Content-Type': file.type || 'application/octet-stream' },
@@ -105,6 +125,7 @@ export function ProjectPlanWorkspace({
           await completeAttachmentUpload({
             taskId: taskId as Id<'tasks'>,
             kind: 'photo',
+            uploadClaimId,
             storageRef: storageId,
             fileName: file.name,
             contentType: file.type || 'application/octet-stream',
@@ -153,17 +174,8 @@ export function ProjectPlanWorkspace({
         color: task.color,
         assignee: task.assigneeText ?? '',
         dueDate: task.dueDate ?? null,
-        notes: row.notes.map((note) => ({
-          id: note._id,
-          text: note.text,
-          createdAt: note.createdAt,
-        })),
-        photos: row.photos.map(({ attachment, url }) => ({
-          id: attachment._id,
-          name: attachment.fileName,
-          createdAt: attachment.createdAt,
-          url: url ?? undefined,
-        })),
+        notes: [],
+        photos: [],
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       };
@@ -181,23 +193,41 @@ export function ProjectPlanWorkspace({
   }, [project.nextTaskSeq, remoteTasks]);
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!selectedRemoteTaskId || !selectedNotes || !selectedPhotos) return;
+    useProject.getState().replaceTaskDetails(
+      selectedRemoteTaskId,
+      selectedNotes.map((note) => ({
+        id: note._id,
+        text: note.text,
+        createdAt: note.createdAt,
+      })),
+      selectedPhotos.map(({ attachment, url }) => ({
+        id: attachment._id,
+        name: attachment.fileName,
+        createdAt: attachment.createdAt,
+        url: url ?? undefined,
+      })),
+    );
+  }, [selectedNotes, selectedPhotos, selectedRemoteTaskId]);
+
+  useEffect(() => {
+    if (!workspacePdfUrl || !workspaceFileName || !workspaceSourceRef) return;
     let active = true;
     setDocument(null);
     setDocumentError(null);
     void (async () => {
       try {
-        const response = await fetch(workspace.pdfUrl);
+        const response = await fetch(workspacePdfUrl);
         if (!response.ok) throw new Error('The plan PDF could not be loaded.');
         const opened = await openPdf(await response.arrayBuffer());
         if (!active) return;
         useProject.getState().loadRemoteDocument({
-          fileName: workspace.primary.sourceFileName ?? `${workspace.primary.name}.pdf`,
-          fingerprint: `project:${project._id}:pdf:${workspace.primary.sourceFileRef}`,
+          fileName: workspaceFileName,
+          fingerprint: `project:${project._id}:pdf:${workspaceSourceRef}`,
           pageCount: opened.pageCount,
         });
         if (remoteTasksRef.current) {
-          useProject.getState().replaceProject(remoteTasksRef.current, project.nextTaskSeq);
+          useProject.getState().replaceProject(remoteTasksRef.current, nextTaskSeqRef.current);
         }
         setDocument(opened.doc);
       } catch (error) {
@@ -207,7 +237,7 @@ export function ProjectPlanWorkspace({
     return () => {
       active = false;
     };
-  }, [project._id, project.nextTaskSeq, workspace]);
+  }, [project._id, workspaceFileName, workspacePdfUrl, workspaceSourceRef]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

@@ -7,8 +7,8 @@ Convex; Zustand holds only the active workspace's responsive UI state.
 
 ## Terminology
 
-- **Ownership** answers who controls a project. An owner can manage membership, transfer ownership,
-  and delete the project.
+- **Ownership** answers who controls a project. The current owner can invite members and delete the
+  project; ownership transfer and member-role management are planned rather than implemented.
 - **Membership** answers whether a user may access a project and which operations they may perform.
 - **Authorship** records who created a task, note, or attachment. It is immutable audit data and does
   not grant access by itself.
@@ -41,6 +41,10 @@ A task does not need its own `ownerId`. Its `projectId` determines its authoriza
 The first project creator is inserted as its owner in the same mutation that creates the project.
 The application must never trust a role supplied by the client; every public Convex function reads
 membership from the database.
+
+The view/content/sheet/invite/delete/leave permissions in this table are enforced now. The current
+invitation flow always creates `member` access; removing members, changing roles, and transferring
+ownership do not yet have public mutations or UI.
 
 ## Implemented tables
 
@@ -100,9 +104,8 @@ duplicates.
 }
 ```
 
-Indexes: `by_project`, `by_user`, and compound `by_project_user`. Mutations enforce one membership
-per user/project and at least one owner. Ownership transfer changes the old and new owner roles in a
-single mutation.
+Indexes: `by_project`, `by_user`, and compound `by_project_user`. Project creation and invitation
+acceptance avoid duplicate memberships. Owners cannot leave; ownership transfer remains planned.
 
 Accepted-member counts come from `projectMembers`; pending invitations never inflate that count.
 Non-owner members may remove their own membership with the leave mutation. Owners cannot leave
@@ -127,6 +130,10 @@ Indexes: `by_project`, compound `by_email_status`, and compound
 foreign keys. The authenticated recipient sees pending invitations for their verified account email
 in notifications. Acceptance validates that email again, inserts a `member` membership if needed,
 and marks the invitation accepted in the same transaction.
+
+Invitation creation intentionally reports when an email has no FieldPilot account because the
+current product requires inviting existing users only. This exposes account existence to project
+owners/admins and is an explicit alpha privacy tradeoff, not an accidental error-message leak.
 
 ### `sheets`
 
@@ -158,6 +165,10 @@ Uploaded PDFs are stored in Convex Storage. Every page becomes a sheet record an
 bundled demo plan continues to use its public asset path in `sourceFileRef`. The project UI groups
 all sheet records with the same `sourceFileRef` into one PDF card; PDF-level edit and remove
 mutations update or delete the entire group.
+
+The generic sheet-creation mutation accepts only same-origin application paths. Stored PDFs use the
+claim-checked upload completion mutation, so clients cannot make other members' browsers fetch an
+arbitrary external URL through `sourceFileRef`.
 
 All project members can read plan metadata. Only owners and admins can create, edit, or remove a
 plan. Removing a plan also removes its related tasks, notes, and attachment records.
@@ -222,7 +233,7 @@ caller and is never accepted as a client argument.
   projectId: Id<'projects'>;
   taskId: Id<'tasks'>;
   kind: 'photo' | 'file';
-  storageRef: string;
+  storageRef: Id<'_storage'>;
   fileName: string;
   contentType: string;
   size: number;
@@ -231,10 +242,13 @@ caller and is never accepted as a client argument.
 }
 ```
 
-Indexes: `by_task` and compound `by_project_createdAt` for the project photo gallery.
+Indexes: `by_task`, compound `by_project_createdAt` for the project photo gallery, and
+`by_storageRef` to prevent a stored object from being claimed by more than one owner record.
 
-The concrete validator for `storageRef` is finalized with the storage provider. Upload completion is
-a server mutation that verifies membership before attaching an uploaded object to a task.
+Upload URLs create short-lived, single-use `pendingUploads` claims tied to the authenticated user,
+project, and upload purpose. Completion requires that claim, an existing newer storage object, and a
+storage ID not already used by any plan or attachment. This prevents a member from copying a plan's
+storage ID into an attachment and deleting the underlying plan through attachment cleanup.
 
 ## Server-assigned fields
 
@@ -249,10 +263,11 @@ Clients must not choose any of the following values:
 The server derives identity from the authenticated Convex context and validates membership before
 every read or write.
 
-## Local-data import
+## Local-data import (planned)
 
-The current version-1 JSON export remains a supported migration input. An authenticated import
-mutation will:
+The authenticated workspace currently exposes JSON export. Its legacy import parser remains in the
+repository, but the import control is disabled until an authorization-checked mutation implements
+the following mapping:
 
 1. Create a new project owned by the importer.
 2. Create one sheet for each referenced PDF page.
@@ -266,17 +281,18 @@ mutation will:
 The local TypeScript model should not invent a `local-user` identifier before authentication is
 available. Authorship becomes required when records cross the Convex mutation boundary.
 
-## Mutation boundaries
+## Current mutation boundaries
 
 The existing Zustand action names provide a useful migration seam, but Zustand becomes UI state
 only. Convex owns persistent operations such as:
 
-- `projects.create`, `projects.update`, `projects.archive`
 - `projects.rename`, `projects.remove`, `projects.leave`
 - `invitations.create`, `invitations.accept`
-- `sheets.createFromPdf`, `sheets.update`, `sheets.archive`
-- `tasks.create`, `tasks.update`, `tasks.move`, `tasks.remove`
-- `notes.create`, `notes.update`, `notes.remove`
+- `projects.create`
+- `sheets.create`, `sheets.completePdfUpload`, `sheets.update`, `sheets.updatePdf`,
+  `sheets.remove`, `sheets.removePdf`
+- `tasks.create`, `tasks.update`, `tasks.remove`
+- `notes.create`
 - `attachments.completeUpload`, `attachments.remove`
 
 Shared helpers such as `requireUser`, `requireProjectMember`, and `requireProjectRole` should be used

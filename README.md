@@ -34,7 +34,7 @@ PDF plan set.
 ## Tech
 
 React 19 + TypeScript + Vite, Tailwind CSS v4, PDF.js, Zustand, IndexedDB (`idb-keyval`), Convex,
-Convex Auth, Google OAuth, and Resend.
+Convex Auth, Google OAuth, and Brevo transactional email.
 
 The selected hosted architecture and every current or conditional external provider are documented
 in [`docs/providers.md`](docs/providers.md). The ownership model and implemented Convex schema are in

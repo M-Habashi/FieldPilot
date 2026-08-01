@@ -78,7 +78,8 @@ export default defineSchema({
   })
     .index('by_project', ['projectId'])
     .index('by_project_number', ['projectId', 'number'])
-    .index('by_project_sourceFileRef', ['projectId', 'sourceFileRef']),
+    .index('by_project_sourceFileRef', ['projectId', 'sourceFileRef'])
+    .index('by_sourceStorageId', ['sourceStorageId']),
 
   tasks: defineTable({
     projectId: v.id('projects'),
@@ -119,7 +120,7 @@ export default defineSchema({
     projectId: v.id('projects'),
     taskId: v.id('tasks'),
     kind: v.union(v.literal('photo'), v.literal('file')),
-    storageRef: v.string(),
+    storageRef: v.id('_storage'),
     fileName: v.string(),
     contentType: v.string(),
     size: v.number(),
@@ -127,5 +128,15 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index('by_task', ['taskId'])
-    .index('by_project_createdAt', ['projectId', 'createdAt']),
+    .index('by_project_createdAt', ['projectId', 'createdAt'])
+    .index('by_storageRef', ['storageRef']),
+
+  pendingUploads: defineTable({
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    purpose: v.union(v.literal('attachment'), v.literal('plan')),
+    createdAt: v.number(),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_user_project_purpose', ['userId', 'projectId', 'purpose']),
 });

@@ -1,6 +1,11 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireProjectMember, requireUser } from './lib/authz';
+import {
+  CONTENT_EDITOR_ROLES,
+  requireProjectMember,
+  requireProjectRole,
+  requireUser,
+} from './lib/authz';
 
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
@@ -25,7 +30,7 @@ export const create = mutation({
     const authorId = await requireUser(ctx);
     const task = await ctx.db.get(taskId);
     if (task === null) throw new Error('Task not found');
-    await requireProjectMember(ctx, task.projectId, authorId);
+    await requireProjectRole(ctx, task.projectId, CONTENT_EDITOR_ROLES, authorId);
 
     const trimmed = text.trim();
     if (!trimmed) throw new Error('Note text is required');

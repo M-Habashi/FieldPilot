@@ -9,26 +9,28 @@ interface PersistedProject {
   nextSeq: number;
 }
 
-type RemoteTaskPatch = Pick<
-  Task,
-  | 'page'
-  | 'x'
-  | 'y'
-  | 'title'
-  | 'description'
-  | 'status'
-  | 'priority'
-  | 'category'
-  | 'color'
-  | 'assignee'
-  | 'dueDate'
+type RemoteTaskPatch = Partial<
+  Pick<
+    Task,
+    | 'page'
+    | 'x'
+    | 'y'
+    | 'title'
+    | 'description'
+    | 'status'
+    | 'priority'
+    | 'category'
+    | 'color'
+    | 'assignee'
+    | 'dueDate'
+  >
 >;
 
 export interface RemoteProjectSync {
   createTask(task: Task): Promise<string>;
   updateTask(taskId: string, patch: RemoteTaskPatch): Promise<void>;
   deleteTask(taskId: string): Promise<void>;
-  addNote(taskId: string, text: string): Promise<void>;
+  addNote(taskId: string, text: string): Promise<string>;
   addPhotos(taskId: string, files: File[]): Promise<void>;
   removePhoto(taskId: string, photoId: string): Promise<void>;
 }
@@ -36,13 +38,44 @@ export interface RemoteProjectSync {
 let remoteSync: RemoteProjectSync | null = null;
 const remoteUpdateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingRemoteUpdates = new Set<string>();
+const pendingRemotePatches = new Map<string, RemoteTaskPatch>();
+
+function sendPendingRemoteUpdate(taskId: string, adapter: RemoteProjectSync) {
+  const patch = pendingRemotePatches.get(taskId);
+  pendingRemotePatches.delete(taskId);
+  if (!patch) {
+    pendingRemoteUpdates.delete(taskId);
+    return;
+  }
+  void adapter
+    .updateTask(taskId, patch)
+    .then(() => useProject.setState({ syncError: null }))
+    .catch((error: unknown) => {
+      useProject.setState({
+        syncError: error instanceof Error ? error.message : 'The task changes could not be saved.',
+      });
+    })
+    .finally(() => {
+      if (!pendingRemotePatches.has(taskId)) pendingRemoteUpdates.delete(taskId);
+    });
+}
 
 export function setRemoteProjectSync(sync: RemoteProjectSync | null) {
+  const previousSync = remoteSync;
+  if (sync === null && previousSync !== null) {
+    // React cleanup cannot await, but starting the mutation with the captured adapter prevents the
+    // final debounced keystroke from being discarded when the user navigates away.
+    for (const taskId of pendingRemotePatches.keys()) {
+      const timer = remoteUpdateTimers.get(taskId);
+      if (timer) clearTimeout(timer);
+      remoteUpdateTimers.delete(taskId);
+      sendPendingRemoteUpdate(taskId, previousSync);
+    }
+  }
   remoteSync = sync;
   if (sync !== null) return;
   for (const timer of remoteUpdateTimers.values()) clearTimeout(timer);
   remoteUpdateTimers.clear();
-  pendingRemoteUpdates.clear();
 }
 
 function remotePatch(task: Task): RemoteTaskPatch {
@@ -95,7 +128,7 @@ interface ProjectState {
   loadRemoteDocument(meta: { fileName: string; fingerprint: string; pageCount: number }): void;
   setPage(page: number): void;
   addTask(page: number, x: number, y: number): string;
-  updateTask(id: string, patch: Partial<Omit<Task, 'id' | 'seq' | 'createdAt'>>): void;
+  updateTask(id: string, patch: RemoteTaskPatch): void;
   moveTask(id: string, x: number, y: number): void;
   deleteTask(id: string): Promise<void>;
   addNote(taskId: string, text: string): void;
@@ -111,6 +144,7 @@ interface ProjectState {
   setLightbox(photoId: string | null): void;
   setDesign(id: string): void;
   replaceProject(tasks: Record<string, Task>, nextSeq: number): void;
+  replaceTaskDetails(taskId: string, notes: Task['notes'], photos: Task['photos']): void;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -268,25 +302,18 @@ export const useProject = create<ProjectState>((set, get) => ({
       const existing = remoteUpdateTimers.get(id);
       if (existing) clearTimeout(existing);
       pendingRemoteUpdates.add(id);
+      pendingRemotePatches.set(id, { ...pendingRemotePatches.get(id), ...patch });
+      set({ syncError: null });
       remoteUpdateTimers.set(
         id,
         setTimeout(() => {
           remoteUpdateTimers.delete(id);
-          const task = get().tasks[id];
           const adapter = remoteSync;
-          if (!task || !adapter) {
+          if (!adapter) {
             pendingRemoteUpdates.delete(id);
             return;
           }
-          void adapter
-            .updateTask(id, remotePatch(task))
-            .catch((error: unknown) => {
-              set({
-                syncError:
-                  error instanceof Error ? error.message : 'The task changes could not be saved.',
-              });
-            })
-            .finally(() => pendingRemoteUpdates.delete(id));
+          sendPendingRemoteUpdate(id, adapter);
         }, 350),
       );
     } else {
@@ -301,6 +328,11 @@ export const useProject = create<ProjectState>((set, get) => ({
   async deleteTask(id) {
     const task = get().tasks[id];
     if (!task) return;
+    const pendingTimer = remoteUpdateTimers.get(id);
+    if (pendingTimer) clearTimeout(pendingTimer);
+    remoteUpdateTimers.delete(id);
+    pendingRemotePatches.delete(id);
+    pendingRemoteUpdates.delete(id);
     const adapter = remoteSync;
     if (!adapter) {
       for (const photo of task.photos) {
@@ -330,7 +362,11 @@ export const useProject = create<ProjectState>((set, get) => ({
   addNote(taskId, text) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const note = { id: uid(), text: trimmed, createdAt: Date.now() };
+    const note = {
+      id: remoteSync ? `local-note:${uid()}` : uid(),
+      text: trimmed,
+      createdAt: Date.now(),
+    };
     set((s) => {
       const task = s.tasks[taskId];
       if (!task) return s;
@@ -342,9 +378,51 @@ export const useProject = create<ProjectState>((set, get) => ({
       };
     });
     if (remoteSync && !taskId.startsWith('local:')) {
-      void remoteSync.addNote(taskId, trimmed).catch((error: unknown) => {
-        set({ syncError: error instanceof Error ? error.message : 'The note could not be saved.' });
-      });
+      void remoteSync
+        .addNote(taskId, trimmed)
+        .then((serverNoteId) => {
+          set((state) => {
+            const task = state.tasks[taskId];
+            if (!task) return state;
+            const serverNoteAlreadyPresent = task.notes.some(
+              (candidate) => candidate.id === serverNoteId,
+            );
+            return {
+              tasks: {
+                ...state.tasks,
+                [taskId]: {
+                  ...task,
+                  notes: serverNoteAlreadyPresent
+                    ? task.notes.filter((candidate) => candidate.id !== note.id)
+                    : task.notes.map((candidate) =>
+                        candidate.id === note.id ? { ...candidate, id: serverNoteId } : candidate,
+                      ),
+                },
+              },
+              syncError: null,
+            };
+          });
+        })
+        .catch((error: unknown) => {
+          set((state) => {
+            const task = state.tasks[taskId];
+            if (!task) {
+              return {
+                syncError: error instanceof Error ? error.message : 'The note could not be saved.',
+              };
+            }
+            return {
+              tasks: {
+                ...state.tasks,
+                [taskId]: {
+                  ...task,
+                  notes: task.notes.filter((candidate) => candidate.id !== note.id),
+                },
+              },
+              syncError: error instanceof Error ? error.message : 'The note could not be saved.',
+            };
+          });
+        });
     } else {
       schedulePersist(get);
     }
@@ -457,7 +535,12 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   replaceProject(tasks, nextSeq) {
     set((state) => {
-      const merged = { ...tasks };
+      const merged = Object.fromEntries(
+        Object.entries(tasks).map(([id, task]) => {
+          const current = state.tasks[id];
+          return [id, current ? { ...task, notes: current.notes, photos: current.photos } : task];
+        }),
+      );
       for (const [id, task] of Object.entries(state.tasks)) {
         if (id.startsWith('local:') || pendingRemoteUpdates.has(id)) merged[id] = task;
       }
@@ -471,5 +554,24 @@ export const useProject = create<ProjectState>((set, get) => ({
       };
     });
     schedulePersist(get);
+  },
+
+  replaceTaskDetails(taskId, notes, photos) {
+    set((state) => {
+      const task = state.tasks[taskId];
+      if (!task) return state;
+      const pendingNotes = task.notes.filter((note) => note.id.startsWith('local-note:'));
+      const pendingIds = new Set(pendingNotes.map((note) => note.id));
+      return {
+        tasks: {
+          ...state.tasks,
+          [taskId]: {
+            ...task,
+            notes: [...pendingNotes, ...notes.filter((note) => !pendingIds.has(note.id))],
+            photos,
+          },
+        },
+      };
+    });
   },
 }));

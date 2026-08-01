@@ -1,8 +1,9 @@
 import type { EmailConfig } from '@convex-dev/auth/server';
 
 const CODE_MAX_AGE_SECONDS = 15 * 60;
+const BREVO_TRANSACTIONAL_EMAIL_URL = 'https://api.brevo.com/v3/smtp/email';
 
-function environment(name: 'AUTH_RESEND_KEY' | 'AUTH_EMAIL_FROM') {
+function environment(name: 'AUTH_BREVO_KEY' | 'AUTH_EMAIL_FROM') {
   return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[
     name
   ];
@@ -40,7 +41,7 @@ function emailBody(code: string, purpose: 'verify' | 'reset') {
 </html>`;
 }
 
-function resendOtpProvider(
+function brevoOtpProvider(
   id: 'fieldpilot-email-verification' | 'fieldpilot-password-reset',
   purpose: 'verify' | 'reset',
 ): EmailConfig {
@@ -65,43 +66,51 @@ function resendOtpProvider(
       }
     },
     sendVerificationRequest: async ({ identifier, token }) => {
-      const apiKey = environment('AUTH_RESEND_KEY');
+      const apiKey = environment('AUTH_BREVO_KEY');
       const from = environment('AUTH_EMAIL_FROM');
       if (!apiKey || !from) {
         throw new Error(
-          'Email delivery is not configured. Set AUTH_RESEND_KEY and AUTH_EMAIL_FROM in Convex.',
+          'Email delivery is not configured. Set AUTH_BREVO_KEY and AUTH_EMAIL_FROM in Convex.',
         );
       }
 
-      const response = await fetch('https://api.resend.com/emails', {
+      // Brevo is the temporary alpha sender because it can verify an existing mailbox before
+      // FieldPilot owns a domain. Keep this call server-side: AUTH_BREVO_KEY must never be exposed
+      // through a VITE_* variable or sent to the browser. AUTH_EMAIL_FROM is the mailbox verified
+      // in Brevo; Brevo may rewrite its visible address until a FieldPilot domain is authenticated.
+      const response = await fetch(BREVO_TRANSACTIONAL_EMAIL_URL, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Accept: 'application/json',
+          'api-key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from,
-          to: [identifier],
+          sender: {
+            name: 'FieldPilot',
+            email: from,
+          },
+          to: [{ email: identifier }],
           subject:
             purpose === 'verify'
               ? 'Verify your FieldPilot email'
               : 'Reset your FieldPilot password',
-          html: emailBody(token, purpose),
+          htmlContent: emailBody(token, purpose),
         }),
       });
 
       if (!response.ok) {
-        const detail = await response.text();
-        console.error('Resend rejected an authentication email', response.status, detail);
+        // Do not log Brevo's response body: provider errors can echo recipient information.
+        console.error('Brevo rejected an authentication email', response.status);
         throw new Error('We could not send the email code. Please try again.');
       }
     },
   };
 }
 
-export const emailVerificationProvider = resendOtpProvider(
+export const emailVerificationProvider = brevoOtpProvider(
   'fieldpilot-email-verification',
   'verify',
 );
 
-export const passwordResetProvider = resendOtpProvider('fieldpilot-password-reset', 'reset');
+export const passwordResetProvider = brevoOtpProvider('fieldpilot-password-reset', 'reset');

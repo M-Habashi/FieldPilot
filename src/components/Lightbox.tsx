@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useRef } from 'react';
 import { X } from 'lucide-react';
 import { useProject } from '../store/project';
 import { usePhotoUrl } from '../hooks/usePhotoUrl';
+import { useModalFocus } from '../hooks/useModalFocus';
 
 export function Lightbox() {
   const photoId = useProject((s) => s.lightboxPhotoId);
@@ -15,23 +16,18 @@ export function Lightbox() {
   });
   const setLightbox = useProject((s) => s.setLightbox);
   const url = usePhotoUrl(photoId, remoteUrl);
-
-  useEffect(() => {
-    if (!photoId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        setLightbox(null);
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [photoId, setLightbox]);
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  useModalFocus(photoId !== null, lightboxRef, () => setLightbox(null));
 
   if (!photoId) return null;
 
   return (
     <div
+      ref={lightboxRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo preview"
+      tabIndex={-1}
       className="fp-lightbox fixed inset-0 z-90 flex items-center justify-center p-6"
       onClick={() => setLightbox(null)}
     >

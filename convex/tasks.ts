@@ -1,7 +1,12 @@
 import { v } from 'convex/values';
-import type { Doc, Id } from './_generated/dataModel';
+import type { Doc } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
-import { requireProjectMember, requireUser } from './lib/authz';
+import {
+  CONTENT_EDITOR_ROLES,
+  requireProjectMember,
+  requireProjectRole,
+  requireUser,
+} from './lib/authz';
 import { taskPriority, taskStatus } from './schema';
 
 function assertNormalizedCoordinate(value: number, label: string) {
@@ -9,17 +14,6 @@ function assertNormalizedCoordinate(value: number, label: string) {
     throw new Error(`${label} must be a normalized coordinate between 0 and 1`);
   }
 }
-
-export const listByProject = query({
-  args: { projectId: v.id('projects') },
-  handler: async (ctx, { projectId }) => {
-    await requireProjectMember(ctx, projectId);
-    return await ctx.db
-      .query('tasks')
-      .withIndex('by_project', (q) => q.eq('projectId', projectId))
-      .collect();
-  },
-});
 
 export const listByPdf = query({
   args: { sheetId: v.id('sheets') },
@@ -36,40 +30,15 @@ export const listByPdf = query({
       .collect();
     pages.sort((a, b) => a.pageIndex - b.pageIndex);
 
-    const rows = [];
-    for (const page of pages) {
-      const tasks = await ctx.db
-        .query('tasks')
-        .withIndex('by_sheet', (q) => q.eq('sheetId', page._id))
-        .collect();
-      for (const task of tasks) {
-        const [notes, attachments] = await Promise.all([
-          ctx.db
-            .query('notes')
-            .withIndex('by_task', (q) => q.eq('taskId', task._id))
-            .order('desc')
-            .collect(),
-          ctx.db
-            .query('attachments')
-            .withIndex('by_task', (q) => q.eq('taskId', task._id))
-            .collect(),
-        ]);
-        const photos = await Promise.all(
-          attachments
-            .filter((attachment) => attachment.kind === 'photo')
-            .map(async (attachment) => {
-              let url: string | null = null;
-              try {
-                url = await ctx.storage.getUrl(attachment.storageRef as Id<'_storage'>);
-              } catch {
-                // Older development rows may reference files that no longer exist.
-              }
-              return { attachment, url };
-            }),
-        );
-        rows.push({ task, page: page.pageIndex + 1, notes, photos });
-      }
-    }
+    const pageBySheet = new Map(pages.map((page) => [page._id, page.pageIndex + 1]));
+    const projectTasks = await ctx.db
+      .query('tasks')
+      .withIndex('by_project', (q) => q.eq('projectId', anchor.projectId))
+      .collect();
+    const rows = projectTasks.flatMap((task) => {
+      const page = pageBySheet.get(task.sheetId);
+      return page === undefined ? [] : [{ task, page }];
+    });
     return rows.sort((a, b) => a.task.seq - b.task.seq);
   },
 });
@@ -92,7 +61,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
-    await requireProjectMember(ctx, args.projectId, userId);
+    await requireProjectRole(ctx, args.projectId, CONTENT_EDITOR_ROLES, userId);
     assertNormalizedCoordinate(args.x, 'x');
     assertNormalizedCoordinate(args.y, 'y');
 
@@ -151,7 +120,7 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (task === null) throw new Error('Task not found');
-    await requireProjectMember(ctx, task.projectId);
+    await requireProjectRole(ctx, task.projectId, CONTENT_EDITOR_ROLES);
 
     if (args.x !== undefined) assertNormalizedCoordinate(args.x, 'x');
     if (args.y !== undefined) assertNormalizedCoordinate(args.y, 'y');
@@ -192,7 +161,7 @@ export const remove = mutation({
   handler: async (ctx, { taskId }) => {
     const task = await ctx.db.get(taskId);
     if (task === null) throw new Error('Task not found');
-    await requireProjectMember(ctx, task.projectId);
+    await requireProjectRole(ctx, task.projectId, CONTENT_EDITOR_ROLES);
 
     const [notes, attachments] = await Promise.all([
       ctx.db
@@ -206,7 +175,7 @@ export const remove = mutation({
     ]);
     for (const attachment of attachments) {
       try {
-        await ctx.storage.delete(attachment.storageRef as Id<'_storage'>);
+        await ctx.storage.delete(attachment.storageRef);
       } catch {
         // The metadata still needs to be removed if its stored file is already gone.
       }

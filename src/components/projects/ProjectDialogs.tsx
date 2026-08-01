@@ -1,8 +1,9 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Mail, Trash2 } from 'lucide-react';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
+import { useModalFocus } from '../../hooks/useModalFocus';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -17,15 +18,8 @@ interface DialogFrameProps {
 
 function DialogFrame({ open, title, description, onClose, children }: DialogFrameProps) {
   const titleId = useId();
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, open]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, dialogRef, onClose);
 
   if (!open) return null;
   return createPortal(
@@ -35,7 +29,9 @@ function DialogFrame({ open, title, description, onClose, children }: DialogFram
       onMouseDown={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby={titleId}
         className="w-full max-w-md rounded-lg border border-line bg-surface p-5 shadow-e3"

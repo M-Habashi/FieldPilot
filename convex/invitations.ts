@@ -64,9 +64,12 @@ export const create = mutation({
       .unique();
     if (pending !== null) throw new Error('An invitation is already pending for this email');
 
-    const matchingUsers = (await ctx.db.query('users').collect()).filter(
-      (user) => user.email && normalizeEmail(user.email) === email,
-    );
+    // Convex Auth already defines the `email` index. Account emails are normalized at the auth
+    // boundary, so invitation checks stay bounded instead of scanning the full users table.
+    const matchingUsers = await ctx.db
+      .query('users')
+      .withIndex('email', (q) => q.eq('email', email))
+      .take(2);
     if (matchingUsers.length === 0) {
       throw new Error('There is no account associated with this email.');
     }
