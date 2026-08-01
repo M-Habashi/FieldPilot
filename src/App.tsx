@@ -1,5 +1,10 @@
 import { ProjectApp } from './components/projects/ProjectApp';
+import { NotificationProvider } from './components/ui/notification-provider';
 
 export default function App() {
-  return <ProjectApp />;
+  return (
+    <NotificationProvider>
+      <ProjectApp />
+    </NotificationProvider>
+  );
 }

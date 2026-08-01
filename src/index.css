@@ -1,9 +1,6 @@
 @import 'tailwindcss';
 
 @import './themes/tokens.css';
-@import './themes/design-blueprint.css';
-@import './themes/design-studio.css';
-@import './themes/design-carbon.css';
 @import './components/marketing/marketing.css';
 
 /* Map raw --fp-* tokens to Tailwind semantic utilities.
@@ -29,9 +26,7 @@
   --color-danger: var(--fp-danger);
   --color-danger-soft: var(--fp-danger-soft);
   --color-ok: var(--fp-ok);
-  --color-ok-soft: var(--fp-ok-soft);
   --color-warn: var(--fp-warn);
-  --color-warn-soft: var(--fp-warn-soft);
 
   --radius-xs: var(--fp-radius-xs);
   --radius-md: var(--fp-radius-md);
@@ -73,25 +68,25 @@ body {
   .fp-toolbar {
     height: var(--fp-toolbar-height);
     background: var(--fp-bg-surface);
-    border-bottom: 1px solid var(--fp-border);
+    border-bottom: 1px solid var(--fp-border-strong);
   }
 
   .fp-actionbar {
     min-height: 34px;
     background: var(--fp-bg-surface);
-    border-bottom: 1px solid var(--fp-border);
+    border-bottom: 1px solid var(--fp-border-strong);
     font-size: var(--fp-ui-font-size);
   }
 
   .fp-statusbar {
     height: 32px;
     background: var(--fp-bg-surface);
-    border-top: 1px solid var(--fp-border);
+    border-top: 1px solid var(--fp-border-strong);
   }
 
   .fp-sidebar {
     background: var(--fp-bg-surface);
-    border-right: 1px solid var(--fp-border);
+    border-right: 1px solid var(--fp-border-strong);
   }
 
   .fp-canvas-stage {
@@ -265,6 +260,17 @@ body {
   }
 }
 
+@keyframes fp-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Drawer fields use a text-editor treatment: focus is communicated by text
    color/caret rather than reintroducing a boxed control around the field. */
 .fp-panel input:focus-visible,
@@ -278,11 +284,11 @@ body {
 @keyframes fp-pin-drop {
   0% {
     opacity: 0;
-    translate: 0 -14px;
-    scale: 0.6;
+    translate: 0 -10px;
+    scale: 0.9;
   }
-  70% {
-    translate: 0 2px;
+  80% {
+    translate: 0 1px;
   }
   100% {
     opacity: 1;

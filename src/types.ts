@@ -2,7 +2,7 @@ export type Priority = 1 | 2 | 3;
 
 export type Status = 'open' | 'in-progress' | 'done' | 'verified';
 
-export interface Note {
+interface Note {
   id: string;
   text: string;
   createdAt: number;

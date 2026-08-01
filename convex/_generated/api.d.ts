@@ -16,6 +16,7 @@ import type * as invitations from "../invitations.js";
 import type * as lib_authUser from "../lib/authUser.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_demoProject from "../lib/demoProject.js";
+import type * as lib_uploads from "../lib/uploads.js";
 import type * as notes from "../notes.js";
 import type * as projects from "../projects.js";
 import type * as sheets from "../sheets.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authUser": typeof lib_authUser;
   "lib/authz": typeof lib_authz;
   "lib/demoProject": typeof lib_demoProject;
+  "lib/uploads": typeof lib_uploads;
   notes: typeof notes;
   projects: typeof projects;
   sheets: typeof sheets;

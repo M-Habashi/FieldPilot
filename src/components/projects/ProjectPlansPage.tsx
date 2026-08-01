@@ -18,6 +18,8 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/dialog';
 import { Dropdown, DropdownItem } from '../ui/dropdown-menu';
+import { Notice } from '../ui/notice';
+import { useNotify } from '../ui/use-notify';
 import { EditPlanDialog } from './ProjectDialogs';
 
 interface ProjectPlansPageProps {
@@ -38,15 +40,7 @@ function formatDate(timestamp: number) {
 function CreationDate({ timestamp }: { timestamp: number }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="group/date relative inline-flex p-1 text-t3" tabIndex={0}>
-        <CalendarDays className="size-4" />
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-t1 px-2 py-1 text-[11px] font-medium text-surface opacity-0 shadow-e2 transition-opacity duration-(--fp-dur-fast) group-hover/date:opacity-100 group-focus-visible/date:opacity-100"
-        >
-          Creation date
-        </span>
-      </span>
+      <CalendarDays className="size-4 text-t3" aria-hidden />
       <span>{formatDate(timestamp)}</span>
     </div>
   );
@@ -58,6 +52,7 @@ export function ProjectPlansPage({
   onBackToProjects,
   onOpenPlan,
 }: ProjectPlansPageProps) {
+  const { notify } = useNotify();
   const plans = useQuery(api.sheets.listByProjectWithMetadata, { projectId: project._id });
   const generateUploadUrl = useMutation(api.sheets.generateUploadUrl);
   const completePdfUpload = useMutation(api.sheets.completePdfUpload);
@@ -94,6 +89,7 @@ export function ProjectPlansPage({
 
   async function uploadPlans(files: FileList | null) {
     if (!files?.length || uploading) return;
+    const fileCount = files.length;
     setUploading(true);
     setUploadError(null);
 
@@ -137,6 +133,11 @@ export function ProjectPlansPage({
           pages,
         });
       }
+      notify({
+        tone: 'success',
+        title: fileCount === 1 ? 'Plan uploaded' : 'Plans uploaded',
+        message: `${fileCount} PDF ${fileCount === 1 ? 'is' : 'are'} now available in this project.`,
+      });
     } catch (error) {
       setUploadError(userFacingError(error));
     } finally {
@@ -172,9 +173,9 @@ export function ProjectPlansPage({
       </nav>
 
       {uploadError && (
-        <p className="mt-5 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
+        <Notice tone="error" title="Upload failed" className="mt-5">
           {uploadError}
-        </p>
+        </Notice>
       )}
 
       {pdfGroups === undefined ? (
@@ -352,6 +353,11 @@ export function ProjectPlansPage({
           values: { name: string; discipline: string | null; version: number },
         ) => {
           await updatePdf({ sheetId, ...values });
+          notify({
+            tone: 'success',
+            title: 'Plan details saved',
+            message: 'The plan name, version, and discipline are up to date.',
+          });
         }}
       />
       <ConfirmDialog
@@ -363,7 +369,23 @@ export function ProjectPlansPage({
         onCancel={() => setRemoveTarget(null)}
         onConfirm={() => {
           if (!removeTarget) return;
-          void removePdf({ sheetId: removeTarget._id }).then(() => setRemoveTarget(null));
+          const planName = removeTarget.name;
+          void removePdf({ sheetId: removeTarget._id })
+            .then(() => {
+              setRemoveTarget(null);
+              notify({
+                tone: 'success',
+                title: 'Plan removed',
+                message: `${planName} and its pages are no longer in this project.`,
+              });
+            })
+            .catch((error: unknown) => {
+              notify({
+                tone: 'error',
+                title: 'Couldn’t remove plan',
+                message: userFacingError(error),
+              });
+            });
         }}
       />
       <input

@@ -23,8 +23,6 @@
     "@convex-dev/auth": "^0.0.94",
     "@fontsource-variable/inter": "^5.2.5",
     "@fontsource-variable/jetbrains-mono": "^5.2.5",
-    "@fontsource-variable/manrope": "^5.2.5",
-    "@fontsource-variable/source-serif-4": "^5.2.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.43.0",

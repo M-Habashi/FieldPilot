@@ -91,7 +91,6 @@ export function TaskListBody() {
                     <button
                       type="button"
                       aria-label={`Locate ${task.title || `task ${task.seq}`} on plan`}
-                      title="Locate on plan"
                       className="ml-1 flex size-6 shrink-0 cursor-pointer items-center justify-center text-t3 transition-colors duration-(--fp-dur-fast) hover:text-accent"
                       onClick={() => focusTask(task.id)}
                     >

@@ -5,6 +5,7 @@ import { userFacingError } from '../../lib/errors';
 import { Brand } from '../Brand';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Notice } from '../ui/notice';
 
 export type AuthMode = 'login' | 'signup';
 type AuthStep = 'credentials' | 'verify' | 'reset-request' | 'reset-code';
@@ -57,6 +58,20 @@ const SSO_BUTTON =
 
 const PRIMARY_BUTTON =
   'inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-on-accent shadow-e1 transition-[background,transform] hover:bg-accent-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+
+function validateEmail(email: string) {
+  if (!email) return 'Enter your email address.';
+  if (!EMAIL_PATTERN.test(email)) {
+    return 'Enter a valid email address, like name@example.com.';
+  }
+  return null;
+}
+
+function validateCode(code: string) {
+  return /^\d{6}$/u.test(code) ? null : 'Enter the six-digit code from your email.';
+}
 
 function PasswordField({
   id,
@@ -138,7 +153,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     try {
       await signIn('google');
     } catch {
-      setError('Google sign-in could not be started. Please try again.');
+      setError('Google sign-in is unavailable right now. Check your connection and try again.');
       setSubmitting(null);
     }
   };
@@ -149,8 +164,29 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     const email = String(values.get('email') ?? '')
       .trim()
       .toLowerCase();
+    const password = String(values.get('password') ?? '');
+    const confirmPassword = String(values.get('confirmPassword') ?? '');
+    setError(null);
 
-    if (mode === 'signup' && values.get('password') !== values.get('confirmPassword')) {
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+    if (!password) {
+      setError('Enter your password.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Your password must be at least 8 characters.');
+      return;
+    }
+    if (mode === 'signup' && !String(values.get('name') ?? '').trim()) {
+      setError('Enter your name.');
+      return;
+    }
+
+    if (mode === 'signup' && password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
@@ -158,7 +194,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     values.delete('confirmPassword');
     values.set('email', email);
     values.set('flow', mode === 'signup' ? 'signUp' : 'signIn');
-    pendingPassword.current = String(values.get('password') ?? '');
+    pendingPassword.current = password;
     setSubmitting('email');
     setError(null);
 
@@ -180,6 +216,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const verifyEmail = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
+    const code = String(values.get('code') ?? '').trim();
+    setError(null);
+    const codeError = validateCode(code);
+    if (codeError) {
+      setError(codeError);
+      return;
+    }
+    values.set('code', code);
     values.set('flow', 'email-verification');
     values.set('email', pendingEmail);
     setSubmitting('email');
@@ -232,6 +276,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     const email = String(values.get('email') ?? '')
       .trim()
       .toLowerCase();
+    setError(null);
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
     values.set('flow', 'reset');
     values.set('email', email);
     setSubmitting('email');
@@ -251,11 +301,25 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const completePasswordReset = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    if (values.get('newPassword') !== values.get('confirmPassword')) {
+    const code = String(values.get('code') ?? '').trim();
+    const newPassword = String(values.get('newPassword') ?? '');
+    const confirmPassword = String(values.get('confirmPassword') ?? '');
+    setError(null);
+    const codeError = validateCode(code);
+    if (codeError) {
+      setError(codeError);
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('Your new password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
+    values.set('code', code);
     values.delete('confirmPassword');
     values.set('flow', 'reset-verification');
     values.set('email', pendingEmail);
@@ -351,7 +415,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     <span className="h-px flex-1 bg-line" />
                   </div>
 
-                  <form onSubmit={(event) => void submitCredentials(event)} className="space-y-3.5">
+                  <form
+                    noValidate
+                    onSubmit={(event) => void submitCredentials(event)}
+                    className="space-y-3.5"
+                  >
                     {mode === 'signup' && (
                       <div>
                         <Label htmlFor="signup-name">Name</Label>
@@ -401,17 +469,20 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               )}
 
               {step === 'verify' && (
-                <form onSubmit={(event) => void verifyEmail(event)} className="space-y-4">
-                  <div className="rounded-md border border-accent/25 bg-accent-soft px-3.5 py-3 text-xs leading-5 text-t2">
-                    <p className="font-semibold text-t1">Verify your email to continue</p>
-                    <p className="mt-0.5">
+                <form
+                  noValidate
+                  onSubmit={(event) => void verifyEmail(event)}
+                  className="space-y-4"
+                >
+                  <Notice tone="info" compact title="Verify your email to continue">
+                    <p>
                       Your projects stay protected until you enter the code. It expires after 15
                       minutes.
                     </p>
                     {codeResent && (
                       <p className="mt-1 font-semibold text-accent">A new code was sent.</p>
                     )}
-                  </div>
+                  </Notice>
                   <div>
                     <Label htmlFor="verification-code">Verification code</Label>
                     <Input
@@ -453,7 +524,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               )}
 
               {step === 'reset-request' && (
-                <form onSubmit={(event) => void requestPasswordReset(event)} className="space-y-4">
+                <form
+                  noValidate
+                  onSubmit={(event) => void requestPasswordReset(event)}
+                  className="space-y-4"
+                >
                   <div>
                     <Label htmlFor="reset-email">Email address</Label>
                     <Input
@@ -481,6 +556,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
               {step === 'reset-code' && (
                 <form
+                  noValidate
                   onSubmit={(event) => void completePasswordReset(event)}
                   className="space-y-3.5"
                 >
@@ -533,12 +609,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             </div>
 
             {error && (
-              <p
-                role="alert"
-                className="mt-4 rounded-md bg-danger-soft px-3 py-2 text-xs font-medium text-danger"
-              >
+              <Notice tone="error" compact title="Couldn’t complete that request" className="mt-4">
                 {error}
-              </p>
+              </Notice>
             )}
 
             {step === 'credentials' && (

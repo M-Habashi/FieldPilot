@@ -114,13 +114,11 @@ interface ProjectState {
   nextSeq: number;
   // ui
   selectedTaskId: string | null;
-  pinTooltipTaskId: string | null;
   addPinMode: boolean;
   taskListOpen: boolean;
   sidebarCollapsed: boolean;
   lightboxPhotoId: string | null;
   focusRequest: FocusRequest | null;
-  design: string;
   lastTaskColor: string;
   syncError: string | null;
 
@@ -135,14 +133,12 @@ interface ProjectState {
   addPhotos(taskId: string, files: File[]): Promise<void>;
   removePhoto(taskId: string, photoId: string): Promise<void>;
   selectTask(id: string | null): void;
-  showPinTooltip(id: string | null): void;
   focusTask(id: string): void;
   setAddPinMode(on: boolean): void;
   showTaskList(): void;
   closeTaskList(): void;
   toggleSidebar(): void;
   setLightbox(photoId: string | null): void;
-  setDesign(id: string): void;
   replaceProject(tasks: Record<string, Task>, nextSeq: number): void;
   replaceTaskDetails(taskId: string, notes: Task['notes'], photos: Task['photos']): void;
 }
@@ -168,7 +164,6 @@ export const useProject = create<ProjectState>((set, get) => ({
   tasks: {},
   nextSeq: 1,
   selectedTaskId: null,
-  pinTooltipTaskId: null,
   addPinMode: false,
   taskListOpen: false,
   // Default to the narrow icon rail; the single "Plans" item doesn't justify
@@ -176,7 +171,6 @@ export const useProject = create<ProjectState>((set, get) => ({
   sidebarCollapsed: true,
   lightboxPhotoId: null,
   focusRequest: null,
-  design: localStorage.getItem('fp:design') ?? 'blueprint',
   lastTaskColor: localStorage.getItem('fp:last-task-color') ?? DEFAULT_TASK_COLOR,
   syncError: null,
 
@@ -190,7 +184,6 @@ export const useProject = create<ProjectState>((set, get) => ({
       tasks: persisted?.tasks ?? {},
       nextSeq: persisted?.nextSeq ?? 1,
       selectedTaskId: null,
-      pinTooltipTaskId: null,
       addPinMode: false,
       focusRequest: null,
     });
@@ -205,7 +198,6 @@ export const useProject = create<ProjectState>((set, get) => ({
       tasks: {},
       nextSeq: 1,
       selectedTaskId: null,
-      pinTooltipTaskId: null,
       addPinMode: false,
       taskListOpen: false,
       focusRequest: null,
@@ -247,7 +239,6 @@ export const useProject = create<ProjectState>((set, get) => ({
       tasks: { ...s.tasks, [id]: task },
       nextSeq: seq + 1,
       selectedTaskId: id,
-      pinTooltipTaskId: null,
     }));
     schedulePersist(get);
     if (adapter) {
@@ -265,7 +256,6 @@ export const useProject = create<ProjectState>((set, get) => ({
             return {
               tasks,
               selectedTaskId: state.selectedTaskId === id ? serverId : state.selectedTaskId,
-              pinTooltipTaskId: state.pinTooltipTaskId === id ? serverId : state.pinTooltipTaskId,
             };
           });
           if (currentTask) {
@@ -345,7 +335,6 @@ export const useProject = create<ProjectState>((set, get) => ({
       return {
         tasks,
         selectedTaskId: s.selectedTaskId === id ? null : s.selectedTaskId,
-        pinTooltipTaskId: s.pinTooltipTaskId === id ? null : s.pinTooltipTaskId,
       };
     });
     if (adapter && !id.startsWith('local:')) {
@@ -490,11 +479,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   selectTask(id) {
-    set({ selectedTaskId: id, pinTooltipTaskId: null });
-  },
-
-  showPinTooltip(id) {
-    set({ pinTooltipTaskId: id });
+    set({ selectedTaskId: id });
   },
 
   focusTask(id) {
@@ -502,7 +487,6 @@ export const useProject = create<ProjectState>((set, get) => ({
     if (!task) return;
     set({
       currentPage: task.page,
-      pinTooltipTaskId: null,
       focusRequest: { taskId: id, ts: Date.now() },
     });
   },
@@ -512,7 +496,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   showTaskList() {
-    set({ taskListOpen: true, selectedTaskId: null, pinTooltipTaskId: null });
+    set({ taskListOpen: true, selectedTaskId: null });
   },
 
   closeTaskList() {
@@ -525,12 +509,6 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   setLightbox(photoId) {
     set({ lightboxPhotoId: photoId });
-  },
-
-  setDesign(id) {
-    localStorage.setItem('fp:design', id);
-    document.documentElement.dataset.design = id;
-    set({ design: id });
   },
 
   replaceProject(tasks, nextSeq) {
@@ -549,8 +527,6 @@ export const useProject = create<ProjectState>((set, get) => ({
         nextSeq,
         selectedTaskId:
           state.selectedTaskId && merged[state.selectedTaskId] ? state.selectedTaskId : null,
-        pinTooltipTaskId:
-          state.pinTooltipTaskId && merged[state.pinTooltipTaskId] ? state.pinTooltipTaskId : null,
       };
     });
     schedulePersist(get);

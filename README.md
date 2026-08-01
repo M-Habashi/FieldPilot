@@ -28,7 +28,6 @@ PDF plan set.
 | Edit a task     | Click its pin — the properties panel has title, status, priority, category, assignee, due date, description, notes, photos |
 | Move a pin      | Drag it                                                                                                                    |
 | Task list       | Toggle **Tasks** (right-side pane) — click a row to jump to its pin                                                        |
-| Switch design   | Palette menu in the action bar: **Blueprint**, **Studio**, or **Carbon**                                                   |
 | Backup / share  | **Import** / **Export** in the action bar (JSON, photos included)                                                          |
 
 ## Tech
@@ -52,11 +51,9 @@ the drawing at any zoom and survive re-renders.
 
 ### Design system
 
-All components consume semantic tokens (`--fp-*`, mapped to Tailwind utilities in
-`src/index.css`). Each design in `src/themes/design-*.css` redefines the full token set —
-palette, fonts, radii, shadows, motion — under `:root[data-design="<id>"]`, so a single CSS
-file restyles the whole app. Add a fourth design by copying one file and registering it in
-`src/themes/designs.ts`.
+The PDF viewer uses the Blueprint design. Components consume semantic tokens (`--fp-*`, mapped to
+Tailwind utilities in `src/index.css`), while `src/themes/tokens.css` owns the Blueprint palette,
+typography, radii, shadows, motion, and viewer geometry.
 
 ## License
 

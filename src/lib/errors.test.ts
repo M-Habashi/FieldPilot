@@ -13,4 +13,10 @@ describe('userFacingError', () => {
   it('falls back safely for non-Error values', () => {
     expect(userFacingError('failure')).toBe('Something went wrong. Please try again.');
   });
+
+  it('translates raw auth account errors into guidance', () => {
+    expect(userFacingError(new Error('InvalidAccountId'))).toBe(
+      'Enter a valid email address, like name@example.com.',
+    );
+  });
 });

@@ -23,7 +23,6 @@ export function Navbar() {
             <button
               key={label}
               type="button"
-              title="Coming soon"
               className="text-sm font-medium text-t2 transition-colors hover:text-t1 cursor-pointer mkt-rise"
               style={{ '--rise-delay': `${40 + i * 50}ms` } as CSSProperties}
             >

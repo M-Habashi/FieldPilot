@@ -66,11 +66,3 @@ export function DropdownItem({
     />
   );
 }
-
-export function DropdownLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-2.5 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-t3">
-      {children}
-    </div>
-  );
-}

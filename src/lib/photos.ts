@@ -2,7 +2,7 @@ import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 
 const urlCache = new Map<string, string>();
 
-export function photoKey(id: string): string {
+function photoKey(id: string): string {
   return `fp:img:${id}`;
 }
 
