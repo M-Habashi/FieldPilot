@@ -97,7 +97,6 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                 variant="text"
                 size="iconXs"
                 aria-label={`Locate ${task.title || `task ${task.seq}`} on plan`}
-                title="Locate on plan"
                 onClick={() => focusTask(task.id)}
               >
                 <LocateFixed />
@@ -194,7 +193,6 @@ export function TaskPanelBody({ taskId }: { taskId: string }) {
                       type="button"
                       aria-label={`${color.label} pin color`}
                       aria-pressed={selected}
-                      title={color.label}
                       className={`size-4 rounded-full transition-transform duration-(--fp-dur-fast) hover:scale-110 ${
                         selected ? 'ring-2 ring-offset-2 ring-offset-surface' : ''
                       }`}

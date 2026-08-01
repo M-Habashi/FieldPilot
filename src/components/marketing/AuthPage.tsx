@@ -5,9 +5,13 @@ import { userFacingError } from '../../lib/errors';
 import { Brand } from '../Brand';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Notice } from '../ui/notice';
 
 export type AuthMode = 'login' | 'signup';
 type AuthStep = 'credentials' | 'verify' | 'reset-request' | 'reset-code';
+
+export const GOOGLE_AUTH_CALLBACK_ROUTE = '/auth/callback';
+const GOOGLE_AUTH_REDIRECT_TO = `/#${GOOGLE_AUTH_CALLBACK_ROUTE}`;
 
 const COPY: Record<
   AuthMode,
@@ -58,6 +62,20 @@ const SSO_BUTTON =
 const PRIMARY_BUTTON =
   'inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-on-accent shadow-e1 transition-[background,transform] hover:bg-accent-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/u;
+
+function validateEmail(email: string) {
+  if (!email) return 'Enter your email address.';
+  if (!EMAIL_PATTERN.test(email)) {
+    return 'Enter a valid email address.';
+  }
+  return null;
+}
+
+function validateCode(code: string) {
+  return /^\d{6}$/u.test(code) ? null : 'Enter the six-digit code from your email.';
+}
+
 function PasswordField({
   id,
   name,
@@ -100,14 +118,20 @@ function PasswordField({
   );
 }
 
-export function AuthPage({ mode }: { mode: AuthMode }) {
+export function AuthPage({
+  mode,
+  initialError = null,
+}: {
+  mode: AuthMode;
+  initialError?: string | null;
+}) {
   const { signIn } = useAuthActions();
   const copy = COPY[mode];
   const [step, setStep] = useState<AuthStep>('credentials');
   const [pendingEmail, setPendingEmail] = useState('');
   const [submitting, setSubmitting] = useState<'google' | 'email' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [resendAvailableIn, setResendAvailableIn] = useState(0);
   const [codeResent, setCodeResent] = useState(false);
   const pendingPassword = useRef('');
@@ -115,11 +139,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   useEffect(() => {
     setStep('credentials');
     setPendingEmail('');
-    setError(null);
+    setError(initialError);
     setResendAvailableIn(0);
     setCodeResent(false);
     pendingPassword.current = '';
-  }, [mode]);
+  }, [initialError, mode]);
 
   useEffect(() => {
     if (resendAvailableIn <= 0) return;
@@ -131,14 +155,17 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }, [resendAvailableIn]);
 
   const busy = submitting !== null;
+  const clearError = () => {
+    if (error) setError(null);
+  };
 
   const signInWithGoogle = async () => {
     setSubmitting('google');
     setError(null);
     try {
-      await signIn('google');
+      await signIn('google', { redirectTo: GOOGLE_AUTH_REDIRECT_TO });
     } catch {
-      setError('Google sign-in could not be started. Please try again.');
+      setError('Google sign-in is unavailable. Try again.');
       setSubmitting(null);
     }
   };
@@ -149,8 +176,29 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     const email = String(values.get('email') ?? '')
       .trim()
       .toLowerCase();
+    const password = String(values.get('password') ?? '');
+    const confirmPassword = String(values.get('confirmPassword') ?? '');
+    setError(null);
 
-    if (mode === 'signup' && values.get('password') !== values.get('confirmPassword')) {
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+    if (!password) {
+      setError('Enter your password.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Your password must be at least 8 characters.');
+      return;
+    }
+    if (mode === 'signup' && !String(values.get('name') ?? '').trim()) {
+      setError('Enter your name.');
+      return;
+    }
+
+    if (mode === 'signup' && password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
@@ -158,7 +206,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     values.delete('confirmPassword');
     values.set('email', email);
     values.set('flow', mode === 'signup' ? 'signUp' : 'signIn');
-    pendingPassword.current = String(values.get('password') ?? '');
+    pendingPassword.current = password;
     setSubmitting('email');
     setError(null);
 
@@ -180,6 +228,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const verifyEmail = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
+    const code = String(values.get('code') ?? '').trim();
+    setError(null);
+    const codeError = validateCode(code);
+    if (codeError) {
+      setError(codeError);
+      return;
+    }
+    values.set('code', code);
     values.set('flow', 'email-verification');
     values.set('email', pendingEmail);
     setSubmitting('email');
@@ -203,7 +259,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const resendVerificationCode = async () => {
     if (resendAvailableIn > 0 || busy) return;
     if (!pendingPassword.current) {
-      setError('Return to sign in and enter your password to request another code.');
+      setError('Return to sign in before requesting another code.');
       return;
     }
 
@@ -232,6 +288,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     const email = String(values.get('email') ?? '')
       .trim()
       .toLowerCase();
+    setError(null);
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
     values.set('flow', 'reset');
     values.set('email', email);
     setSubmitting('email');
@@ -251,11 +313,25 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const completePasswordReset = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    if (values.get('newPassword') !== values.get('confirmPassword')) {
+    const code = String(values.get('code') ?? '').trim();
+    const newPassword = String(values.get('newPassword') ?? '');
+    const confirmPassword = String(values.get('confirmPassword') ?? '');
+    setError(null);
+    const codeError = validateCode(code);
+    if (codeError) {
+      setError(codeError);
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('Your new password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
+    values.set('code', code);
     values.delete('confirmPassword');
     values.set('flow', 'reset-verification');
     values.set('email', pendingEmail);
@@ -351,7 +427,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     <span className="h-px flex-1 bg-line" />
                   </div>
 
-                  <form onSubmit={(event) => void submitCredentials(event)} className="space-y-3.5">
+                  <form
+                    noValidate
+                    onSubmit={(event) => void submitCredentials(event)}
+                    onChange={clearError}
+                    className="space-y-3.5"
+                  >
                     {mode === 'signup' && (
                       <div>
                         <Label htmlFor="signup-name">Name</Label>
@@ -401,17 +482,17 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               )}
 
               {step === 'verify' && (
-                <form onSubmit={(event) => void verifyEmail(event)} className="space-y-4">
-                  <div className="rounded-md border border-accent/25 bg-accent-soft px-3.5 py-3 text-xs leading-5 text-t2">
-                    <p className="font-semibold text-t1">Verify your email to continue</p>
-                    <p className="mt-0.5">
-                      Your projects stay protected until you enter the code. It expires after 15
-                      minutes.
-                    </p>
-                    {codeResent && (
-                      <p className="mt-1 font-semibold text-accent">A new code was sent.</p>
-                    )}
-                  </div>
+                <form
+                  noValidate
+                  onSubmit={(event) => void verifyEmail(event)}
+                  onChange={clearError}
+                  className="space-y-4"
+                >
+                  <Notice tone="info" compact>
+                    {codeResent
+                      ? 'A new code was sent. Enter it within 15 minutes.'
+                      : 'Enter the six-digit code within 15 minutes.'}
+                  </Notice>
                   <div>
                     <Label htmlFor="verification-code">Verification code</Label>
                     <Input
@@ -453,7 +534,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               )}
 
               {step === 'reset-request' && (
-                <form onSubmit={(event) => void requestPasswordReset(event)} className="space-y-4">
+                <form
+                  noValidate
+                  onSubmit={(event) => void requestPasswordReset(event)}
+                  onChange={clearError}
+                  className="space-y-4"
+                >
                   <div>
                     <Label htmlFor="reset-email">Email address</Label>
                     <Input
@@ -481,7 +567,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
               {step === 'reset-code' && (
                 <form
+                  noValidate
                   onSubmit={(event) => void completePasswordReset(event)}
+                  onChange={clearError}
                   className="space-y-3.5"
                 >
                   <div>
@@ -532,18 +620,17 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               )}
             </div>
 
-            {error && (
-              <p
-                role="alert"
-                className="mt-4 rounded-md bg-danger-soft px-3 py-2 text-xs font-medium text-danger"
-              >
-                {error}
-              </p>
-            )}
+            <div className="mt-3 h-5 overflow-hidden" aria-live="polite" aria-atomic="true">
+              {error && (
+                <p role="alert" className="truncate text-xs font-medium leading-5 text-danger">
+                  {error}
+                </p>
+              )}
+            </div>
 
             {step === 'credentials' && (
               <div
-                className="mkt-rise mt-6 flex items-center justify-between text-xs"
+                className="mkt-rise mt-3 flex items-center justify-between text-xs"
                 style={{ '--rise-delay': '300ms' } as CSSProperties}
               >
                 {mode === 'login' ? (

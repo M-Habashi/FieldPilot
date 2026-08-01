@@ -13,4 +13,25 @@ describe('userFacingError', () => {
   it('falls back safely for non-Error values', () => {
     expect(userFacingError('failure')).toBe('Something went wrong. Please try again.');
   });
+
+  it.each(['InvalidAccountId', 'InvalidSecret'])(
+    'translates %s into a safe credentials message',
+    (code) => {
+      expect(userFacingError(new Error(code))).toBe('The email or password is incorrect.');
+    },
+  );
+
+  it('translates rate-limit errors into next-step guidance', () => {
+    expect(userFacingError(new Error('TooManyFailedAttempts'))).toBe(
+      'Too many attempts. Try again later or reset your password.',
+    );
+  });
+
+  it('translates an existing Google account into a concise signup action', () => {
+    const error = new Error(
+      'Uncaught Error: This email is already registered with Google. Continue with Google.',
+    );
+
+    expect(userFacingError(error)).toBe('This email uses Google. Sign in with Google.');
+  });
 });

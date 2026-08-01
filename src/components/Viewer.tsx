@@ -43,7 +43,6 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const addPinMode = useProject((s) => s.addPinMode);
   const addTask = useProject((s) => s.addTask);
   const selectTask = useProject((s) => s.selectTask);
-  const showPinTooltip = useProject((s) => s.showPinTooltip);
   const focusRequest = useProject((s) => s.focusRequest);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -239,7 +238,6 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     if (addPinMode && inside) {
       addTask(currentPage, nx, ny);
     } else {
-      showPinTooltip(null);
       selectTask(null);
     }
   };

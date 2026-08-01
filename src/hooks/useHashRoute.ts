@@ -7,8 +7,8 @@ function readRoute(): string {
 
 /**
  * Minimal hash-based routing for the pre-auth marketing pages.
- * Routes: `#/` landing, `#/login`, `#/signup`. Anything unknown
- * falls back to the landing page.
+ * Routes: `#/` landing, `#/login`, `#/signup`, and the OAuth callback.
+ * Anything unknown falls back to the landing page.
  */
 export function useHashRoute(): string {
   const [route, setRoute] = useState(readRoute);

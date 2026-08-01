@@ -9,7 +9,6 @@ export function PinLayer() {
   const tasks = useProject((s) => s.tasks);
   const currentPage = useProject((s) => s.currentPage);
   const selectedTaskId = useProject((s) => s.selectedTaskId);
-  const pinTooltipTaskId = useProject((s) => s.pinTooltipTaskId);
 
   const pins = Object.values(tasks)
     .filter((t) => t.page === currentPage)
@@ -18,29 +17,14 @@ export function PinLayer() {
   return (
     <div data-pin-layer className="pointer-events-none absolute inset-0">
       {pins.map((task) => (
-        <Pin
-          key={task.id}
-          task={task}
-          selected={task.id === (selectedTaskId ?? pinTooltipTaskId)}
-          tooltipOpen={task.id === pinTooltipTaskId}
-        />
+        <Pin key={task.id} task={task} selected={task.id === selectedTaskId} />
       ))}
     </div>
   );
 }
 
-function Pin({
-  task,
-  selected,
-  tooltipOpen,
-}: {
-  task: Task;
-  selected: boolean;
-  tooltipOpen: boolean;
-}) {
-  const selectedTaskId = useProject((s) => s.selectedTaskId);
+function Pin({ task, selected }: { task: Task; selected: boolean }) {
   const selectTask = useProject((s) => s.selectTask);
-  const showPinTooltip = useProject((s) => s.showPinTooltip);
   const moveTask = useProject((s) => s.moveTask);
   const dragRef = useRef<{ sx: number; sy: number; moved: boolean } | null>(null);
 
@@ -76,18 +60,6 @@ function Pin({
     dragRef.current = null;
     if (!d || d.moved) return;
 
-    // Closed drawer: first click selects/previews, clicking that selected pin
-    // again opens Properties. Open drawer: one click switches Properties to
-    // whichever pin was clicked.
-    if (selectedTaskId !== null || tooltipOpen) {
-      selectTask(task.id);
-    } else {
-      showPinTooltip(task.id);
-    }
-  };
-
-  const onDoubleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
     selectTask(task.id);
   };
 
@@ -100,16 +72,7 @@ function Pin({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onDoubleClick={onDoubleClick}
     >
-      {tooltipOpen && (
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 whitespace-nowrap rounded-xs bg-t1 px-2 py-1 text-xs font-medium text-surface shadow-e2"
-        >
-          {task.title || 'Untitled task'}
-        </span>
-      )}
       <span
         className="fp-pin-marker"
         style={{ '--pin-color': pinColor(task) } as React.CSSProperties}

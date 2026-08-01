@@ -7,7 +7,6 @@ import { exportProject } from '../lib/transfer';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Dropdown, DropdownItem } from './ui/dropdown-menu';
-import { DesignSwitcher } from './DesignSwitcher';
 
 interface ToolbarProps {
   hasDoc: boolean;
@@ -36,10 +35,7 @@ export function AppHeader({ onLogoClick }: { onLogoClick?: () => void } = {}) {
       )}
 
       {fileName && (
-        <span
-          className="absolute left-1/2 hidden max-w-[50%] -translate-x-1/2 truncate text-xs text-t2 md:block"
-          title={fileName}
-        >
+        <span className="absolute left-1/2 hidden max-w-[50%] -translate-x-1/2 truncate text-xs text-t2 md:block">
           {fileName}
         </span>
       )}
@@ -49,7 +45,6 @@ export function AppHeader({ onLogoClick }: { onLogoClick?: () => void } = {}) {
         size="sm"
         className="ml-auto"
         aria-label="Sign out"
-        title="Sign out"
         onClick={() => void signOut()}
       >
         <LogOut />
@@ -147,7 +142,6 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson, allowLocalFiles = tru
             aria-pressed={addPinMode}
             disabled={!hasDoc}
             onClick={() => setAddPinMode(!addPinMode)}
-            title="Add pin (P)"
           >
             <Pin />
             <span className="hidden sm:inline">Add pin</span>
@@ -164,13 +158,11 @@ export function Toolbar({ hasDoc, onOpenPdf, onImportJson, allowLocalFiles = tru
               }
               disabled={!hasDoc}
               onClick={showTaskList}
-              title="Show tasks"
             >
               <ListTodo />
               <span className="hidden sm:inline">Tasks</span>
               {taskCount > 0 && <span className="font-mono text-[10px]">{taskCount}</span>}
             </Button>
-            <DesignSwitcher />
           </div>
         </div>
       </header>

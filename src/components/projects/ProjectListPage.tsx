@@ -15,10 +15,11 @@ import {
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
-import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/dialog';
 import { Dropdown, DropdownItem } from '../ui/dropdown-menu';
+import { Notice } from '../ui/notice';
+import { useNotify } from '../ui/use-notify';
 import { CreateProjectDialog, DeleteProjectDialog, InviteDialog } from './ProjectDialogs';
 
 interface ProjectListPageProps {
@@ -38,33 +39,8 @@ function formatDate(timestamp: number) {
   }).format(timestamp);
 }
 
-function IconTooltip({
-  label,
-  children,
-  className,
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      className={cn('group/tooltip relative inline-flex', className)}
-      tabIndex={0}
-      aria-label={label}
-    >
-      {children}
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-t1 px-2 py-1 text-[11px] font-medium text-surface opacity-0 shadow-e2 transition-opacity duration-(--fp-dur-fast) group-hover/tooltip:opacity-100 group-focus-visible/tooltip:opacity-100"
-      >
-        {label}
-      </span>
-    </span>
-  );
-}
-
 export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
+  const { notify } = useNotify();
   const projects = useQuery(api.projects.listMine);
   const createProject = useMutation(api.projects.create);
   const renameProject = useMutation(api.projects.rename);
@@ -92,6 +68,10 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
     try {
       await renameProject({ projectId, name });
       setRename(null);
+      notify({
+        tone: 'success',
+        message: `Project renamed to ${name}.`,
+      });
     } catch (error) {
       setRenameError(userFacingError(error));
     } finally {
@@ -110,9 +90,9 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
       </div>
 
       {renameError && (
-        <div className="mt-5 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
-          {renameError}
-        </div>
+        <Notice tone="error" className="mt-5">
+          Couldn’t rename project: {renameError}
+        </Notice>
       )}
 
       {projects === undefined ? (
@@ -192,9 +172,9 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
                     onClick={(event) => event.stopPropagation()}
                   >
                     {canManage && (
-                      <IconTooltip label="Admin" className="p-1 text-accent">
-                        <Crown className="size-4" />
-                      </IconTooltip>
+                      <span className="p-1 text-accent" role="img" aria-label="Project admin">
+                        <Crown className="size-4" aria-hidden />
+                      </span>
                     )}
                     <Dropdown
                       className="min-w-44"
@@ -270,9 +250,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
 
                 <div className="pointer-events-none relative z-10 mt-auto flex items-end justify-between gap-3 pt-7 text-xs text-t2">
                   <div className="flex items-center gap-1.5">
-                    <IconTooltip label="Creation date" className="pointer-events-auto p-1 text-t3">
-                      <CalendarDays className="size-4" />
-                    </IconTooltip>
+                    <CalendarDays className="size-4 text-t3" aria-hidden />
                     <span>{formatDate(project.createdAt)}</span>
                   </div>
                   <div
@@ -294,6 +272,10 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
         onClose={() => setShowCreate(false)}
         onCreate={async (name) => {
           await createProject({ name });
+          notify({
+            tone: 'success',
+            message: `${name.trim()} was created.`,
+          });
         }}
       />
       <InviteDialog
@@ -301,6 +283,10 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
         onClose={() => setInviteProject(null)}
         onInvite={async (projectId, email) => {
           await inviteToProject({ projectId, email });
+          notify({
+            tone: 'success',
+            message: `Invitation sent to ${email.trim()}.`,
+          });
         }}
       />
       <DeleteProjectDialog
@@ -308,6 +294,10 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
         onClose={() => setDeleteTarget(null)}
         onDelete={async (projectId, confirmationName) => {
           await deleteProject({ projectId, confirmationName });
+          notify({
+            tone: 'success',
+            message: 'The project and its data were deleted.',
+          });
         }}
       />
       <ConfirmDialog
@@ -319,7 +309,21 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
         onCancel={() => setLeaveTarget(null)}
         onConfirm={() => {
           if (!leaveTarget) return;
-          void leaveProject({ projectId: leaveTarget._id }).then(() => setLeaveTarget(null));
+          const projectName = leaveTarget.name;
+          void leaveProject({ projectId: leaveTarget._id })
+            .then(() => {
+              setLeaveTarget(null);
+              notify({
+                tone: 'success',
+                message: `You left ${projectName}.`,
+              });
+            })
+            .catch((error: unknown) => {
+              notify({
+                tone: 'error',
+                message: `Couldn’t leave ${projectName}: ${userFacingError(error)}`,
+              });
+            });
         }}
       />
     </main>

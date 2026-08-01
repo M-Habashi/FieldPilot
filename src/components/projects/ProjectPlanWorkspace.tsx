@@ -13,6 +13,7 @@ import { Sidebar } from '../Sidebar';
 import { StatusBar } from '../StatusBar';
 import { AppHeader, Toolbar } from '../Toolbar';
 import { Viewer } from '../Viewer';
+import { Notice } from '../ui/notice';
 
 interface ProjectPlanWorkspaceProps {
   project: Doc<'projects'>;
@@ -253,7 +254,7 @@ export function ProjectPlanWorkspace({
           state.setAddPinMode(false);
           return;
         }
-        if (state.selectedTaskId || state.pinTooltipTaskId) state.selectTask(null);
+        if (state.selectedTaskId) state.selectTask(null);
         if (target.closest('.fp-pin')) target.blur();
         return;
       }
@@ -290,9 +291,7 @@ export function ProjectPlanWorkspace({
               ) : (
                 <div className="fp-canvas-stage flex h-full items-center justify-center p-6">
                   {documentError ? (
-                    <p className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
-                      {documentError}
-                    </p>
+                    <Notice tone="error">This plan could not be opened: {documentError}</Notice>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-t2">
                       <Loader2 className="size-4 animate-spin text-accent" />
@@ -302,9 +301,13 @@ export function ProjectPlanWorkspace({
                 </div>
               )}
               {document && syncError && (
-                <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-md bg-danger px-3 py-2 text-xs font-medium text-white shadow-e2">
-                  {syncError}
-                </div>
+                <Notice
+                  tone="error"
+                  compact
+                  className="absolute left-1/2 top-4 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
+                >
+                  Changes not saved: {syncError}
+                </Notice>
               )}
             </main>
             {document && <RightDrawer />}

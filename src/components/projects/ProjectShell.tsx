@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { Bell, Check, ChevronDown, LogOut } from 'lucide-react';
+import { Bell, BellDot, Check, ChevronDown, Inbox, Loader2, LogOut, MailOpen } from 'lucide-react';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
 import { Brand } from '../Brand';
 import { Button } from '../ui/button';
 import { Dropdown, DropdownItem } from '../ui/dropdown-menu';
+import { Notice } from '../ui/notice';
+import { useNotify } from '../ui/use-notify';
 
 interface InvitationNotification {
   invitation: {
@@ -32,31 +34,36 @@ export function ProjectShell({
   children,
 }: ProjectShellProps) {
   const { signOut } = useAuthActions();
+  const { notify } = useNotify();
   const [acceptingId, setAcceptingId] = useState<Id<'projectInvitations'> | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
-  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const displayName = user?.name?.trim() || user?.email?.split('@')[0] || 'FieldPilot user';
 
   useEffect(() => {
     const notice = window.sessionStorage.getItem('fp:auth-notice');
     if (!notice) return;
     window.sessionStorage.removeItem('fp:auth-notice');
-    setAuthNotice(notice);
-  }, []);
-
-  useEffect(() => {
-    if (!authNotice) return;
-    const timeout = window.setTimeout(() => setAuthNotice(null), 5_000);
-    return () => window.clearTimeout(timeout);
-  }, [authNotice]);
+    const isPasswordUpdate = notice.startsWith('Password updated');
+    notify({
+      tone: 'success',
+      message: isPasswordUpdate
+        ? 'Password updated. You are signed in.'
+        : 'Email verified. Your account is ready.',
+    });
+  }, [notify]);
 
   async function accept(invitationId: Id<'projectInvitations'>) {
     setAcceptingId(invitationId);
     setAcceptError(null);
     try {
       await onAcceptInvitation(invitationId);
+      notify({
+        tone: 'success',
+        message: 'Invitation accepted. The project is now in your project list.',
+      });
     } catch (error) {
-      setAcceptError(userFacingError(error));
+      const message = userFacingError(error);
+      setAcceptError(message);
     } finally {
       setAcceptingId(null);
     }
@@ -86,45 +93,110 @@ export function ProjectShell({
           <Dropdown
             className="w-84 max-w-[calc(100vw-2rem)] p-0"
             trigger={
-              <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
-                <Bell />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={
+                  invitations?.length
+                    ? `Notifications, ${invitations.length} pending invitation${invitations.length === 1 ? '' : 's'}`
+                    : 'Notifications'
+                }
+                className="relative"
+              >
+                {invitations?.length ? <BellDot /> : <Bell />}
                 {!!invitations?.length && (
-                  <span className="absolute right-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold leading-4 text-white">
+                  <span className="absolute right-1 top-1 flex min-w-4 items-center justify-center rounded-full border-2 border-surface bg-danger px-1 text-[9px] font-bold leading-3.5 text-white">
                     {invitations.length}
                   </span>
                 )}
               </Button>
             }
           >
-            <div className="border-b border-line px-4 py-3">
-              <p className="text-sm font-semibold text-t1">Notifications</p>
+            <div className="border-b border-line px-4 py-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-t1">Notifications</p>
+                  <p className="mt-0.5 text-xs text-t3">Project invitations and updates</p>
+                </div>
+                {!!invitations?.length && (
+                  <span className="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-semibold text-accent">
+                    {invitations.length} pending
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="max-h-88 overflow-y-auto p-2">
+            <div className="max-h-96 overflow-y-auto p-2">
               {acceptError && (
-                <p className="mx-2 mb-2 rounded-md bg-danger-soft px-2.5 py-2 text-xs text-danger">
-                  {acceptError}
-                </p>
+                <Notice
+                  tone="error"
+                  compact
+                  className="mx-2 mb-2"
+                  onDismiss={() => setAcceptError(null)}
+                >
+                  Couldn’t accept invitation: {acceptError}
+                </Notice>
               )}
               {invitations === undefined ? (
-                <p className="px-2 py-5 text-center text-xs text-t3">Loading notifications…</p>
+                <div className="space-y-2 px-2 py-2" aria-label="Loading notifications">
+                  {[0, 1].map((item) => (
+                    <div key={item} className="rounded-md border border-line bg-surface2/45 p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="size-8 animate-pulse rounded-md bg-line" />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="h-3 w-32 animate-pulse rounded bg-line" />
+                          <div className="h-3 w-full animate-pulse rounded bg-line" />
+                          <div className="h-3 w-20 animate-pulse rounded bg-line" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : invitations.length === 0 ? (
-                <p className="px-2 py-5 text-center text-xs text-t3">No new notifications</p>
+                <div className="flex flex-col items-center px-5 py-8 text-center">
+                  <span className="flex size-10 items-center justify-center rounded-full bg-accent-soft text-accent">
+                    <Inbox className="size-5" />
+                  </span>
+                  <p className="mt-3 text-sm font-semibold text-t1">You’re all caught up</p>
+                  <p className="mt-1 max-w-52 text-xs leading-5 text-t3">
+                    New project invitations will show up here.
+                  </p>
+                </div>
               ) : (
                 invitations.map(({ invitation, projectName, inviterName }) => (
-                  <div key={invitation._id} className="rounded-md px-2 py-2.5 hover:bg-surface2">
-                    <p className="text-sm font-medium text-t1">Project invitation</p>
-                    <p className="mt-0.5 text-xs leading-5 text-t2">
-                      {inviterName} invited you to{' '}
-                      <span className="font-semibold">{projectName}</span>.
-                    </p>
+                  <div
+                    key={invitation._id}
+                    className="rounded-md border border-line bg-surface2/45 p-3 transition-colors hover:border-line-strong"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
+                        <MailOpen className="size-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-t1">Project invitation</p>
+                        <p className="mt-0.5 text-xs leading-5 text-t2">
+                          {inviterName} invited you to{' '}
+                          <span className="font-semibold text-t1">
+                            {projectName ?? 'a project'}
+                          </span>
+                          .
+                        </p>
+                        <p className="mt-1 text-[11px] text-t3">
+                          {formatRelativeTime(invitation.createdAt)}
+                        </p>
+                      </div>
+                    </div>
                     <Button
                       variant="default"
                       size="sm"
-                      className="mt-2"
+                      className="mt-3 w-full"
                       disabled={acceptingId !== null}
                       onClick={() => void accept(invitation._id)}
                     >
-                      <Check />
+                      {acceptingId === invitation._id ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Check />
+                      )}
                       {acceptingId === invitation._id ? 'Accepting…' : 'Accept invitation'}
                     </Button>
                   </div>
@@ -155,16 +227,19 @@ export function ProjectShell({
           </Dropdown>
         </div>
       </header>
-      {authNotice && (
-        <div
-          role="status"
-          className="fixed left-1/2 top-18 z-70 flex -translate-x-1/2 items-center gap-2 rounded-md border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-t1 shadow-e3"
-        >
-          <Check className="size-4 text-accent" />
-          {authNotice}
-        </div>
-      )}
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
   );
+}
+
+function formatRelativeTime(timestamp: number) {
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp);
 }

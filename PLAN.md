@@ -164,7 +164,7 @@ Repo scaffolding, Vite + React + TS + Tailwind, ESLint/Prettier, baseline tests,
 ### Phase 1 — Plan viewer + Pins + Detail panel
 
 > **Status (2026-07-17):** implemented (viewer, pins, panel, notes/photos, IndexedDB
-> persistence, task list, JSON export/import, 3 switchable designs, bundled demo plan).
+> persistence, task list, JSON export/import, Blueprint design, bundled demo plan).
 > Acceptance criteria below still need hands-on verification.
 
 Goal: a user can open a PDF plan, drop pins, click a pin to open a side panel, and edit its

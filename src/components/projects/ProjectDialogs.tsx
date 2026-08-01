@@ -7,6 +7,7 @@ import { useModalFocus } from '../../hooks/useModalFocus';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Notice } from '../ui/notice';
 
 interface DialogFrameProps {
   open: boolean;
@@ -97,7 +98,11 @@ export function CreateProjectDialog({ open, onClose, onCreate }: CreateProjectDi
           onChange={(event) => setName(event.target.value)}
           placeholder="Project name"
         />
-        {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+        {error && (
+          <Notice tone="error" compact className="mt-3">
+            {error}
+          </Notice>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
@@ -165,7 +170,11 @@ export function InviteDialog({ project, onClose, onInvite }: InviteDialogProps) 
             className="pl-9"
           />
         </div>
-        {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+        {error && (
+          <Notice tone="error" compact className="mt-3">
+            {error}
+          </Notice>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
@@ -234,7 +243,11 @@ export function DeleteProjectDialog({ project, onClose, onDelete }: DeleteProjec
           value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}
         />
-        {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+        {error && (
+          <Notice tone="error" compact className="mt-3">
+            {error}
+          </Notice>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
@@ -323,7 +336,11 @@ export function EditPlanDialog({ plan, onClose, onSave }: EditPlanDialogProps) {
             onChange={(event) => setDiscipline(event.target.value)}
           />
         </div>
-        {error && <p className="text-xs text-danger">{error}</p>}
+        {error && (
+          <Notice tone="error" compact>
+            {error}
+          </Notice>
+        )}
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel

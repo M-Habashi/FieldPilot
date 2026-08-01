@@ -36,7 +36,6 @@ export function Sidebar({ onShowPlans }: { onShowPlans?: () => void } = {}) {
         type="button"
         onClick={toggleSidebar}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        title={collapsed ? 'Expand' : 'Collapse'}
         className="absolute top-1 left-full flex size-8 items-center justify-center rounded-md text-t3 transition-[color,background-color,transform] duration-(--fp-motion-duration) ease-(--fp-motion-ease) hover:bg-surface2 hover:text-t1 cursor-pointer"
       >
         <ChevronRight
@@ -80,18 +79,13 @@ function SidebarItem({
     <button
       type="button"
       className={className}
-      title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       onClick={onClick}
     >
       {content}
     </button>
   ) : (
-    <span
-      className={className}
-      title={collapsed ? label : undefined}
-      aria-current={active ? 'page' : undefined}
-    >
+    <span className={className} aria-current={active ? 'page' : undefined}>
       {content}
     </span>
   );
