@@ -79,7 +79,7 @@ export async function createOrUpdateAuthUser(
         (candidate) => candidate._id !== userId,
       );
       if (conflictingUser) {
-        throw new Error('This email is already associated with another account.');
+        throw new Error('This email address is already linked to another account.');
       }
     }
     await ctx.db.patch(userId, patch);
@@ -92,15 +92,15 @@ export async function createOrUpdateAuthUser(
 
   const matches = email ? await usersWithEmail(ctx, email) : [];
   if (matches.length > 1) {
-    throw new Error('Multiple accounts use this email. Contact support before signing in.');
+    throw new Error('We found a problem with this account. Contact support before signing in.');
   }
 
   if (args.type === 'credentials' && matches.length === 1) {
     const existingUser = matches[0];
     if (await hasGoogleAccount(ctx, existingUser._id)) {
-      throw new Error('This email is already registered with Google. Continue with Google.');
+      throw new Error('This email uses Google. Sign in with Google.');
     }
-    throw new Error('An account already exists for this email. Log in instead.');
+    throw new Error('An account already exists for this email. Sign in instead.');
   }
 
   // A verified OAuth identity may safely claim a matching unverified email

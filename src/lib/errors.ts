@@ -1,4 +1,4 @@
-const GENERIC_ERROR = 'Something went wrong. Please try again.';
+const GENERIC_ERROR = 'Something went wrong. Try again.';
 
 function structuredErrorMessage(error: unknown) {
   if (typeof error !== 'object' || error === null || !('data' in error)) return null;
@@ -37,7 +37,7 @@ export function userFacingError(error: unknown, fallback = GENERIC_ERROR) {
   if (/^TooManyFailedAttempts$/iu.test(message)) {
     return 'Too many attempts. Try again later or reset your password.';
   }
-  if (/This email is already registered with Google/iu.test(message)) {
+  if (/This email (?:is already registered with|uses) Google/iu.test(message)) {
     return 'This email uses Google. Sign in with Google.';
   }
   return message;

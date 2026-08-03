@@ -48,12 +48,16 @@ export function ProjectShell({
     const notice = window.sessionStorage.getItem('fp:auth-notice');
     if (!notice) return;
     window.sessionStorage.removeItem('fp:auth-notice');
-    const isPasswordUpdate = notice.startsWith('Password updated');
+    const message =
+      notice === 'Email verified. You are signed in.' ||
+      notice === 'Email verified. Your account is ready.' ||
+      notice === 'Password updated. You are signed in.'
+        ? notice
+        : null;
+    if (!message) return;
     notify({
       tone: 'success',
-      message: isPasswordUpdate
-        ? 'Password updated. You are signed in.'
-        : 'Email verified. Your account is ready.',
+      message,
     });
   }, [notify]);
 
@@ -67,7 +71,7 @@ export function ProjectShell({
         message: 'Invitation accepted. The project is now in your project list.',
       });
     } catch (error) {
-      const message = userFacingError(error, 'We could not accept the invitation. Try again.');
+      const message = userFacingError(error, 'We couldn’t accept the invitation. Try again.');
       setAcceptError(message);
     } finally {
       setAcceptingId(null);

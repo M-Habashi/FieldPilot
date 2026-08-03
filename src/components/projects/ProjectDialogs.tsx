@@ -76,7 +76,7 @@ export function CreateProjectDialog({ open, onClose, onCreate }: CreateProjectDi
       await onCreate(name);
       onClose();
     } catch (caught) {
-      setError(userFacingError(caught, 'We could not create the project. Try again.'));
+      setError(userFacingError(caught, 'We couldn’t create the project. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -143,7 +143,7 @@ export function InviteDialog({ project, onClose, onInvite }: InviteDialogProps) 
       await onInvite(project._id, email);
       onClose();
     } catch (caught) {
-      setError(userFacingError(caught, 'We could not send the invitation. Try again.'));
+      setError(userFacingError(caught, 'We couldn’t send the invitation. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -215,7 +215,7 @@ export function DeleteProjectDialog({ project, onClose, onDelete }: DeleteProjec
       await onDelete(project._id, confirmation);
       onClose();
     } catch (caught) {
-      setError(userFacingError(caught, 'We could not delete the project. Try again.'));
+      setError(userFacingError(caught, 'We couldn’t delete the project. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -304,7 +304,7 @@ export function EditPlanDialog({ plan, onClose, onSave }: EditPlanDialogProps) {
       });
       onClose();
     } catch (caught) {
-      setError(userFacingError(caught, 'We could not update the plan. Try again.'));
+      setError(userFacingError(caught, 'We couldn’t update the plan. Try again.'));
     } finally {
       setBusy(false);
     }

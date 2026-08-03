@@ -20,7 +20,7 @@ const COPY: Record<
   login: {
     heading: 'Good to see you',
     sub: 'Your projects are right where you left them.',
-    submit: 'Log in',
+    submit: 'Sign in',
     switchLabel: 'Sign up',
     switchHref: '#/signup',
   },
@@ -28,7 +28,7 @@ const COPY: Record<
     heading: 'Sign up',
     sub: 'Drop your first plan and put the crew on the same sheet.',
     submit: 'Create account',
-    switchLabel: 'Log in',
+    switchLabel: 'Sign in',
     switchHref: '#/login',
   },
 };
@@ -224,7 +224,7 @@ export function AuthPage({
           caught,
           mode === 'login'
             ? 'The email address or password is incorrect.'
-            : 'We could not create your account. Try again.',
+            : 'We couldn’t create your account. Try again.',
         ),
       );
     } finally {
@@ -251,19 +251,22 @@ export function AuthPage({
     try {
       const result = await signIn('password', values);
       if (!result.signingIn) {
-        setError('That code is invalid or has expired. Request a new code and try again.');
+        setError('That code is incorrect or expired. Request a new code and try again.');
       } else {
         window.sessionStorage.setItem(
           'fp:auth-notice',
           mode === 'login'
             ? 'Email verified. You are signed in.'
-            : 'Email verified. Welcome to FieldPilot.',
+            : 'Email verified. Your account is ready.',
         );
         pendingPassword.current = '';
       }
     } catch (caught) {
       setError(
-        userFacingError(caught, 'That code is incorrect or expired. Request a new code.'),
+        userFacingError(
+          caught,
+          'That code is incorrect or expired. Request a new code and try again.',
+        ),
       );
     } finally {
       setSubmitting(null);
@@ -290,7 +293,7 @@ export function AuthPage({
       setCodeResent(true);
       setResendAvailableIn(30);
     } catch (caught) {
-      setError(userFacingError(caught, 'We could not send a new code. Try again.'));
+      setError(userFacingError(caught, 'We couldn’t send a new code. Try again.'));
     } finally {
       setSubmitting(null);
     }
@@ -318,7 +321,7 @@ export function AuthPage({
       setPendingEmail(email);
       setStep('reset-code');
     } catch (caught) {
-      setError(userFacingError(caught, 'We could not send a reset code. Try again.'));
+      setError(userFacingError(caught, 'We couldn’t send a reset code. Try again.'));
     } finally {
       setSubmitting(null);
     }
@@ -355,7 +358,7 @@ export function AuthPage({
     try {
       const result = await signIn('password', values);
       if (!result.signingIn) {
-        setError('That code is invalid or has expired.');
+        setError('That code is incorrect or expired. Request a new code.');
       } else {
         window.sessionStorage.setItem('fp:auth-notice', 'Password updated. You are signed in.');
       }
@@ -379,8 +382,8 @@ export function AuthPage({
   const heading =
     step === 'verify'
       ? mode === 'login'
-        ? 'Verify your email'
-        : 'Check your email'
+        ? 'Verify your email to sign in'
+        : 'Verify your email'
       : step === 'reset-request'
         ? 'Reset your password'
         : step === 'reset-code'
@@ -390,12 +393,12 @@ export function AuthPage({
   const sub =
     step === 'verify'
       ? mode === 'login'
-        ? `Your password is correct, but ${pendingEmail} still needs verification. Enter the code we sent to continue.`
+        ? `This email address hasn’t been verified. Enter the six-digit code sent to ${pendingEmail}.`
         : `Enter the six-digit code sent to ${pendingEmail}.`
       : step === 'reset-request'
-        ? 'We will send a six-digit reset code to your email.'
+        ? 'Enter your email address to receive a six-digit reset code.'
         : step === 'reset-code'
-          ? `Enter the code sent to ${pendingEmail}.`
+          ? `If an account exists for ${pendingEmail}, enter the six-digit code we sent.`
           : copy.sub;
 
   return (
@@ -582,7 +585,7 @@ export function AuthPage({
                     onClick={returnToCredentials}
                     className="w-full cursor-pointer text-xs font-semibold text-t2 hover:text-t1"
                   >
-                    Back to log in
+                    Back to sign in
                   </button>
                 </form>
               )}
@@ -642,9 +645,9 @@ export function AuthPage({
               )}
             </div>
 
-            <div className="mt-3 h-5 overflow-hidden" aria-live="polite" aria-atomic="true">
+            <div className="mt-3 min-h-5" aria-live="polite" aria-atomic="true">
               {error && (
-                <p role="alert" className="truncate text-xs font-medium leading-5 text-danger">
+                <p role="alert" className="break-words text-xs font-medium leading-5 text-danger">
                   {error}
                 </p>
               )}

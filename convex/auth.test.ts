@@ -116,7 +116,7 @@ describe('new account onboarding', () => {
           } as unknown as CreateOrUpdateAuthUserArgs['provider'],
           profile: { email: 'GOOGLE-USER@example.com' },
         }),
-      ).rejects.toThrow('This email is already registered with Google. Continue with Google.');
+      ).rejects.toThrow('This email uses Google. Sign in with Google.');
 
       expect(await ctx.db.query('users').collect()).toHaveLength(1);
       expect(await ctx.db.query('authAccounts').collect()).toHaveLength(1);

@@ -106,7 +106,7 @@ function brevoOtpProvider(
       if (!response.ok) {
         // Do not log Brevo's response body: provider errors can echo recipient information.
         console.error('Brevo rejected an authentication email', response.status);
-        throw new Error('We could not send the email code. Please try again.');
+        throw new Error('We couldn’t send the email code. Try again.');
       }
     },
   };

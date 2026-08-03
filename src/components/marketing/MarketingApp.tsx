@@ -2,7 +2,7 @@ import { useHashRoute } from '../../hooks/useHashRoute';
 import { AuthPage, GOOGLE_AUTH_CALLBACK_ROUTE } from './AuthPage';
 import { LandingPage } from './LandingPage';
 
-const GOOGLE_CALLBACK_ERROR = 'Google sign-in did not finish. Please try again.';
+const GOOGLE_CALLBACK_ERROR = 'Google sign-in didn’t finish. Try again.';
 
 /**
  * Pre-auth shell: landing page plus the login/signup screens, switched by

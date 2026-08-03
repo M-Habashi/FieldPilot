@@ -11,13 +11,13 @@ describe('userFacingError', () => {
   });
 
   it('falls back safely for non-Error values', () => {
-    expect(userFacingError('failure')).toBe('Something went wrong. Please try again.');
+    expect(userFacingError('failure')).toBe('Something went wrong. Try again.');
   });
 
   it('uses the call-site fallback for opaque Convex server envelopes', () => {
     const error = new Error('[CONVEX A(auth:signIn)] Server Error\nCalled by client');
 
-    expect(userFacingError(error)).toBe('Something went wrong. Please try again.');
+    expect(userFacingError(error)).toBe('Something went wrong. Try again.');
     expect(
       userFacingError(error, 'The email address or password is incorrect.'),
     ).toBe('The email address or password is incorrect.');

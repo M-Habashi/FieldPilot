@@ -3,7 +3,7 @@ import { Brand } from '../Brand';
 
 /**
  * Landing page top navigation. Section links are placeholders until the
- * marketing pages exist — only "Log in" navigates.
+ * marketing pages exist — only "Sign in" navigates.
  */
 export function Navbar() {
   return (
@@ -29,7 +29,7 @@ export function Navbar() {
           className="mkt-rise inline-flex h-10 items-center rounded-md bg-accent px-5 text-sm font-semibold text-on-accent shadow-e1 transition-[background,box-shadow,transform] hover:bg-accent-hover hover:shadow-e2 active:translate-y-px"
           style={{ '--rise-delay': '240ms' } as CSSProperties}
         >
-          Log in
+          Sign in
         </a>
       </div>
     </header>
