@@ -70,7 +70,7 @@ describe('projects, memberships, and invitations', () => {
     ).rejects.toThrow('valid email address');
     await expect(
       owner.mutation(api.invitations.create, { projectId, email: 'missing@example.com' }),
-    ).rejects.toThrow('There is no account associated with this email.');
+    ).rejects.toThrow('No FieldPilot account uses this email address.');
     await t.run(async (ctx) => {
       expect(await ctx.db.query('projectInvitations').collect()).toEqual([]);
     });

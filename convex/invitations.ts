@@ -1,4 +1,4 @@
-import { v } from 'convex/values';
+import { ConvexError, v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { requireProjectRole, requireUser } from './lib/authz';
 
@@ -49,11 +49,11 @@ export const create = mutation({
     const invitedBy = await requireUser(ctx);
     await requireProjectRole(ctx, projectId, ['owner', 'admin'], invitedBy);
     const email = normalizeEmail(suppliedEmail);
-    if (!isEmail(email)) throw new Error('Enter a valid email address');
+    if (!isEmail(email)) throw new ConvexError('Enter a valid email address.');
 
     const inviter = await ctx.db.get(invitedBy);
     if (inviter?.email && normalizeEmail(inviter.email) === email) {
-      throw new Error('You are already a member of this project');
+      throw new ConvexError('You are already a member of this project.');
     }
 
     const pending = await ctx.db
@@ -62,7 +62,9 @@ export const create = mutation({
         q.eq('projectId', projectId).eq('email', email).eq('status', 'pending'),
       )
       .unique();
-    if (pending !== null) throw new Error('An invitation is already pending for this email');
+    if (pending !== null) {
+      throw new ConvexError('An invitation is already pending for this email address.');
+    }
 
     // Convex Auth already defines the `email` index. Account emails are normalized at the auth
     // boundary, so invitation checks stay bounded instead of scanning the full users table.
@@ -71,14 +73,16 @@ export const create = mutation({
       .withIndex('email', (q) => q.eq('email', email))
       .take(2);
     if (matchingUsers.length === 0) {
-      throw new Error('There is no account associated with this email.');
+      throw new ConvexError('No FieldPilot account uses this email address.');
     }
     for (const user of matchingUsers) {
       const membership = await ctx.db
         .query('projectMembers')
         .withIndex('by_project_user', (q) => q.eq('projectId', projectId).eq('userId', user._id))
         .unique();
-      if (membership !== null) throw new Error('This person is already a project member');
+      if (membership !== null) {
+        throw new ConvexError('This person is already a project member.');
+      }
     }
 
     return await ctx.db.insert('projectInvitations', {
@@ -97,14 +101,14 @@ export const accept = mutation({
     const userId = await requireUser(ctx);
     const [user, invitation] = await Promise.all([ctx.db.get(userId), ctx.db.get(invitationId)]);
     if (invitation === null || invitation.status !== 'pending') {
-      throw new Error('This invitation is no longer available');
+      throw new ConvexError('This invitation is no longer available.');
     }
     if (!user?.email || normalizeEmail(user.email) !== invitation.email) {
-      throw new Error('This invitation belongs to another email address');
+      throw new ConvexError('This invitation belongs to another email address.');
     }
     const project = await ctx.db.get(invitation.projectId);
     if (project === null || project.archivedAt !== undefined) {
-      throw new Error('This project is no longer available');
+      throw new ConvexError('This project is no longer available.');
     }
 
     const existingMembership = await ctx.db

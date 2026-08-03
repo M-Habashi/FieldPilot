@@ -67,7 +67,7 @@ export function ProjectShell({
         message: 'Invitation accepted. The project is now in your project list.',
       });
     } catch (error) {
-      const message = userFacingError(error);
+      const message = userFacingError(error, 'We could not accept the invitation. Try again.');
       setAcceptError(message);
     } finally {
       setAcceptingId(null);

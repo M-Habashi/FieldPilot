@@ -14,16 +14,27 @@ describe('userFacingError', () => {
     expect(userFacingError('failure')).toBe('Something went wrong. Please try again.');
   });
 
-  it('replaces opaque Convex server envelopes with a useful auth error', () => {
+  it('uses the call-site fallback for opaque Convex server envelopes', () => {
+    const error = new Error('[CONVEX A(auth:signIn)] Server Error\nCalled by client');
+
+    expect(userFacingError(error)).toBe('Something went wrong. Please try again.');
     expect(
-      userFacingError(new Error('[CONVEX A(auth:signIn)] Server Error\nCalled by client')),
-    ).toBe('We could not sign you in. Please try again.');
+      userFacingError(error, 'The email address or password is incorrect.'),
+    ).toBe('The email address or password is incorrect.');
+  });
+
+  it('reads user-safe structured Convex errors', () => {
+    expect(
+      userFacingError({ data: 'No FieldPilot account uses this email address.' }),
+    ).toBe('No FieldPilot account uses this email address.');
   });
 
   it.each(['InvalidAccountId', 'InvalidSecret'])(
     'translates %s into a safe credentials message',
     (code) => {
-      expect(userFacingError(new Error(code))).toBe('The email or password is incorrect.');
+      expect(userFacingError(new Error(code))).toBe(
+        'The email address or password is incorrect.',
+      );
     },
   );
 

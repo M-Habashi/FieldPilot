@@ -138,7 +138,7 @@ export function ProjectPlansPage({
         message: `${fileCount} PDF ${fileCount === 1 ? 'was' : 'were'} uploaded.`,
       });
     } catch (error) {
-      setUploadError(userFacingError(error));
+      setUploadError(userFacingError(error, 'The plans could not be uploaded. Try again.'));
     } finally {
       setUploading(false);
       setDragOver(false);
@@ -379,7 +379,7 @@ export function ProjectPlansPage({
             .catch((error: unknown) => {
               notify({
                 tone: 'error',
-                message: `Couldn’t remove ${planName}: ${userFacingError(error)}`,
+                message: `Couldn’t remove ${planName}: ${userFacingError(error, 'Try again.')}`,
               });
             });
         }}

@@ -219,7 +219,14 @@ export function AuthPage({
         setStep('verify');
       }
     } catch (caught) {
-      setError(userFacingError(caught));
+      setError(
+        userFacingError(
+          caught,
+          mode === 'login'
+            ? 'The email address or password is incorrect.'
+            : 'We could not create your account. Try again.',
+        ),
+      );
     } finally {
       setSubmitting(null);
     }
@@ -255,7 +262,9 @@ export function AuthPage({
         pendingPassword.current = '';
       }
     } catch (caught) {
-      setError(userFacingError(caught));
+      setError(
+        userFacingError(caught, 'That code is incorrect or expired. Request a new code.'),
+      );
     } finally {
       setSubmitting(null);
     }
@@ -281,7 +290,7 @@ export function AuthPage({
       setCodeResent(true);
       setResendAvailableIn(30);
     } catch (caught) {
-      setError(userFacingError(caught));
+      setError(userFacingError(caught, 'We could not send a new code. Try again.'));
     } finally {
       setSubmitting(null);
     }
@@ -309,7 +318,7 @@ export function AuthPage({
       setPendingEmail(email);
       setStep('reset-code');
     } catch (caught) {
-      setError(userFacingError(caught));
+      setError(userFacingError(caught, 'We could not send a reset code. Try again.'));
     } finally {
       setSubmitting(null);
     }
@@ -351,7 +360,9 @@ export function AuthPage({
         window.sessionStorage.setItem('fp:auth-notice', 'Password updated. You are signed in.');
       }
     } catch (caught) {
-      setError(userFacingError(caught));
+      setError(
+        userFacingError(caught, 'That code is incorrect or expired. Request a new code.'),
+      );
     } finally {
       setSubmitting(null);
     }

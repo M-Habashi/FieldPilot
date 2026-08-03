@@ -301,7 +301,9 @@ export function ProjectPlanWorkspace({
         setDocument(opened.doc);
         sourcePdfRef.current = source;
       } catch (error) {
-        if (active) setDocumentError(userFacingError(error));
+        if (active) {
+          setDocumentError(userFacingError(error, 'The plan PDF could not be loaded.'));
+        }
       }
     })();
     return () => {
@@ -323,7 +325,7 @@ export function ProjectPlanWorkspace({
         calibrations: state.calibrations,
       });
     } catch (error) {
-      setDownloadError(userFacingError(error));
+      setDownloadError(userFacingError(error, 'The marked-up PDF could not be downloaded.'));
     } finally {
       setSavingPdf(false);
     }

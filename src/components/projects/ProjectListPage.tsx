@@ -73,7 +73,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
         message: `Project renamed to ${name}.`,
       });
     } catch (error) {
-      setRenameError(userFacingError(error));
+      setRenameError(userFacingError(error, 'Try again.'));
     } finally {
       setRenameBusy(false);
     }
@@ -323,7 +323,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
             .catch((error: unknown) => {
               notify({
                 tone: 'error',
-                message: `Couldn’t leave ${projectName}: ${userFacingError(error)}`,
+                message: `Couldn’t leave ${projectName}: ${userFacingError(error, 'Try again.')}`,
               });
             });
         }}
