@@ -213,7 +213,9 @@ body {
     background: var(--fp-bg-surface);
     border: 1.5px dashed var(--fp-border-strong);
     border-radius: var(--fp-radius-lg);
-    transition: border-color var(--fp-dur-fast) var(--fp-ease), background var(--fp-dur-fast) var(--fp-ease);
+    transition:
+      border-color var(--fp-dur-fast) var(--fp-ease),
+      background var(--fp-dur-fast) var(--fp-ease);
   }
 
   .fp-empty-dragover {
@@ -237,16 +239,38 @@ body {
 /* App-owned cursors keep their dark core and white safety edge on both the
    white plan sheet and the blue-grey canvas. */
 .fp-cursor-pan {
-  cursor: url('/cursors/macos-pan-24.png') 12 8, grab;
+  cursor:
+    url('/cursors/macos-pan-24.png') 12 8,
+    grab;
 }
 
 .fp-cursor-panning,
 .fp-cursor-pan:active {
-  cursor: url('/cursors/macos-grabbing-24.png') 13 8, grabbing;
+  cursor:
+    url('/cursors/macos-grabbing-24.png') 13 8,
+    grabbing;
 }
 
 .fp-cursor-pin {
-  cursor: url('/cursors/pin-dark.svg') 16 16, crosshair;
+  cursor:
+    url('/cursors/pin-dark.svg') 16 16,
+    crosshair;
+}
+
+.fp-cursor-markup {
+  cursor: crosshair;
+}
+
+/* SVG annotations remain interactive even though their full-page overlay lets
+   empty sheet areas fall through to the viewer for pan/draw gestures. */
+[data-markup-layer] g,
+[data-markup-layer] line,
+[data-markup-layer] rect,
+[data-markup-layer] ellipse,
+[data-markup-layer] path,
+[data-markup-layer] polyline,
+[data-markup-layer] text {
+  touch-action: none;
 }
 
 .fp-dropdown-menu {
