@@ -76,7 +76,7 @@ export function ProjectShell({
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-app text-t1">
-      <header className="relative z-60 flex h-15 shrink-0 items-center border-b border-line bg-surface px-5 shadow-e1">
+      <header className="relative z-60 flex h-16 shrink-0 items-center border-b border-line-strong bg-surface px-5 sm:px-7">
         <button
           type="button"
           className="cursor-pointer"
@@ -88,7 +88,7 @@ export function ProjectShell({
 
         <button
           type="button"
-          className="absolute left-1/2 top-0 flex h-full -translate-x-1/2 cursor-pointer items-center border-b-2 border-accent px-4 text-sm font-semibold text-t1"
+          className="absolute left-1/2 top-0 flex h-full -translate-x-1/2 cursor-pointer items-center border-b-[3px] border-accent px-5 text-sm font-semibold text-t1 transition-colors hover:bg-accent-soft/45"
           onClick={onShowProjects}
         >
           Projects

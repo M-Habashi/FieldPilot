@@ -1,25 +1,25 @@
 /* FieldPilot's single Blueprint design token contract. */
 :root {
   /* Typography */
-  --fp-font-sans: 'Inter Variable', system-ui, sans-serif;
-  --fp-font-display: 'Inter Variable', system-ui, sans-serif;
+  --fp-font-sans: 'IBM Plex Sans Variable', 'Segoe UI', sans-serif;
+  --fp-font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --fp-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
   /* Cool drafting-table surfaces */
-  --fp-bg-app: #eef1f6;
-  --fp-bg-surface: #fbfcfe;
-  --fp-bg-surface-2: #e7ecf3;
-  --fp-bg-inset: #e3e8f0;
-  --fp-border: #d5dde8;
-  --fp-border-strong: #b6c2d3;
+  --fp-bg-app: #edf1f5;
+  --fp-bg-surface: #fffefa;
+  --fp-bg-surface-2: #f2f5f7;
+  --fp-bg-inset: #dfe6ee;
+  --fp-border: #d4dce4;
+  --fp-border-strong: #aebdcb;
 
   /* Ink and semantic colors */
-  --fp-text-1: #101b2e;
-  --fp-text-2: #465269;
-  --fp-text-3: #8493a8;
-  --fp-accent: #1d5fd4;
-  --fp-accent-hover: #174aa8;
-  --fp-accent-soft: #e4edfb;
+  --fp-text-1: #172236;
+  --fp-text-2: #46586d;
+  --fp-text-3: #687b91;
+  --fp-accent: #1767c9;
+  --fp-accent-hover: #0f4f9d;
+  --fp-accent-soft: #e2eefb;
   --fp-on-accent: #ffffff;
   --fp-danger: #d33636;
   --fp-danger-soft: #fbe9e9;
@@ -27,13 +27,13 @@
   --fp-warn: #c07a12;
 
   /* Shape and elevation */
-  --fp-radius-xs: 2px;
-  --fp-radius-md: 4px;
-  --fp-radius-lg: 6px;
+  --fp-radius-xs: 4px;
+  --fp-radius-md: 8px;
+  --fp-radius-lg: 14px;
   --fp-radius-pill: 999px;
-  --fp-shadow-e1: 0 1px 1px rgb(16 27 46 / 0.05);
-  --fp-shadow-e2: 0 1px 2px rgb(16 27 46 / 0.10), 0 2px 5px rgb(16 27 46 / 0.06);
-  --fp-shadow-e3: 0 10px 28px rgb(16 27 46 / 0.16), 0 2px 6px rgb(16 27 46 / 0.08);
+  --fp-shadow-e1: 0 2px 5px rgb(23 34 54 / 0.07);
+  --fp-shadow-e2: 0 7px 18px rgb(23 34 54 / 0.11), 0 2px 5px rgb(23 34 54 / 0.07);
+  --fp-shadow-e3: 0 22px 54px rgb(23 34 54 / 0.18), 0 5px 14px rgb(23 34 54 / 0.09);
 
   /* Motion */
   --fp-dur-fast: 100ms;

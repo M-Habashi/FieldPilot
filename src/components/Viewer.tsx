@@ -412,6 +412,24 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     };
   }, [doc, currentPage, fit]);
 
+  // Keep the whole sheet visible when the workspace changes shape (mobile
+  // rotation, browser resize, sidebar/drawer transitions). Without this the
+  // previous desktop offset can leave the plan entirely outside the viewport.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !pageBase) return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => fit(pageBase));
+    });
+    observer.observe(el);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [fit, pageBase]);
+
   // Extract vector endpoints, midpoints, and intersections once per page.
   // Raster-only sheets fall back to nearby ink pixels during pointer movement.
   useEffect(() => {

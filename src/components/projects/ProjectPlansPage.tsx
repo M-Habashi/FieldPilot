@@ -153,20 +153,20 @@ export function ProjectPlansPage({
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-5 py-9 sm:px-8 lg:px-10">
+    <main className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
       <nav
-        className="flex min-w-0 items-center gap-2 border-b border-line pb-5"
+        className="fp-page-header flex min-w-0 items-center gap-2.5 border-b border-line pb-6"
         aria-label="Project breadcrumb"
       >
         <button
           type="button"
-          className="cursor-pointer font-display text-2xl font-semibold tracking-tight text-t2 transition-colors duration-(--fp-dur-fast) hover:text-accent"
+          className="cursor-pointer font-display text-4xl font-semibold leading-none tracking-[-0.02em] text-t2 transition-colors duration-(--fp-dur-fast) hover:text-accent"
           onClick={onBackToProjects}
         >
           Projects
         </button>
-        <ChevronRight className="size-5 shrink-0 text-t3" aria-hidden="true" />
-        <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight text-t1">
+        <ChevronRight className="size-6 shrink-0 text-t3" aria-hidden="true" />
+        <h1 className="min-w-0 truncate font-display text-4xl font-semibold leading-none tracking-[-0.02em] text-t1">
           {project.name}
         </h1>
       </nav>
@@ -178,11 +178,11 @@ export function ProjectPlansPage({
       )}
 
       {pdfGroups === undefined ? (
-        <div className="grid gap-4 pt-7 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 pt-8 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1].map((index) => (
             <div
               key={index}
-              className="h-40 animate-pulse rounded-lg border border-line bg-surface"
+              className="h-44 animate-pulse rounded-lg border border-line bg-surface"
             />
           ))}
         </div>
@@ -191,7 +191,7 @@ export function ProjectPlansPage({
           <button
             type="button"
             className={cn(
-              'mt-8 flex min-h-72 w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-surface px-6 text-center transition-[border-color,background-color] duration-(--fp-dur-fast)',
+              'mt-9 flex min-h-80 w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-surface px-6 text-center transition-[border-color,background-color] duration-(--fp-dur-fast)',
               dragOver
                 ? 'border-accent bg-accent-soft'
                 : 'border-line-strong hover:border-accent hover:bg-surface2',
@@ -206,7 +206,7 @@ export function ProjectPlansPage({
             onDragLeave={() => setDragOver(false)}
             onDrop={dropPlans}
           >
-            <div className="flex size-12 items-center justify-center rounded-full bg-accent-soft text-accent">
+            <div className="flex size-12 items-center justify-center text-accent">
               {uploading ? (
                 <FileUp className="size-6 animate-pulse" />
               ) : (
@@ -223,8 +223,8 @@ export function ProjectPlansPage({
             </p>
           </button>
         ) : (
-          <div className="mt-8 flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-line-strong bg-surface px-6 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-accent-soft text-accent">
+          <div className="mt-9 flex min-h-80 flex-col items-center justify-center rounded-lg border border-dashed border-line-strong bg-surface px-6 text-center">
+            <div className="flex size-12 items-center justify-center text-accent">
               <FileText className="size-6" />
             </div>
             <h2 className="mt-4 font-display text-lg font-semibold text-t1">
@@ -233,11 +233,11 @@ export function ProjectPlansPage({
           </div>
         )
       ) : (
-        <div className="grid gap-4 pt-7 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 pt-8 sm:grid-cols-2 lg:grid-cols-3">
           {pdfGroups.map(({ primary, pages }) => (
             <article
               key={primary.sourceFileRef}
-              className="group relative flex min-h-40 flex-col rounded-lg border border-line bg-surface p-5 shadow-e1 transition-[border-color,box-shadow,transform] duration-(--fp-dur-fast) hover:-translate-y-0.5 hover:border-line-strong hover:shadow-e2"
+              className="fp-project-card group relative flex min-h-44 flex-col rounded-lg border border-line p-6 transition-[border-color,background-color,transform] duration-(--fp-dur-fast) hover:-translate-y-0.5 hover:border-accent"
             >
               <button
                 type="button"
@@ -246,11 +246,11 @@ export function ProjectPlansPage({
                 onClick={() => onOpenPlan(primary._id)}
               />
               <div className="pointer-events-none relative z-20 flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
-                  <FileText className="size-4.5" />
+                <div className="flex size-8 shrink-0 items-center justify-center text-accent">
+                  <FileText className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate font-display text-base font-semibold text-t1">
+                  <h2 className="truncate font-display text-xl font-semibold leading-none text-t1">
                     {primary.name}
                   </h2>
                 </div>
@@ -320,7 +320,7 @@ export function ProjectPlansPage({
             <button
               type="button"
               className={cn(
-                'flex min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-surface px-5 py-5 text-sm font-medium text-t2 transition-[border-color,background-color,color] duration-(--fp-dur-fast)',
+                'flex min-h-44 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-surface px-5 py-5 text-sm font-medium text-t2 transition-[border-color,background-color,color] duration-(--fp-dur-fast)',
                 dragOver
                   ? 'border-accent bg-accent-soft text-accent'
                   : 'border-line-strong hover:border-accent hover:bg-surface2 hover:text-t1',

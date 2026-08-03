@@ -57,10 +57,10 @@ function GoogleMark() {
 }
 
 const SSO_BUTTON =
-  'inline-flex h-10 w-full items-center justify-center gap-2.5 rounded-md border border-line-strong bg-surface text-sm font-semibold text-t1 shadow-e1 transition-[background,transform] hover:bg-surface2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-md border border-line-strong bg-surface text-sm font-semibold text-t1 transition-[background,border-color,transform] hover:border-accent hover:bg-accent-soft active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60';
 
 const PRIMARY_BUTTON =
-  'inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-on-accent shadow-e1 transition-[background,transform] hover:bg-accent-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-on-accent shadow-e1 transition-[background,box-shadow,transform] hover:bg-accent-hover hover:shadow-e2 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/u;
 
@@ -379,8 +379,8 @@ export function AuthPage({
           : copy.sub;
 
   return (
-    <div className="grid h-full bg-surface font-sans text-t1 lg:grid-cols-[1.05fr_1fr]">
-      <div className="flex h-full flex-col overflow-y-auto">
+    <div className="grid h-full bg-surface font-sans text-t1 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="fp-auth-panel flex h-full flex-col overflow-y-auto">
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 py-8 sm:px-10">
           <a
             href="#/"
@@ -392,13 +392,13 @@ export function AuthPage({
 
           <main className="flex flex-1 flex-col justify-center py-10">
             <h1
-              className="mkt-rise font-display text-3xl font-bold tracking-tight"
+              className="mkt-rise text-balance font-display text-5xl font-bold leading-[0.95] tracking-[-0.02em]"
               style={{ '--rise-delay': '80ms' } as CSSProperties}
             >
               {heading}
             </h1>
             <p
-              className="mkt-rise mt-2 text-sm text-t2"
+              className="mkt-rise mt-3 max-w-sm text-sm leading-6 text-t2"
               style={{ '--rise-delay': '150ms' } as CSSProperties}
             >
               {sub}
@@ -656,12 +656,18 @@ export function AuthPage({
         </div>
       </div>
 
-      <div className="relative hidden overflow-hidden border-l border-line lg:block" aria-hidden>
+      <div className="relative hidden overflow-hidden lg:block" aria-hidden>
         <img
           src="/images/auth/blueprint-collage.png"
           alt=""
           className="mkt-img-in absolute inset-0 h-full w-full object-cover"
         />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgb(15_40_72_/_0.78))]" />
+        <p className="absolute bottom-12 left-12 max-w-sm font-display text-5xl font-bold leading-[0.95] text-white drop-shadow-lg">
+          Plans move.
+          <br />
+          Work follows.
+        </p>
       </div>
     </div>
   );
