@@ -7,6 +7,9 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
     ignores: [
+      '.agents/**',
+      '.codex/**',
+      '.impeccable/**',
       'convex/_generated/**',
       'dist/**',
       'node_modules/**',

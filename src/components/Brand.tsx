@@ -17,7 +17,7 @@ export function Brand({ className, size = 'md', ...props }: BrandProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center font-display font-bold tracking-tight text-t1',
+        'inline-flex items-center font-display font-bold tracking-[-0.015em] text-t1',
         sizing.root,
         className,
       )}

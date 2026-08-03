@@ -8,7 +8,7 @@ import { Brand } from '../Brand';
 export function Navbar() {
   return (
     <header className="relative z-20">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6 lg:px-10">
+      <div className="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-6 lg:px-10">
         <a
           href="#/"
           className="inline-flex mkt-rise"
@@ -17,23 +17,16 @@ export function Navbar() {
           <Brand size="lg" className="font-extrabold" />
         </a>
 
-        {/* Placeholder sections — no target pages yet. */}
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
-          {['How it works', 'For teams', 'Resources'].map((label, i) => (
-            <button
-              key={label}
-              type="button"
-              className="text-sm font-medium text-t2 transition-colors hover:text-t1 cursor-pointer mkt-rise"
-              style={{ '--rise-delay': `${40 + i * 50}ms` } as CSSProperties}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        <p
+          className="mkt-rise hidden text-sm font-medium tracking-wide text-t2 md:block"
+          style={{ '--rise-delay': '80ms' } as CSSProperties}
+        >
+          Plans. Pins. Field progress.
+        </p>
 
         <a
           href="#/login"
-          className="inline-flex h-9 items-center rounded-md border border-accent bg-accent px-4 text-sm font-semibold text-on-accent shadow-e1 transition-[background,transform] hover:bg-accent-hover active:scale-[0.97] mkt-rise"
+          className="mkt-rise inline-flex h-10 items-center rounded-md bg-accent px-5 text-sm font-semibold text-on-accent shadow-e1 transition-[background,box-shadow,transform] hover:bg-accent-hover hover:shadow-e2 active:translate-y-px"
           style={{ '--rise-delay': '240ms' } as CSSProperties}
         >
           Log in

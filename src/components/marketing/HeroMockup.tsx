@@ -207,9 +207,9 @@ const TASK_ROWS: Array<[string, React.ReactNode]> = [
  */
 export function HeroMockup() {
   return (
-    <div className="mkt-hero-viewport relative mkt-hero-in w-full min-w-0 lg:max-w-[500px] lg:justify-self-end">
+    <div className="mkt-hero-viewport relative mkt-hero-in w-full min-w-0 lg:max-w-[560px] lg:justify-self-end">
       <div className="mkt-hero-scale mkt-plan-shift relative lg:w-full">
-        <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-e3">
+        <div className="overflow-hidden rounded-[16px] bg-surface shadow-e3 ring-1 ring-line">
           {/* Window chrome */}
           <div className="flex h-10 items-center gap-3 border-b border-line bg-surface px-3">
             <span className="flex gap-1.5">
@@ -282,7 +282,7 @@ export function HeroMockup() {
         </div>
 
         {/* Overlapping task card */}
-        <div className="mkt-card-in mkt-details-shift absolute -right-3 top-16 z-10 block w-[264px] rounded-lg border border-line bg-surface p-4 shadow-e3 xl:-right-8">
+        <div className="mkt-card-in mkt-details-shift absolute -right-3 top-16 z-10 block w-[264px] rounded-lg bg-surface p-4 shadow-e3 ring-1 ring-line xl:-right-8">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex size-5 items-center justify-center rounded-full bg-ok font-mono text-[10px] font-bold text-on-accent">

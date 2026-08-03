@@ -18,7 +18,7 @@ function Polaroid({
 }) {
   return (
     <figure
-      className="mkt-polaroid relative w-36 shrink-0 rounded-sm border border-line bg-surface p-2 pb-1 shadow-e2 transition-transform hover:z-10 sm:w-44 lg:w-36"
+      className="mkt-polaroid relative w-36 shrink-0 rounded-md bg-surface p-2 pb-1 shadow-e2 transition-[transform,box-shadow] hover:z-10 hover:shadow-e3 sm:w-44 lg:w-38"
       style={{ '--tilt': tilt } as CSSProperties}
     >
       <span className="mkt-tape" style={{ '--tape-tilt': tapeTilt } as CSSProperties} />
@@ -44,18 +44,18 @@ export function LandingPage() {
 
         <Navbar />
 
-        <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-6 lg:px-10 lg:pb-8">
-          <div className="grid min-h-0 flex-1 items-center gap-12 pt-10 lg:grid-cols-[1fr_1.05fr] lg:gap-8 lg:pt-4">
+        <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col px-6 lg:px-10 lg:pb-8">
+          <div className="grid min-h-0 flex-1 items-center gap-12 pt-9 lg:grid-cols-[0.88fr_1.12fr] lg:gap-12 lg:pt-2">
             {/* Copy */}
             <div>
               <img
                 src="/images/landing/built-for-engineers-stamp.png"
                 alt="Built for engineers"
-                className="mkt-rise block h-11 w-56 object-cover object-center"
+                className="mkt-rise block h-11 w-56 object-cover object-center drop-shadow-sm"
                 style={{ '--rise-delay': '60ms' } as CSSProperties}
               />
               <h1
-                className="mkt-rise mt-5 font-display text-5xl font-bold leading-[1.02] tracking-[-0.03em] sm:text-6xl"
+                className="mkt-rise mt-6 max-w-xl text-balance font-display text-6xl font-bold leading-[0.92] tracking-[-0.025em] sm:text-7xl lg:text-[5.25rem] xl:text-8xl"
                 style={{ '--rise-delay': '140ms' } as CSSProperties}
               >
                 Plans move
@@ -63,7 +63,7 @@ export function LandingPage() {
                 Work follows
               </h1>
               <p
-                className="mkt-rise mt-5 max-w-md text-base leading-relaxed text-t2 sm:text-lg"
+                className="mkt-rise mt-6 max-w-lg text-base leading-7 text-t2 sm:text-lg sm:leading-8"
                 style={{ '--rise-delay': '220ms' } as CSSProperties}
               >
                 Turn every drawing into a live, shared record of what needs attention—and
@@ -74,9 +74,9 @@ export function LandingPage() {
                 style={{ '--rise-delay': '300ms' } as CSSProperties}
               >
                 <Button
-                  variant="text"
-                  size="sm"
-                  className="group h-auto gap-2 p-0 font-sans text-base font-semibold text-accent hover:text-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+                  variant="default"
+                  size="md"
+                  className="group h-11 gap-3 px-5 font-sans text-base"
                   onClick={() => {
                     window.location.hash = '/login';
                   }}
@@ -89,7 +89,7 @@ export function LandingPage() {
                     viewBox="0 0 24 24"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
-                    className="mkt-arrow !h-6 !w-6 shrink-0 text-accent transition-transform duration-200 group-hover:translate-x-1"
+                    className="mkt-arrow !h-5 !w-5 shrink-0 text-on-accent transition-transform duration-200 group-hover:translate-x-1"
                   >
                     <path
                       d="M4 12H20M20 12L14 6M20 12L14 18"
@@ -108,7 +108,7 @@ export function LandingPage() {
           </div>
 
           {/* Field notes strip: polaroids + sheet stamp above the torn plan */}
-          <div className="relative z-10 mt-6 flex items-end justify-between gap-6 pb-24 sm:pb-28 lg:mt-0 lg:pb-0">
+          <div className="relative z-10 mt-8 flex items-end justify-between gap-6 pb-24 sm:pb-28 lg:mt-1 lg:pb-0">
             <div className="flex items-end gap-4 sm:gap-6">
               <Polaroid
                 src="/images/landing/jobsite-rebar.png"

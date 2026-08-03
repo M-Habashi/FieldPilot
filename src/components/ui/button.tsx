@@ -3,11 +3,12 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium select-none cursor-pointer transition-[background,color,border-color,box-shadow,transform] duration-(--fp-dur-fast) ease-(--fp-ease) disabled:pointer-events-none disabled:opacity-50 active:scale-[0.97] [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-semibold select-none cursor-pointer transition-[background,color,border-color,box-shadow,transform] duration-(--fp-dur-fast) ease-(--fp-ease) disabled:pointer-events-none disabled:opacity-50 active:translate-y-px active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default: 'bg-accent text-on-accent hover:bg-accent-hover shadow-e1 rounded-md',
+        default:
+          'bg-accent text-on-accent hover:bg-accent-hover shadow-e1 hover:shadow-e2 rounded-md',
         secondary:
           'bg-surface text-t1 border border-line hover:border-line-strong hover:bg-surface2 rounded-md',
         ghost: 'text-t2 hover:bg-surface2 hover:text-t1 rounded-md',
@@ -22,7 +23,7 @@ const buttonVariants = cva(
         md: 'h-9 px-3.5 text-sm [&_svg]:size-4',
         icon: 'size-9 [&_svg]:size-4',
         iconSm: 'size-8 [&_svg]:size-4',
-        iconXs: 'size-7 [&_svg]:size-3.5',
+        iconXs: 'size-8 [&_svg]:size-3.5',
       },
     },
     defaultVariants: { variant: 'secondary', size: 'md' },

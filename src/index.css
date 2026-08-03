@@ -47,6 +47,8 @@ body {
   font-family: var(--fp-font-sans);
   background: var(--fp-bg-app);
   color: var(--fp-text-1);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overscroll-behavior: none;
   /* The app owns its own internal scrolling; the document itself never scrolls,
      so there is no browser-level horizontal or vertical overflow scrollbar. */
@@ -61,6 +63,14 @@ body {
 ::selection {
   background: var(--fp-accent);
   color: var(--fp-on-accent);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ============ component hooks (visuals themable per design) ============ */
@@ -87,6 +97,44 @@ body {
   .fp-sidebar {
     background: var(--fp-bg-surface);
     border-right: 1px solid var(--fp-border-strong);
+  }
+
+  .fp-page-header {
+    position: relative;
+  }
+
+  .fp-page-header::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    bottom: -1px;
+    width: 72px;
+    height: 2px;
+    background: var(--fp-accent);
+  }
+
+  .fp-project-card {
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--fp-accent-soft) 36%, transparent),
+        transparent 42%
+      ),
+      var(--fp-bg-surface);
+  }
+
+  .fp-project-card:hover {
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--fp-accent-soft) 58%, transparent),
+        transparent 46%
+      ),
+      var(--fp-bg-surface);
+  }
+
+  .fp-auth-panel {
+    background: var(--fp-bg-surface);
   }
 
   .fp-canvas-stage {
