@@ -14,6 +14,12 @@ export function userFacingError(error: unknown) {
       .trim();
 
   if (!message) return GENERIC_ERROR;
+  if (
+    /^(?:Server Error\s*)?Called by client$/iu.test(message) ||
+    /^Server Error$/iu.test(message)
+  ) {
+    return 'We could not sign you in. Please try again.';
+  }
   if (/^(InvalidAccountId|InvalidSecret)$/iu.test(message)) {
     return 'The email or password is incorrect.';
   }

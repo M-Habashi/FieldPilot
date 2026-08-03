@@ -13,6 +13,7 @@ import type * as auth from "../auth.js";
 import type * as authEmail from "../authEmail.js";
 import type * as http from "../http.js";
 import type * as invitations from "../invitations.js";
+import type * as lib_authConfig from "../lib/authConfig.js";
 import type * as lib_authUser from "../lib/authUser.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_demoProject from "../lib/demoProject.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   authEmail: typeof authEmail;
   http: typeof http;
   invitations: typeof invitations;
+  "lib/authConfig": typeof lib_authConfig;
   "lib/authUser": typeof lib_authUser;
   "lib/authz": typeof lib_authz;
   "lib/demoProject": typeof lib_demoProject;

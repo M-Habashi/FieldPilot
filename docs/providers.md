@@ -24,6 +24,8 @@ Last reviewed: 2026-08-01
   production launch; no auth UI changes are required when the sender changes.
 - Codes are six digits and expire after 15 minutes. Until configured, Google sign-in still works;
   email verification and password reset return a configuration error.
+- For an alpha deployment with no mail provider, `AUTH_ALLOW_UNVERIFIED_EMAIL=true` enables direct
+  email/password sign-up and disables password reset. Remove the flag as soon as Brevo is configured.
 - Unverified password users receive no app session; reminders and change-email actions stay in auth,
   and successful verification goes directly to Projects.
 

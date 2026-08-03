@@ -1,11 +1,15 @@
 import { convexTest } from 'convex-test';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createOrUpdateAuthUser, type CreateOrUpdateAuthUserArgs } from './lib/authUser';
 import { DEMO_PLAN_NAME, DEMO_PROJECT_NAME, ensureDemoProjectForUser } from './lib/demoProject';
 import schema from './schema';
 import { modules } from './test.setup';
 
 describe('new account onboarding', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('creates an owned demo project with the bundled demo plan', async () => {
     const t = convexTest(schema, modules);
 
@@ -85,6 +89,31 @@ describe('new account onboarding', () => {
       });
 
       expect((await ctx.db.get(userId))?.emailVerificationTime).toEqual(expect.any(Number));
+      expect(await ctx.db.query('projects').collect()).toHaveLength(1);
+      expect(await ctx.db.query('sheets').collect()).toHaveLength(3);
+    });
+  });
+
+  it('onboards password users immediately when the explicit alpha fallback is enabled', async () => {
+    vi.stubEnv('AUTH_ALLOW_UNVERIFIED_EMAIL', 'true');
+    const t = convexTest(schema, modules);
+
+    await t.run(async (ctx) => {
+      const userId = await createOrUpdateAuthUser(ctx, {
+        existingUserId: null,
+        type: 'credentials',
+        provider: {
+          id: 'password',
+          type: 'credentials',
+        } as unknown as CreateOrUpdateAuthUserArgs['provider'],
+        profile: { name: 'Alpha User', email: 'alpha-user@example.com' },
+      });
+
+      expect(await ctx.db.get(userId)).toMatchObject({
+        name: 'Alpha User',
+        email: 'alpha-user@example.com',
+        emailVerificationTime: expect.any(Number),
+      });
       expect(await ctx.db.query('projects').collect()).toHaveLength(1);
       expect(await ctx.db.query('sheets').collect()).toHaveLength(3);
     });

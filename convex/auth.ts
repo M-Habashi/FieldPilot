@@ -4,6 +4,7 @@ import { convexAuth } from '@convex-dev/auth/server';
 import type { DataModel } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 import { emailVerificationProvider, passwordResetProvider } from './authEmail';
+import { allowUnverifiedEmailAuth } from './lib/authConfig';
 import { createOrUpdateAuthUser } from './lib/authUser';
 
 function normalizeEmail(value: unknown) {
@@ -15,6 +16,8 @@ function normalizeEmail(value: unknown) {
   return email;
 }
 
+const skipEmailVerification = allowUnverifiedEmailAuth();
+
 const password = Password<DataModel>({
   profile: (params) => ({
     email: normalizeEmail(params.email),
@@ -24,8 +27,8 @@ const password = Password<DataModel>({
     if (value.length < 8) throw new Error('Password must be at least 8 characters.');
     if (value.length > 128) throw new Error('Password must be 128 characters or fewer.');
   },
-  verify: emailVerificationProvider,
-  reset: passwordResetProvider,
+  verify: skipEmailVerification ? undefined : emailVerificationProvider,
+  reset: skipEmailVerification ? undefined : passwordResetProvider,
 });
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({

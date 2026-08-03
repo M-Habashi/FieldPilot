@@ -14,6 +14,12 @@ describe('userFacingError', () => {
     expect(userFacingError('failure')).toBe('Something went wrong. Please try again.');
   });
 
+  it('replaces opaque Convex server envelopes with a useful auth error', () => {
+    expect(
+      userFacingError(new Error('[CONVEX A(auth:signIn)] Server Error\nCalled by client')),
+    ).toBe('We could not sign you in. Please try again.');
+  });
+
   it.each(['InvalidAccountId', 'InvalidSecret'])(
     'translates %s into a safe credentials message',
     (code) => {
