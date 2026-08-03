@@ -244,9 +244,14 @@ export function AuthPage({
     try {
       const result = await signIn('password', values);
       if (!result.signingIn) {
-        setError('That code is invalid or has expired.');
+        setError('That code is invalid or has expired. Request a new code and try again.');
       } else {
-        window.sessionStorage.setItem('fp:auth-notice', 'Email verified. Welcome to FieldPilot.');
+        window.sessionStorage.setItem(
+          'fp:auth-notice',
+          mode === 'login'
+            ? 'Email verified. You are signed in.'
+            : 'Email verified. Welcome to FieldPilot.',
+        );
         pendingPassword.current = '';
       }
     } catch (caught) {
@@ -362,7 +367,9 @@ export function AuthPage({
 
   const heading =
     step === 'verify'
-      ? 'Check your email'
+      ? mode === 'login'
+        ? 'Verify your email'
+        : 'Check your email'
       : step === 'reset-request'
         ? 'Reset your password'
         : step === 'reset-code'
@@ -371,7 +378,9 @@ export function AuthPage({
 
   const sub =
     step === 'verify'
-      ? `Enter the six-digit code sent to ${pendingEmail}.`
+      ? mode === 'login'
+        ? `Your password is correct, but ${pendingEmail} still needs verification. Enter the code we sent to continue.`
+        : `Enter the six-digit code sent to ${pendingEmail}.`
       : step === 'reset-request'
         ? 'We will send a six-digit reset code to your email.'
         : step === 'reset-code'
@@ -491,7 +500,9 @@ export function AuthPage({
                   <Notice tone="info" compact>
                     {codeResent
                       ? 'A new code was sent. Enter it within 15 minutes.'
-                      : 'Enter the six-digit code within 15 minutes.'}
+                      : mode === 'login'
+                        ? 'For your security, unverified accounts cannot sign in.'
+                        : 'Enter the six-digit code within 15 minutes.'}
                   </Notice>
                   <div>
                     <Label htmlFor="verification-code">Verification code</Label>
@@ -509,7 +520,7 @@ export function AuthPage({
                   </div>
                   <button type="submit" className={PRIMARY_BUTTON} disabled={busy}>
                     {submitting === 'email' && <Loader2 className="size-4 animate-spin" />}
-                    Verify email
+                    {mode === 'login' ? 'Verify and sign in' : 'Verify email'}
                   </button>
                   <div className="flex items-center justify-between gap-4 text-xs">
                     <button
@@ -527,7 +538,7 @@ export function AuthPage({
                       onClick={returnToCredentials}
                       className="cursor-pointer font-semibold text-t2 hover:text-t1"
                     >
-                      Use a different email
+                      {mode === 'login' ? 'Back to sign in' : 'Use a different email'}
                     </button>
                   </div>
                 </form>
