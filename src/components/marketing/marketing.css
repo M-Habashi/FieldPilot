@@ -85,16 +85,67 @@
   }
 }
 
-/* On wide hero layouts, keep the final pin visible beside the details card.
-   The 40px / 160px split leaves a comfortable right gutter at the reference
-   desktop width while keeping the mockup and card visually related. */
+/* On wide hero layouts, keep the final pin visible beside the details card
+   while preserving a right gutter for the complete mockup composition. */
 @media (min-width: 1440px) {
   .mkt-plan-shift {
-    translate: -40px 0;
+    translate: -128px 0;
   }
 
   .mkt-details-shift {
-    translate: 160px 0;
+    translate: 128px 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mkt-field-photo-group {
+    translate: 0 -8px;
+  }
+}
+
+/* Keep the desktop composition viewport-bound at compact heights. Reducing the
+   display face preserves the CTA-to-field-notes separation without introducing
+   a page scrollbar. */
+@media (min-width: 1024px) and (max-height: 760px) {
+  .mkt-landing-hero-grid h1 {
+    font-size: 4.5rem;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 700px) {
+  .mkt-hero-copy {
+    translate: 0 -12px;
+  }
+
+  .mkt-landing-hero-grid h1 {
+    font-size: 4.25rem;
+  }
+
+  .mkt-field-notes .mkt-polaroid {
+    width: 8rem;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 640px) {
+  .mkt-landing-hero-grid h1 {
+    font-size: 3.25rem;
+  }
+
+  .mkt-landing-hero-grid {
+    margin-bottom: 1rem;
+  }
+
+  .mkt-hero-viewport {
+    height: 300px;
+  }
+
+  .mkt-hero-scale {
+    transform: scale(0.66);
+    transform-origin: top right;
+  }
+
+  .mkt-field-notes .mkt-polaroid {
+    width: 7.5rem;
   }
 }
 

@@ -32,8 +32,8 @@ function Polaroid({
 
 export function LandingPage() {
   return (
-    <div className="h-full overflow-x-hidden overflow-y-auto bg-app font-sans text-t1 lg:overflow-hidden">
-      <div className="relative flex min-h-full flex-col lg:h-full lg:min-h-0">
+    <div className="mkt-landing-page h-full overflow-x-hidden overflow-y-auto bg-app font-sans text-t1 lg:overflow-hidden">
+      <div className="mkt-landing-shell relative flex min-h-full flex-col lg:h-full lg:min-h-0">
         {/* Faint drafting grid drifting behind everything. */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           <div
@@ -44,10 +44,10 @@ export function LandingPage() {
 
         <Navbar />
 
-        <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col px-6 lg:px-10 lg:pb-8">
-          <div className="grid min-h-0 flex-1 items-center gap-12 pt-9 lg:grid-cols-[0.88fr_1.12fr] lg:gap-12 lg:pt-2">
+        <main className="mkt-landing-main relative z-10 mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col px-6 lg:pr-16 lg:pl-10 xl:pr-20 lg:pb-4">
+          <div className="mkt-landing-hero-grid grid min-h-0 flex-1 items-center gap-12 pt-9 lg:mb-8 lg:grid-cols-[0.88fr_1.12fr] lg:gap-12 lg:pt-2">
             {/* Copy */}
-            <div>
+            <div className="mkt-hero-copy">
               <img
                 src="/images/landing/built-for-engineers-stamp.png"
                 alt="Built for engineers"
@@ -63,7 +63,7 @@ export function LandingPage() {
                 Work follows
               </h1>
               <p
-                className="mkt-rise mt-6 max-w-lg text-base leading-7 text-t2 sm:text-lg sm:leading-8"
+                className="mkt-rise mt-6 max-w-lg text-base leading-7 text-t2 sm:text-lg sm:leading-8 lg:max-w-md"
                 style={{ '--rise-delay': '220ms' } as CSSProperties}
               >
                 Turn every drawing into a live, shared record of what needs attention—and
@@ -108,8 +108,8 @@ export function LandingPage() {
           </div>
 
           {/* Field notes strip: polaroids + sheet stamp above the torn plan */}
-          <div className="relative z-10 mt-8 flex items-end justify-between gap-6 pb-24 sm:pb-28 lg:mt-1 lg:pb-0">
-            <div className="flex items-end gap-4 sm:gap-6">
+          <div className="mkt-field-notes relative z-10 mt-8 flex items-end justify-between gap-6 pb-24 sm:pb-28 lg:mt-1 lg:pb-0">
+            <div className="mkt-field-photo-group flex items-end gap-4 sm:gap-6">
               <Polaroid
                 src="/images/landing/jobsite-rebar.png"
                 alt="Rebar and formwork on the level 2 deck"
