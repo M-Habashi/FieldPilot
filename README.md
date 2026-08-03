@@ -14,8 +14,14 @@ pnpm install
 pnpm dev
 ```
 
-Open the printed URL, then click **Load demo plan** (a bundled 3-sheet sample) or open your own
-PDF plan set.
+Open `http://localhost:5173`. The repository includes non-secret development and production browser
+endpoints, so a fresh clone can run both `pnpm dev` and `pnpm build` without reconstructing
+`.env.local`. Port 5173 is fixed because it is the registered local OAuth callback; if it is occupied,
+stop that process and run `pnpm dev` again instead of using another port.
+
+To use a personal Convex deployment, copy `.env.example` to `.env.local`, run
+`pnpm convex dev --once`, and keep `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` on the same deployment.
+Provider secrets stay in Convex and must never be added to either file.
 
 ## Using it
 

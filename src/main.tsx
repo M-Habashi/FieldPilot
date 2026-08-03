@@ -10,10 +10,12 @@ import './index.css';
 import App from './App';
 import { AuthLoadingScreen } from './components/AuthScreen';
 import { MarketingApp } from './components/marketing/MarketingApp';
+import { createAuthStorage } from './lib/auth-storage';
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 if (!convexUrl) throw new Error('VITE_CONVEX_URL is not configured');
 const convex = new ConvexReactClient(convexUrl);
+const authStorage = createAuthStorage(window.localStorage, window.sessionStorage);
 
 const viewerCursorSources = ['/cursors/macos-pan-24.png', '/cursors/macos-grabbing-24.png'];
 
@@ -28,7 +30,7 @@ function preloadViewerCursors() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ConvexAuthProvider client={convex}>
+    <ConvexAuthProvider client={convex} storage={authStorage}>
       <AuthLoading>
         <AuthLoadingScreen />
       </AuthLoading>

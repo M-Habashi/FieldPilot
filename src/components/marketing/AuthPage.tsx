@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { GOOGLE_AUTH_CALLBACK_ROUTE, googleAuthRedirectTo } from '../../lib/auth-redirect';
 import { userFacingError } from '../../lib/errors';
 import { Brand } from '../Brand';
 import { Input } from '../ui/input';
@@ -10,8 +11,7 @@ import { Notice } from '../ui/notice';
 export type AuthMode = 'login' | 'signup';
 type AuthStep = 'credentials' | 'verify' | 'reset-request' | 'reset-code';
 
-export const GOOGLE_AUTH_CALLBACK_ROUTE = '/auth/callback';
-const GOOGLE_AUTH_REDIRECT_TO = `/#${GOOGLE_AUTH_CALLBACK_ROUTE}`;
+export { GOOGLE_AUTH_CALLBACK_ROUTE };
 
 const COPY: Record<
   AuthMode,
@@ -163,7 +163,7 @@ export function AuthPage({
     setSubmitting('google');
     setError(null);
     try {
-      await signIn('google', { redirectTo: GOOGLE_AUTH_REDIRECT_TO });
+      await signIn('google', { redirectTo: googleAuthRedirectTo(window.location.origin) });
     } catch {
       setError('Google sign-in is unavailable. Try again.');
       setSubmitting(null);
@@ -363,9 +363,7 @@ export function AuthPage({
         window.sessionStorage.setItem('fp:auth-notice', 'Password updated. You are signed in.');
       }
     } catch (caught) {
-      setError(
-        userFacingError(caught, 'That code is incorrect or expired. Request a new code.'),
-      );
+      setError(userFacingError(caught, 'That code is incorrect or expired. Request a new code.'));
     } finally {
       setSubmitting(null);
     }
