@@ -1,6 +1,7 @@
 import { authTables } from '@convex-dev/auth/server';
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
+import { markupData, pageCalibration } from './lib/markup';
 
 export const projectRole = v.union(
   v.literal('owner'),
@@ -72,6 +73,7 @@ export default defineSchema({
     width: v.number(),
     height: v.number(),
     version: v.number(),
+    calibration: v.optional(pageCalibration),
     createdBy: v.id('users'),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -80,6 +82,18 @@ export default defineSchema({
     .index('by_project_number', ['projectId', 'number'])
     .index('by_project_sourceFileRef', ['projectId', 'sourceFileRef'])
     .index('by_sourceStorageId', ['sourceStorageId']),
+
+  markups: defineTable({
+    projectId: v.id('projects'),
+    sheetId: v.id('sheets'),
+    clientId: v.string(),
+    data: markupData,
+    createdBy: v.id('users'),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_sheet', ['sheetId'])
+    .index('by_project_client', ['projectId', 'clientId']),
 
   tasks: defineTable({
     projectId: v.id('projects'),

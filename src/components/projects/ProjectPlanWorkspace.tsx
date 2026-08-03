@@ -6,13 +6,14 @@ import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
 import { openPdf, type PDFDocumentProxy } from '../../lib/pdf';
 import { setRemoteProjectSync, useProject, type RemoteProjectSync } from '../../store/project';
-import type { Priority, Status, Task } from '../../types';
+import type { Markup, PageCalibration, Priority, Status, Task } from '../../types';
 import { Lightbox } from '../Lightbox';
 import { RightDrawer } from '../RightDrawer';
 import { Sidebar } from '../Sidebar';
 import { StatusBar } from '../StatusBar';
 import { AppHeader, Toolbar } from '../Toolbar';
 import { Viewer } from '../Viewer';
+import { MarkupPropertiesBar } from '../MarkupPropertiesBar';
 import { Notice } from '../ui/notice';
 
 interface ProjectPlanWorkspaceProps {
@@ -28,6 +29,7 @@ export function ProjectPlanWorkspace({
 }: ProjectPlanWorkspaceProps) {
   const workspace = useQuery(api.sheets.getPdfWorkspace, { sheetId });
   const taskRows = useQuery(api.tasks.listByPdf, { sheetId });
+  const markupRows = useQuery(api.markups.listByPdf, { sheetId });
   const selectedTaskId = useProject((state) => state.selectedTaskId);
   const selectedRemoteTaskId =
     selectedTaskId && !selectedTaskId.startsWith('local:') ? (selectedTaskId as Id<'tasks'>) : null;
@@ -46,10 +48,18 @@ export function ProjectPlanWorkspace({
   const generateAttachmentUploadUrl = useMutation(api.attachments.generateUploadUrl);
   const completeAttachmentUpload = useMutation(api.attachments.completeUpload);
   const removeAttachment = useMutation(api.attachments.remove);
+  const saveMarkupMutation = useMutation(api.markups.save);
+  const removeMarkupMutation = useMutation(api.markups.remove);
+  const setCalibrationMutation = useMutation(api.markups.setCalibration);
 
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
+  const sourcePdfRef = useRef<Uint8Array | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [savingPdf, setSavingPdf] = useState(false);
   const remoteTasksRef = useRef<Record<string, Task> | null>(null);
+  const remoteMarkupsRef = useRef<Record<string, Markup> | null>(null);
+  const remoteCalibrationsRef = useRef<Record<number, PageCalibration>>({});
   const nextTaskSeqRef = useRef(project.nextTaskSeq);
   const syncError = useProject((state) => state.syncError);
   nextTaskSeqRef.current = project.nextTaskSeq;
@@ -137,6 +147,23 @@ export function ProjectPlanWorkspace({
       async removePhoto(_taskId, photoId) {
         await removeAttachment({ attachmentId: photoId as Id<'attachments'> });
       },
+      async saveMarkup(markup) {
+        const { id, page, createdAt: _createdAt, updatedAt: _updatedAt, ...data } = markup;
+        void _createdAt;
+        void _updatedAt;
+        await saveMarkupMutation({
+          projectId: project._id,
+          sheetId: pageSheet(page)._id,
+          clientId: id,
+          data,
+        });
+      },
+      async deleteMarkup(markupId) {
+        await removeMarkupMutation({ projectId: project._id, clientId: markupId });
+      },
+      async setCalibration(page, calibration) {
+        await setCalibrationMutation({ sheetId: pageSheet(page)._id, calibration });
+      },
     };
   }, [
     completeAttachmentUpload,
@@ -146,6 +173,9 @@ export function ProjectPlanWorkspace({
     project._id,
     removeAttachment,
     removeTask,
+    removeMarkupMutation,
+    saveMarkupMutation,
+    setCalibrationMutation,
     updateTask,
     workspace,
   ]);
@@ -193,6 +223,36 @@ export function ProjectPlanWorkspace({
     useProject.getState().replaceProject(remoteTasks, project.nextTaskSeq);
   }, [project.nextTaskSeq, remoteTasks]);
 
+  const remoteMarkups = useMemo(() => {
+    if (!markupRows) return null;
+    const markups: Record<string, Markup> = {};
+    for (const { markup, page } of markupRows) {
+      markups[markup.clientId] = {
+        id: markup.clientId,
+        page,
+        ...markup.data,
+        createdAt: markup.createdAt,
+        updatedAt: markup.updatedAt,
+      } as Markup;
+    }
+    return markups;
+  }, [markupRows]);
+
+  const remoteCalibrations = useMemo(() => {
+    const calibrations: Record<number, PageCalibration> = {};
+    for (const page of workspace?.pages ?? []) {
+      if (page.calibration) calibrations[page.pageIndex + 1] = page.calibration;
+    }
+    return calibrations;
+  }, [workspace?.pages]);
+
+  useEffect(() => {
+    if (!remoteMarkups || !workspace) return;
+    remoteMarkupsRef.current = remoteMarkups;
+    remoteCalibrationsRef.current = remoteCalibrations;
+    useProject.getState().replaceMarkups(remoteMarkups, remoteCalibrations);
+  }, [remoteCalibrations, remoteMarkups, workspace]);
+
   useEffect(() => {
     if (!selectedRemoteTaskId || !selectedNotes || !selectedPhotos) return;
     useProject.getState().replaceTaskDetails(
@@ -215,12 +275,15 @@ export function ProjectPlanWorkspace({
     if (!workspacePdfUrl || !workspaceFileName || !workspaceSourceRef) return;
     let active = true;
     setDocument(null);
+    sourcePdfRef.current = null;
     setDocumentError(null);
     void (async () => {
       try {
         const response = await fetch(workspacePdfUrl);
         if (!response.ok) throw new Error('The plan PDF could not be loaded.');
-        const opened = await openPdf(await response.arrayBuffer());
+        const buffer = await response.arrayBuffer();
+        const source = new Uint8Array(buffer.slice(0));
+        const opened = await openPdf(buffer);
         if (!active) return;
         useProject.getState().loadRemoteDocument({
           fileName: workspaceFileName,
@@ -230,7 +293,13 @@ export function ProjectPlanWorkspace({
         if (remoteTasksRef.current) {
           useProject.getState().replaceProject(remoteTasksRef.current, nextTaskSeqRef.current);
         }
+        if (remoteMarkupsRef.current) {
+          useProject
+            .getState()
+            .replaceMarkups(remoteMarkupsRef.current, remoteCalibrationsRef.current);
+        }
         setDocument(opened.doc);
+        sourcePdfRef.current = source;
       } catch (error) {
         if (active) setDocumentError(userFacingError(error));
       }
@@ -239,6 +308,26 @@ export function ProjectPlanWorkspace({
       active = false;
     };
   }, [project._id, workspaceFileName, workspacePdfUrl, workspaceSourceRef]);
+
+  const saveMarkedUpPdf = async () => {
+    const sourcePdf = sourcePdfRef.current;
+    if (!sourcePdf) return;
+    setSavingPdf(true);
+    setDownloadError(null);
+    try {
+      const { downloadAnnotatedPdf } = await import('../../lib/annotated-pdf');
+      const state = useProject.getState();
+      await downloadAnnotatedPdf(sourcePdf, {
+        fileName: state.fileName,
+        markups: state.markups,
+        calibrations: state.calibrations,
+      });
+    } catch (error) {
+      setDownloadError(userFacingError(error));
+    } finally {
+      setSavingPdf(false);
+    }
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -254,11 +343,33 @@ export function ProjectPlanWorkspace({
           state.setAddPinMode(false);
           return;
         }
+        if (state.markupTool && state.markupTool !== 'select') {
+          state.setMarkupTool('select');
+          return;
+        }
+        if (state.selectedMarkupId) {
+          state.selectMarkup(null);
+          return;
+        }
         if (state.selectedTaskId) state.selectTask(null);
         if (target.closest('.fp-pin')) target.blur();
         return;
       }
+      if (!typing && document && (event.ctrlKey || event.metaKey)) {
+        const key = event.key.toLowerCase();
+        if (key === 'z' || key === 'y') {
+          event.preventDefault();
+          if (key === 'y' || event.shiftKey) state.redo();
+          else state.undo();
+          return;
+        }
+      }
       if (typing || !document) return;
+      if ((event.key === 'Delete' || event.key === 'Backspace') && state.selectedMarkupId) {
+        event.preventDefault();
+        state.deleteMarkup(state.selectedMarkupId);
+        return;
+      }
       if (event.key === 'p' || event.key === 'P') {
         state.setAddPinMode(!state.addPinMode);
       } else if (event.key === 'ArrowLeft') {
@@ -281,9 +392,12 @@ export function ProjectPlanWorkspace({
           <Toolbar
             hasDoc={document !== null}
             allowLocalFiles={false}
+            savingPdf={savingPdf}
             onOpenPdf={() => undefined}
             onImportJson={() => undefined}
+            onSavePdf={() => void saveMarkedUpPdf()}
           />
+          {document && <MarkupPropertiesBar />}
           <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <main className="relative min-w-0 flex-1 overflow-hidden">
               {document ? (
@@ -307,6 +421,15 @@ export function ProjectPlanWorkspace({
                   className="absolute left-1/2 top-4 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
                 >
                   Changes not saved: {syncError}
+                </Notice>
+              )}
+              {document && downloadError && (
+                <Notice
+                  tone="error"
+                  compact
+                  className="absolute left-1/2 top-16 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
+                >
+                  The marked-up PDF could not be saved: {downloadError}
                 </Notice>
               )}
             </main>

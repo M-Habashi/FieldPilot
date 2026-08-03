@@ -1,12 +1,26 @@
 import { create } from 'zustand';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
-import { DEFAULT_TASK_COLOR, type Photo, type Task } from '../types';
+import {
+  DEFAULT_TASK_COLOR,
+  type Markup,
+  type MarkupTool,
+  type PageCalibration,
+  type Photo,
+  type Task,
+} from '../types';
 import { uid } from '../lib/utils';
 import { deletePhotoBlob, savePhotoBlob } from '../lib/photos';
 
 interface PersistedProject {
   tasks: Record<string, Task>;
   nextSeq: number;
+  markups?: Record<string, Markup>;
+  calibrations?: Record<number, PageCalibration>;
+}
+
+interface HistorySnapshot {
+  markups: Record<string, Markup>;
+  calibrations: Record<number, PageCalibration>;
 }
 
 type RemoteTaskPatch = Partial<
@@ -33,12 +47,70 @@ export interface RemoteProjectSync {
   addNote(taskId: string, text: string): Promise<string>;
   addPhotos(taskId: string, files: File[]): Promise<void>;
   removePhoto(taskId: string, photoId: string): Promise<void>;
+  saveMarkup(markup: Markup): Promise<void>;
+  deleteMarkup(markupId: string): Promise<void>;
+  setCalibration(page: number, calibration: PageCalibration | null): Promise<void>;
 }
 
 let remoteSync: RemoteProjectSync | null = null;
 const remoteUpdateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingRemoteUpdates = new Set<string>();
 const pendingRemotePatches = new Map<string, RemoteTaskPatch>();
+const markupSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingRemoteMarkups = new Set<string>();
+const pendingDeletedMarkups = new Set<string>();
+const pendingCalibrationPages = new Set<number>();
+
+function syncErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function reportRemoteError(error: unknown, fallback: string) {
+  useProject.setState({ syncError: syncErrorMessage(error, fallback) });
+}
+
+function saveMarkupRemotely(markup: Markup, adapter: RemoteProjectSync) {
+  pendingRemoteMarkups.add(markup.id);
+  void adapter
+    .saveMarkup(markup)
+    .then(() => useProject.setState({ syncError: null }))
+    .catch((error: unknown) => reportRemoteError(error, 'The markup could not be saved.'))
+    .finally(() => pendingRemoteMarkups.delete(markup.id));
+}
+
+function syncMarkupHistory(
+  before: HistorySnapshot,
+  after: HistorySnapshot,
+  adapter: RemoteProjectSync,
+) {
+  const markupIds = new Set([...Object.keys(before.markups), ...Object.keys(after.markups)]);
+  for (const id of markupIds) {
+    const previous = before.markups[id];
+    const next = after.markups[id];
+    if (!next) {
+      pendingDeletedMarkups.add(id);
+      void adapter
+        .deleteMarkup(id)
+        .catch((error: unknown) => reportRemoteError(error, 'The markup could not be deleted.'))
+        .finally(() => pendingDeletedMarkups.delete(id));
+    } else if (previous !== next) {
+      saveMarkupRemotely(next, adapter);
+    }
+  }
+
+  const pages = new Set([
+    ...Object.keys(before.calibrations).map(Number),
+    ...Object.keys(after.calibrations).map(Number),
+  ]);
+  for (const page of pages) {
+    if (before.calibrations[page] === after.calibrations[page]) continue;
+    pendingCalibrationPages.add(page);
+    void adapter
+      .setCalibration(page, after.calibrations[page] ?? null)
+      .catch((error: unknown) => reportRemoteError(error, 'The calibration could not be saved.'))
+      .finally(() => pendingCalibrationPages.delete(page));
+  }
+}
 
 function sendPendingRemoteUpdate(taskId: string, adapter: RemoteProjectSync) {
   const patch = pendingRemotePatches.get(taskId);
@@ -71,11 +143,19 @@ export function setRemoteProjectSync(sync: RemoteProjectSync | null) {
       remoteUpdateTimers.delete(taskId);
       sendPendingRemoteUpdate(taskId, previousSync);
     }
+    for (const [markupId, timer] of markupSaveTimers) {
+      clearTimeout(timer);
+      markupSaveTimers.delete(markupId);
+      const markup = useProject.getState().markups[markupId];
+      if (markup) saveMarkupRemotely(markup, previousSync);
+    }
   }
   remoteSync = sync;
   if (sync !== null) return;
   for (const timer of remoteUpdateTimers.values()) clearTimeout(timer);
   remoteUpdateTimers.clear();
+  for (const timer of markupSaveTimers.values()) clearTimeout(timer);
+  markupSaveTimers.clear();
 }
 
 function remotePatch(task: Task): RemoteTaskPatch {
@@ -112,6 +192,8 @@ interface ProjectState {
   // data
   tasks: Record<string, Task>;
   nextSeq: number;
+  markups: Record<string, Markup>;
+  calibrations: Record<number, PageCalibration>;
   // ui
   selectedTaskId: string | null;
   addPinMode: boolean;
@@ -119,8 +201,13 @@ interface ProjectState {
   sidebarCollapsed: boolean;
   lightboxPhotoId: string | null;
   focusRequest: FocusRequest | null;
+  selectedMarkupId: string | null;
+  markupTool: MarkupTool | null;
+  snappingEnabled: boolean;
   lastTaskColor: string;
   syncError: string | null;
+  historyPast: HistorySnapshot[];
+  historyFuture: HistorySnapshot[];
 
   loadDocument(meta: { fileName: string; fingerprint: string; pageCount: number }): Promise<void>;
   loadRemoteDocument(meta: { fileName: string; fingerprint: string; pageCount: number }): void;
@@ -135,11 +222,24 @@ interface ProjectState {
   selectTask(id: string | null): void;
   focusTask(id: string): void;
   setAddPinMode(on: boolean): void;
+  setMarkupTool(tool: MarkupTool | null): void;
+  setSnappingEnabled(enabled: boolean): void;
+  addMarkup(markup: Omit<Markup, 'id' | 'createdAt' | 'updatedAt'>): string;
+  updateMarkup(id: string, patch: Partial<Omit<Markup, 'id' | 'page' | 'createdAt'>>): void;
+  deleteMarkup(id: string): void;
+  selectMarkup(id: string | null): void;
+  setCalibration(page: number, calibration: PageCalibration): void;
+  undo(): void;
+  redo(): void;
   showTaskList(): void;
   closeTaskList(): void;
   toggleSidebar(): void;
   setLightbox(photoId: string | null): void;
   replaceProject(tasks: Record<string, Task>, nextSeq: number): void;
+  replaceMarkups(
+    markups: Record<string, Markup>,
+    calibrations: Record<number, PageCalibration>,
+  ): void;
   replaceTaskDetails(taskId: string, notes: Task['notes'], photos: Task['photos']): void;
 }
 
@@ -149,11 +249,34 @@ function schedulePersist(get: () => ProjectState) {
   if (remoteSync) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const { fingerprint, tasks, nextSeq } = get();
+    const { fingerprint, tasks, nextSeq, markups, calibrations } = get();
     if (!fingerprint) return;
-    const data: PersistedProject = { tasks, nextSeq };
+    const data: PersistedProject = { tasks, nextSeq, markups, calibrations };
     void idbSet(projectKey(fingerprint), data);
   }, 300);
+}
+
+function captureHistory(state: ProjectState): HistorySnapshot {
+  return { markups: state.markups, calibrations: state.calibrations };
+}
+
+let historyKey: string | null = null;
+let historyAt = 0;
+
+function recordHistory(
+  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
+  get: () => ProjectState,
+  key?: string,
+) {
+  const now = Date.now();
+  if (key && historyKey === key && now - historyAt < 500) return;
+  const current = captureHistory(get());
+  set((state) => ({
+    historyPast: [...state.historyPast, current].slice(-100),
+    historyFuture: [],
+  }));
+  historyKey = key ?? null;
+  historyAt = now;
 }
 
 export const useProject = create<ProjectState>((set, get) => ({
@@ -163,6 +286,8 @@ export const useProject = create<ProjectState>((set, get) => ({
   currentPage: 1,
   tasks: {},
   nextSeq: 1,
+  markups: {},
+  calibrations: {},
   selectedTaskId: null,
   addPinMode: false,
   taskListOpen: false,
@@ -171,8 +296,13 @@ export const useProject = create<ProjectState>((set, get) => ({
   sidebarCollapsed: true,
   lightboxPhotoId: null,
   focusRequest: null,
+  selectedMarkupId: null,
+  markupTool: null,
+  snappingEnabled: localStorage.getItem('fp:snapping') !== 'off',
   lastTaskColor: localStorage.getItem('fp:last-task-color') ?? DEFAULT_TASK_COLOR,
   syncError: null,
+  historyPast: [],
+  historyFuture: [],
 
   async loadDocument({ fileName, fingerprint, pageCount }) {
     const persisted = await idbGet<PersistedProject>(projectKey(fingerprint));
@@ -183,9 +313,15 @@ export const useProject = create<ProjectState>((set, get) => ({
       currentPage: 1,
       tasks: persisted?.tasks ?? {},
       nextSeq: persisted?.nextSeq ?? 1,
+      markups: persisted?.markups ?? {},
+      calibrations: persisted?.calibrations ?? {},
       selectedTaskId: null,
+      selectedMarkupId: null,
+      markupTool: null,
       addPinMode: false,
       focusRequest: null,
+      historyPast: [],
+      historyFuture: [],
     });
   },
 
@@ -197,11 +333,17 @@ export const useProject = create<ProjectState>((set, get) => ({
       currentPage: 1,
       tasks: {},
       nextSeq: 1,
+      markups: {},
+      calibrations: {},
       selectedTaskId: null,
+      selectedMarkupId: null,
+      markupTool: null,
       addPinMode: false,
       taskListOpen: false,
       focusRequest: null,
       syncError: null,
+      historyPast: [],
+      historyFuture: [],
     });
   },
 
@@ -479,7 +621,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   selectTask(id) {
-    set({ selectedTaskId: id });
+    set({ selectedTaskId: id, selectedMarkupId: null });
   },
 
   focusTask(id) {
@@ -492,11 +634,155 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   setAddPinMode(on) {
-    set({ addPinMode: on });
+    set({ addPinMode: on, markupTool: on ? null : get().markupTool, selectedMarkupId: null });
+  },
+
+  setMarkupTool(tool) {
+    set({
+      markupTool: tool,
+      addPinMode: false,
+      selectedTaskId: null,
+      taskListOpen: false,
+      selectedMarkupId: tool === 'select' ? get().selectedMarkupId : null,
+    });
+  },
+
+  setSnappingEnabled(enabled) {
+    localStorage.setItem('fp:snapping', enabled ? 'on' : 'off');
+    set({ snappingEnabled: enabled });
+  },
+
+  addMarkup(markup) {
+    recordHistory(set, get);
+    const id = uid();
+    const now = Date.now();
+    const created: Markup = { ...markup, id, createdAt: now, updatedAt: now };
+    set((state) => ({
+      markups: { ...state.markups, [id]: created },
+      selectedMarkupId: id,
+      selectedTaskId: null,
+      taskListOpen: false,
+    }));
+    const adapter = remoteSync;
+    if (adapter) saveMarkupRemotely(created, adapter);
+    else schedulePersist(get);
+    return id;
+  },
+
+  updateMarkup(id, patch) {
+    const current = get().markups[id];
+    if (!current) return;
+    recordHistory(set, get, `markup:${id}`);
+    const updated = { ...current, ...patch, updatedAt: Date.now() };
+    set((state) => ({ markups: { ...state.markups, [id]: updated } }));
+
+    const adapter = remoteSync;
+    if (!adapter) {
+      schedulePersist(get);
+      return;
+    }
+    const existing = markupSaveTimers.get(id);
+    if (existing) clearTimeout(existing);
+    pendingRemoteMarkups.add(id);
+    markupSaveTimers.set(
+      id,
+      setTimeout(() => {
+        markupSaveTimers.delete(id);
+        const latest = useProject.getState().markups[id];
+        const activeAdapter = remoteSync;
+        if (latest && activeAdapter) saveMarkupRemotely(latest, activeAdapter);
+        else pendingRemoteMarkups.delete(id);
+      }, 250),
+    );
+  },
+
+  deleteMarkup(id) {
+    if (!get().markups[id]) return;
+    recordHistory(set, get);
+    const timer = markupSaveTimers.get(id);
+    if (timer) clearTimeout(timer);
+    markupSaveTimers.delete(id);
+    pendingRemoteMarkups.delete(id);
+    set((state) => {
+      const markups = { ...state.markups };
+      delete markups[id];
+      return {
+        markups,
+        selectedMarkupId: state.selectedMarkupId === id ? null : state.selectedMarkupId,
+      };
+    });
+    const adapter = remoteSync;
+    if (!adapter) {
+      schedulePersist(get);
+      return;
+    }
+    pendingDeletedMarkups.add(id);
+    void adapter
+      .deleteMarkup(id)
+      .then(() => set({ syncError: null }))
+      .catch((error: unknown) => reportRemoteError(error, 'The markup could not be deleted.'))
+      .finally(() => pendingDeletedMarkups.delete(id));
+  },
+
+  selectMarkup(id) {
+    set({
+      selectedMarkupId: id,
+      selectedTaskId: null,
+      taskListOpen: false,
+      markupTool: 'select',
+    });
+  },
+
+  setCalibration(page, calibration) {
+    recordHistory(set, get, `calibration:${page}`);
+    set((state) => ({ calibrations: { ...state.calibrations, [page]: calibration } }));
+    const adapter = remoteSync;
+    if (!adapter) {
+      schedulePersist(get);
+      return;
+    }
+    pendingCalibrationPages.add(page);
+    void adapter
+      .setCalibration(page, calibration)
+      .then(() => set({ syncError: null }))
+      .catch((error: unknown) => reportRemoteError(error, 'The calibration could not be saved.'))
+      .finally(() => pendingCalibrationPages.delete(page));
+  },
+
+  undo() {
+    const state = get();
+    const previous = state.historyPast.at(-1);
+    if (!previous) return;
+    const current = captureHistory(state);
+    historyKey = null;
+    set({
+      ...previous,
+      historyPast: state.historyPast.slice(0, -1),
+      historyFuture: [...state.historyFuture, current].slice(-100),
+      selectedMarkupId: null,
+    });
+    if (remoteSync) syncMarkupHistory(current, previous, remoteSync);
+    else schedulePersist(get);
+  },
+
+  redo() {
+    const state = get();
+    const next = state.historyFuture.at(-1);
+    if (!next) return;
+    const current = captureHistory(state);
+    historyKey = null;
+    set({
+      ...next,
+      historyPast: [...state.historyPast, current].slice(-100),
+      historyFuture: state.historyFuture.slice(0, -1),
+      selectedMarkupId: null,
+    });
+    if (remoteSync) syncMarkupHistory(current, next, remoteSync);
+    else schedulePersist(get);
   },
 
   showTaskList() {
-    set({ taskListOpen: true, selectedTaskId: null });
+    set({ taskListOpen: true, selectedTaskId: null, selectedMarkupId: null });
   },
 
   closeTaskList() {
@@ -530,6 +816,29 @@ export const useProject = create<ProjectState>((set, get) => ({
       };
     });
     schedulePersist(get);
+  },
+
+  replaceMarkups(markups, calibrations) {
+    set((state) => {
+      const mergedMarkups = { ...markups };
+      for (const id of pendingDeletedMarkups) delete mergedMarkups[id];
+      for (const id of pendingRemoteMarkups) {
+        if (state.markups[id]) mergedMarkups[id] = state.markups[id];
+      }
+      const mergedCalibrations = { ...calibrations };
+      for (const page of pendingCalibrationPages) {
+        if (state.calibrations[page]) mergedCalibrations[page] = state.calibrations[page];
+        else delete mergedCalibrations[page];
+      }
+      return {
+        markups: mergedMarkups,
+        calibrations: mergedCalibrations,
+        selectedMarkupId:
+          state.selectedMarkupId && mergedMarkups[state.selectedMarkupId]
+            ? state.selectedMarkupId
+            : null,
+      };
+    });
   },
 
   replaceTaskDetails(taskId, notes, photos) {

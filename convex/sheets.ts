@@ -259,10 +259,16 @@ export const updatePdf = mutation({
 });
 
 async function deleteSheetData(ctx: MutationCtx, sheetId: Id<'sheets'>) {
-  const tasks = await ctx.db
-    .query('tasks')
-    .withIndex('by_sheet', (q) => q.eq('sheetId', sheetId))
-    .collect();
+  const [tasks, markups] = await Promise.all([
+    ctx.db
+      .query('tasks')
+      .withIndex('by_sheet', (q) => q.eq('sheetId', sheetId))
+      .collect(),
+    ctx.db
+      .query('markups')
+      .withIndex('by_sheet', (q) => q.eq('sheetId', sheetId))
+      .collect(),
+  ]);
   for (const task of tasks) {
     const [notes, attachments] = await Promise.all([
       ctx.db
@@ -289,6 +295,7 @@ async function deleteSheetData(ctx: MutationCtx, sheetId: Id<'sheets'>) {
     );
     await ctx.db.delete(task._id);
   }
+  await Promise.all(markups.map((markup) => ctx.db.delete(markup._id)));
   await ctx.db.delete(sheetId);
 }
 
