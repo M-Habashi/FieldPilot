@@ -249,6 +249,22 @@ body {
   cursor: url('/cursors/pin-dark.svg') 16 16, crosshair;
 }
 
+.fp-cursor-markup {
+  cursor: crosshair;
+}
+
+/* SVG annotations remain interactive even though their full-page overlay lets
+   empty sheet areas fall through to the viewer for pan/draw gestures. */
+[data-markup-layer] g,
+[data-markup-layer] line,
+[data-markup-layer] rect,
+[data-markup-layer] ellipse,
+[data-markup-layer] path,
+[data-markup-layer] polyline,
+[data-markup-layer] text {
+  touch-action: none;
+}
+
 .fp-dropdown-menu {
   animation: fp-dropdown-in var(--fp-dur-fast) var(--fp-motion-ease) both;
 }

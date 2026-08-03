@@ -39,6 +39,117 @@ export interface Task {
   updatedAt: number;
 }
 
+export interface MarkupPoint {
+  /** Normalized 0..1 coordinates relative to the PDF page box. */
+  x: number;
+  y: number;
+}
+
+export type MarkupType =
+  | 'text'
+  | 'pen'
+  | 'highlight'
+  | 'line'
+  | 'arrow'
+  | 'rectangle'
+  | 'ellipse'
+  | 'cloud'
+  | 'callout'
+  | 'cloud-plus'
+  | 'dimension'
+  | 'area'
+  | 'radius'
+  | 'diameter'
+  | 'arc';
+
+export type MarkupTool = 'select' | 'calibrate' | MarkupType;
+
+export type MarkupLineStyle =
+  | 'solid'
+  | 'dashed-1'
+  | 'dashed-2'
+  | 'dashed-3'
+  | 'dashed-4'
+  | 'dashed-5'
+  | 'dashed-6'
+  | 'cloud';
+
+export type MarkupLineEnding =
+  | 'none'
+  | 'open-arrow'
+  | 'closed-arrow'
+  | 'filled-arrow'
+  | 'butt'
+  | 'slash'
+  | 'dot'
+  | 'square';
+
+export type MarkupBoxShape = 'rectangle' | 'rounded' | 'ellipse' | 'none';
+
+/** Editable vector annotation stored in page-normalized coordinates. */
+export interface Markup {
+  id: string;
+  page: number;
+  type: MarkupType;
+  points: MarkupPoint[];
+  text: string;
+  /** Optional independent font color; older markups fall back to `stroke`. */
+  textColor?: string;
+  stroke: string;
+  fill: string;
+  strokeWidth: number;
+  opacity: number;
+  /** Optional Bluebeam-style boundary pattern. Older markups are solid. */
+  lineStyle?: MarkupLineStyle;
+  /** Independent endpoint styles for lines, arrows, and dimensions. */
+  startEnding?: MarkupLineEnding;
+  endEnding?: MarkupLineEnding;
+  /** Fill transparency is independent from the boundary/markup opacity. */
+  fillOpacity?: number;
+  /** Callout and Cloud+ leader appearance. */
+  leaderStroke?: string;
+  leaderStrokeWidth?: number;
+  leaderOpacity?: number;
+  leaderLineStyle?: MarkupLineStyle;
+  leaderEnding?: MarkupLineEnding;
+  /** Text-box/callout boundary shape and revision-cloud scallop size. */
+  boxShape?: MarkupBoxShape;
+  cloudRadius?: number;
+  fontSize: number;
+  fontFamily?: string;
+  fontBold?: boolean;
+  fontItalic?: boolean;
+  textAlign?: 'left' | 'center' | 'right';
+  measurementUnit?: 'calibrated' | 'in' | 'ft' | 'mm' | 'cm' | 'm';
+  fractionDenominator?: 1 | 2 | 4 | 8 | 16;
+  /** Dimension construction controls, stored in page display points. */
+  witnessLines?: boolean;
+  extensionOffset?: number;
+  extensionLength?: number;
+  arrowSize?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A page scale expressed as real-world units per PDF point. */
+export interface PageCalibration {
+  unitsPerPoint: number;
+  unit: 'in' | 'ft' | 'mm' | 'cm' | 'm';
+  referenceLength: number;
+  calibratedAt: number;
+}
+
+export const MARKUP_COLORS = [
+  '#dc2626',
+  '#f59e0b',
+  '#facc15',
+  '#16a34a',
+  '#2563eb',
+  '#7c3aed',
+  '#111827',
+  '#ffffff',
+] as const;
+
 export const DEFAULT_TASK_COLOR = '#d97706';
 
 export const TASK_COLORS = [

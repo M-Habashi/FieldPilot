@@ -1,4 +1,4 @@
-import type { Task } from '../types';
+import type { Markup, PageCalibration, Task } from '../types';
 import { getPhotoBlob, savePhotoBlob } from './photos';
 
 interface ExportedPhoto {
@@ -9,12 +9,14 @@ interface ExportedPhoto {
 
 interface ExportFile {
   app: 'fieldpilot';
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   fileName: string | null;
   fingerprint: string | null;
   nextSeq: number;
   tasks: Record<string, Task>;
+  markups?: Record<string, Markup>;
+  calibrations?: Record<number, PageCalibration>;
   photos: ExportedPhoto[];
 }
 
@@ -37,6 +39,8 @@ export async function exportProject(opts: {
   fingerprint: string | null;
   nextSeq: number;
   tasks: Record<string, Task>;
+  markups: Record<string, Markup>;
+  calibrations: Record<number, PageCalibration>;
 }): Promise<void> {
   const photos: ExportedPhoto[] = [];
   for (const task of Object.values(opts.tasks)) {
@@ -48,12 +52,14 @@ export async function exportProject(opts: {
   }
   const payload: ExportFile = {
     app: 'fieldpilot',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     fileName: opts.fileName,
     fingerprint: opts.fingerprint,
     nextSeq: opts.nextSeq,
     tasks: opts.tasks,
+    markups: opts.markups,
+    calibrations: opts.calibrations,
     photos,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -68,7 +74,12 @@ export async function exportProject(opts: {
 
 export async function importProject(
   file: File,
-): Promise<{ tasks: Record<string, Task>; nextSeq: number }> {
+): Promise<{
+  tasks: Record<string, Task>;
+  nextSeq: number;
+  markups: Record<string, Markup>;
+  calibrations: Record<number, PageCalibration>;
+}> {
   const text = await file.text();
   const data = JSON.parse(text) as ExportFile;
   if (data.app !== 'fieldpilot' || !data.tasks) {
@@ -77,5 +88,10 @@ export async function importProject(
   for (const photo of data.photos ?? []) {
     await savePhotoBlob(photo.id, await dataUrlToBlob(photo.dataUrl));
   }
-  return { tasks: data.tasks, nextSeq: data.nextSeq ?? Object.keys(data.tasks).length + 1 };
+  return {
+    tasks: data.tasks,
+    nextSeq: data.nextSeq ?? Object.keys(data.tasks).length + 1,
+    markups: data.markups ?? {},
+    calibrations: data.calibrations ?? {},
+  };
 }

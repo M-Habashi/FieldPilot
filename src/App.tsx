@@ -9,10 +9,13 @@ import { Viewer } from './components/Viewer';
 import { RightDrawer } from './components/RightDrawer';
 import { EmptyState } from './components/EmptyState';
 import { Lightbox } from './components/Lightbox';
+import { MarkupPropertiesBar } from './components/MarkupPropertiesBar';
 
 export default function App() {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
+  const [sourcePdf, setSourcePdf] = useState<Uint8Array | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savingPdf, setSavingPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const design = useProject((s) => s.design);
 
@@ -24,17 +27,38 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      const source = new Uint8Array(buf.slice(0));
       const opened = await openPdf(buf);
       await useProject
         .getState()
         .loadDocument({ fileName: name, fingerprint: opened.fingerprint, pageCount: opened.pageCount });
       setDoc(opened.doc);
+      setSourcePdf(source);
     } catch {
       setError('That file could not be opened as a PDF plan. Try another file.');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const saveMarkedUpPdf = useCallback(async () => {
+    if (!sourcePdf) return;
+    setSavingPdf(true);
+    setError(null);
+    try {
+      const { downloadAnnotatedPdf } = await import('./lib/annotated-pdf');
+      const state = useProject.getState();
+      await downloadAnnotatedPdf(sourcePdf, {
+        fileName: state.fileName,
+        markups: state.markups,
+        calibrations: state.calibrations,
+      });
+    } catch {
+      setError('The marked-up PDF could not be saved.');
+    } finally {
+      setSavingPdf(false);
+    }
+  }, [sourcePdf]);
 
   const openPdfFile = useCallback(
     async (file: File) => {
@@ -58,8 +82,8 @@ export default function App() {
 
   const onImportJson = useCallback(async (file: File) => {
     try {
-      const { tasks, nextSeq } = await importProject(file);
-      useProject.getState().replaceProject(tasks, nextSeq);
+      const { tasks, nextSeq, markups, calibrations } = await importProject(file);
+      useProject.getState().replaceProject(tasks, nextSeq, markups, calibrations);
     } catch {
       setError('That file is not a valid FieldPilot export.');
     }
@@ -83,6 +107,14 @@ export default function App() {
           s.setAddPinMode(false);
           return;
         }
+        if (s.markupTool && s.markupTool !== 'select') {
+          s.setMarkupTool('select');
+          return;
+        }
+        if (s.selectedMarkupId) {
+          s.selectMarkup(null);
+          return;
+        }
         // Priority 2: otherwise close Properties or clear a first-click pin
         // preview. Remove focus from the pin hit-area as well; leaving it there
         // makes the global rectangular focus ring appear after Escape.
@@ -90,7 +122,21 @@ export default function App() {
         if (target.closest('.fp-pin')) target.blur();
         return;
       }
+      if (!typing && doc && (e.ctrlKey || e.metaKey)) {
+        const key = e.key.toLowerCase();
+        if (key === 'z' || key === 'y') {
+          e.preventDefault();
+          if (key === 'y' || e.shiftKey) s.redo();
+          else s.undo();
+          return;
+        }
+      }
       if (typing || !doc) return;
+      if ((e.key === 'Delete' || e.key === 'Backspace') && s.selectedMarkupId) {
+        e.preventDefault();
+        s.deleteMarkup(s.selectedMarkupId);
+        return;
+      }
       if (e.key === 'p' || e.key === 'P') {
         s.setAddPinMode(!s.addPinMode);
       } else if (e.key === 'ArrowLeft') {
@@ -112,7 +158,14 @@ export default function App() {
         <Sidebar />
         <div className="w-14 shrink-0" aria-hidden />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <Toolbar hasDoc={doc !== null} onOpenPdf={(f) => void openPdfFile(f)} onImportJson={(f) => void onImportJson(f)} />
+          <Toolbar
+            hasDoc={doc !== null}
+            savingPdf={savingPdf}
+            onOpenPdf={(f) => void openPdfFile(f)}
+            onImportJson={(f) => void onImportJson(f)}
+            onSavePdf={() => void saveMarkedUpPdf()}
+          />
+          {doc && <MarkupPropertiesBar />}
           <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <main className="relative min-w-0 flex-1 overflow-hidden">
               {doc ? (
