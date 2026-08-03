@@ -2,7 +2,6 @@ import type { AuthProviderMaterializedConfig } from '@convex-dev/auth/server';
 import type { GenericId } from 'convex/values';
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
-import { allowUnverifiedEmailAuth } from './authConfig';
 import { ensureDemoProjectForUser } from './demoProject';
 
 type AuthProfile = Record<string, unknown> & {
@@ -30,10 +29,7 @@ function normalizedString(value: unknown) {
 function userPatch(args: CreateOrUpdateAuthUserArgs) {
   const email = normalizedEmail(args.profile.email);
   const emailVerified =
-    args.profile.emailVerified === true ||
-    args.type === 'oauth' ||
-    args.provider.type === 'oidc' ||
-    (args.type === 'credentials' && allowUnverifiedEmailAuth());
+    args.profile.emailVerified === true || args.type === 'oauth' || args.provider.type === 'oidc';
 
   return {
     ...(normalizedString(args.profile.name) ? { name: normalizedString(args.profile.name) } : {}),
@@ -88,10 +84,7 @@ export async function createOrUpdateAuthUser(
     }
     await ctx.db.patch(userId, patch);
 
-    if (
-      (args.type === 'verification' && args.profile.emailVerified === true) ||
-      (args.type === 'credentials' && allowUnverifiedEmailAuth())
-    ) {
+    if (args.type === 'verification' && args.profile.emailVerified === true) {
       await ensureDemoProjectForUser(ctx, userId);
     }
     return userId;
@@ -121,11 +114,7 @@ export async function createOrUpdateAuthUser(
   }
 
   const userId = await ctx.db.insert('users', patch);
-  if (
-    args.type === 'oauth' ||
-    args.provider.type === 'oidc' ||
-    (args.type === 'credentials' && allowUnverifiedEmailAuth())
-  ) {
+  if (args.type === 'oauth' || args.provider.type === 'oidc') {
     await ensureDemoProjectForUser(ctx, userId);
   }
   return userId;

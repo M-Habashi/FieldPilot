@@ -9,6 +9,14 @@ function environment(name: 'AUTH_BREVO_KEY' | 'AUTH_EMAIL_FROM') {
   ];
 }
 
+export function assertAuthEmailConfigured() {
+  if (!environment('AUTH_BREVO_KEY') || !environment('AUTH_EMAIL_FROM')) {
+    throw new Error(
+      'Email verification is temporarily unavailable. Continue with Google or try again later.',
+    );
+  }
+}
+
 function generateSixDigitCode() {
   const values = new Uint32Array(1);
   crypto.getRandomValues(values);
@@ -66,13 +74,9 @@ function brevoOtpProvider(
       }
     },
     sendVerificationRequest: async ({ identifier, token }) => {
-      const apiKey = environment('AUTH_BREVO_KEY');
-      const from = environment('AUTH_EMAIL_FROM');
-      if (!apiKey || !from) {
-        throw new Error(
-          'Email delivery is not configured. Set AUTH_BREVO_KEY and AUTH_EMAIL_FROM in Convex.',
-        );
-      }
+      assertAuthEmailConfigured();
+      const apiKey = environment('AUTH_BREVO_KEY')!;
+      const from = environment('AUTH_EMAIL_FROM')!;
 
       // Brevo is the temporary alpha sender because it can verify an existing mailbox before
       // FieldPilot owns a domain. Keep this call server-side: AUTH_BREVO_KEY must never be exposed

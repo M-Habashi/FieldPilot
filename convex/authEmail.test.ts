@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { emailVerificationProvider, passwordResetProvider } from './authEmail';
+import {
+  assertAuthEmailConfigured,
+  emailVerificationProvider,
+  passwordResetProvider,
+} from './authEmail';
 
 function verificationRequest(
   provider: typeof emailVerificationProvider,
@@ -75,9 +79,16 @@ describe('Brevo authentication email delivery', () => {
       emailVerificationProvider.sendVerificationRequest(
         verificationRequest(emailVerificationProvider),
       ),
-    ).rejects.toThrow(
-      'Email delivery is not configured. Set AUTH_BREVO_KEY and AUTH_EMAIL_FROM in Convex.',
-    );
+    ).rejects.toThrow('Email verification is temporarily unavailable.');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks signup before account creation when email delivery is unavailable', () => {
+    vi.stubEnv('AUTH_BREVO_KEY', '');
+    vi.stubEnv('AUTH_EMAIL_FROM', '');
+
+    expect(() => assertAuthEmailConfigured()).toThrow(
+      'Email verification is temporarily unavailable.',
+    );
   });
 });
