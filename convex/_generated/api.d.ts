@@ -17,6 +17,7 @@ import type * as lib_authUser from "../lib/authUser.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_demoProject from "../lib/demoProject.js";
 import type * as lib_markup from "../lib/markup.js";
+import type * as lib_tmpAccountDevFeature from "../lib/tmpAccountDevFeature.js";
 import type * as lib_uploads from "../lib/uploads.js";
 import type * as markups from "../markups.js";
 import type * as notes from "../notes.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authz": typeof lib_authz;
   "lib/demoProject": typeof lib_demoProject;
   "lib/markup": typeof lib_markup;
+  "lib/tmpAccountDevFeature": typeof lib_tmpAccountDevFeature;
   "lib/uploads": typeof lib_uploads;
   markups: typeof markups;
   notes: typeof notes;

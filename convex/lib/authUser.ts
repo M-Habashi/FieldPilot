@@ -3,6 +3,7 @@ import type { GenericId } from 'convex/values';
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 import { ensureDemoProjectForUser } from './demoProject';
+import { isTmpAccountEmail, TMP_ACCOUNT_DEV_FEATURE_ENABLED } from './tmpAccountDevFeature';
 
 type AuthProfile = Record<string, unknown> & {
   email?: string;
@@ -71,6 +72,7 @@ export async function createOrUpdateAuthUser(
 ): Promise<Id<'users'>> {
   const email = normalizedEmail(args.profile.email);
   const patch = userPatch(args);
+  const isEnabledTmpAccount = TMP_ACCOUNT_DEV_FEATURE_ENABLED && isTmpAccountEmail(email);
 
   if (args.existingUserId !== null) {
     const userId = args.existingUserId as Id<'users'>;
@@ -84,7 +86,10 @@ export async function createOrUpdateAuthUser(
     }
     await ctx.db.patch(userId, patch);
 
-    if (args.type === 'verification' && args.profile.emailVerified === true) {
+    if (
+      (args.type === 'verification' && args.profile.emailVerified === true) ||
+      isEnabledTmpAccount
+    ) {
       await ensureDemoProjectForUser(ctx, userId);
     }
     return userId;
@@ -114,7 +119,7 @@ export async function createOrUpdateAuthUser(
   }
 
   const userId = await ctx.db.insert('users', patch);
-  if (args.type === 'oauth' || args.provider.type === 'oidc') {
+  if (args.type === 'oauth' || args.provider.type === 'oidc' || isEnabledTmpAccount) {
     await ensureDemoProjectForUser(ctx, userId);
   }
   return userId;

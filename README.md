@@ -23,6 +23,22 @@ To use a personal Convex deployment, copy `.env.example` to `.env.local`, run
 `pnpm convex dev --once`, and keep `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` on the same deployment.
 Provider secrets stay in Convex and must never be added to either file.
 
+### Temporary developer accounts
+
+The login screen accepts two shared developer accounts. They are provisioned automatically in the
+configured Convex deployment on first sign-in, so dashboard, PDF viewer, and collaboration changes
+are real and persist across devices:
+
+| Email                       | Password     |
+| --------------------------- | ------------ |
+| `fake_acc_1@fieldpilot.dev` | `fake_acc_1` |
+| `fake_acc_2@fieldpilot.dev` | `fake_acc_2` |
+
+These credentials are intentionally public and must only be used for non-sensitive test data. To
+disable new temporary-account sign-ins everywhere, set
+`TMP_ACCOUNT_DEV_FEATURE_ENABLED` to `false` in
+`convex/lib/tmpAccountDevFeature.ts` and deploy the Convex functions.
+
 ## Using it
 
 | Action           | How                                                                                                                        |

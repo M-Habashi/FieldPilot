@@ -2,6 +2,7 @@ import { convexTest } from 'convex-test';
 import { describe, expect, it } from 'vitest';
 import { createOrUpdateAuthUser, type CreateOrUpdateAuthUserArgs } from './lib/authUser';
 import { DEMO_PLAN_NAME, DEMO_PROJECT_NAME, ensureDemoProjectForUser } from './lib/demoProject';
+import { tmpAccountForEmail } from './lib/tmpAccountDevFeature';
 import schema from './schema';
 import { modules } from './test.setup';
 
@@ -85,6 +86,36 @@ describe('new account onboarding', () => {
       });
 
       expect((await ctx.db.get(userId))?.emailVerificationTime).toEqual(expect.any(Number));
+      expect(await ctx.db.query('projects').collect()).toHaveLength(1);
+      expect(await ctx.db.query('sheets').collect()).toHaveLength(3);
+    });
+  });
+
+  it('onboards an enabled temporary developer account immediately', async () => {
+    const t = convexTest(schema, modules);
+    const tmpAccount = tmpAccountForEmail('FAKE_ACC_1@FIELDPILOT.DEV');
+    expect(tmpAccount).toBeDefined();
+
+    await t.run(async (ctx) => {
+      const userId = await createOrUpdateAuthUser(ctx, {
+        existingUserId: null,
+        type: 'credentials',
+        provider: {
+          id: 'password',
+          type: 'credentials',
+        } as unknown as CreateOrUpdateAuthUserArgs['provider'],
+        profile: {
+          name: tmpAccount!.name,
+          email: tmpAccount!.email,
+          emailVerified: true,
+        },
+      });
+
+      expect(await ctx.db.get(userId)).toMatchObject({
+        name: 'Fake Account 1',
+        email: 'fake_acc_1@fieldpilot.dev',
+        emailVerificationTime: expect.any(Number),
+      });
       expect(await ctx.db.query('projects').collect()).toHaveLength(1);
       expect(await ctx.db.query('sheets').collect()).toHaveLength(3);
     });
