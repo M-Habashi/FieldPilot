@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { GOOGLE_AUTH_CALLBACK_ROUTE, googleAuthRedirectTo } from '../../lib/auth-redirect';
+import { getAuthPersistence, setAuthPersistence } from '../../lib/auth-storage';
 import { userFacingError } from '../../lib/errors';
 import { Brand } from '../Brand';
 import { Input } from '../ui/input';
@@ -131,6 +132,9 @@ export function AuthPage({
   const [pendingEmail, setPendingEmail] = useState('');
   const [submitting, setSubmitting] = useState<'google' | 'email' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(
+    () => mode === 'signup' || getAuthPersistence() === 'persistent',
+  );
   const [error, setError] = useState<string | null>(initialError);
   const [resendAvailableIn, setResendAvailableIn] = useState(0);
   const [codeResent, setCodeResent] = useState(false);
@@ -142,6 +146,7 @@ export function AuthPage({
     setError(initialError);
     setResendAvailableIn(0);
     setCodeResent(false);
+    setRememberMe(mode === 'signup' || getAuthPersistence() === 'persistent');
     pendingPassword.current = '';
   }, [initialError, mode]);
 
@@ -163,6 +168,7 @@ export function AuthPage({
     setSubmitting('google');
     setError(null);
     try {
+      setAuthPersistence(mode === 'signup' || rememberMe);
       await signIn('google', { redirectTo: googleAuthRedirectTo(window.location.origin) });
     } catch {
       setError('Google sign-in is unavailable. Try again.');
@@ -211,6 +217,7 @@ export function AuthPage({
     setError(null);
 
     try {
+      setAuthPersistence(mode === 'signup' || rememberMe);
       const result = await signIn('password', values);
       if (!result.signingIn) {
         setPendingEmail(email);
@@ -249,6 +256,7 @@ export function AuthPage({
     setError(null);
 
     try {
+      setAuthPersistence(mode === 'signup' || rememberMe);
       const result = await signIn('password', values);
       if (!result.signingIn) {
         setError('That code is incorrect or expired. Request a new code and try again.');
@@ -288,6 +296,7 @@ export function AuthPage({
     setError(null);
 
     try {
+      setAuthPersistence(mode === 'signup' || rememberMe);
       const result = await signIn('password', values);
       if (result.signingIn) return;
       setCodeResent(true);
@@ -356,6 +365,7 @@ export function AuthPage({
     setError(null);
 
     try {
+      setAuthPersistence(mode === 'signup' || rememberMe);
       const result = await signIn('password', values);
       if (!result.signingIn) {
         setError('That code is incorrect or expired. Request a new code.');
@@ -493,6 +503,22 @@ export function AuthPage({
                         shown={showPassword}
                         onToggle={() => setShowPassword((value) => !value)}
                       />
+                    )}
+                    {mode === 'login' && (
+                      <label
+                        htmlFor="remember-me"
+                        className="inline-flex w-fit cursor-pointer items-center gap-2 text-sm text-t2"
+                      >
+                        <input
+                          id="remember-me"
+                          name="rememberMe"
+                          type="checkbox"
+                          checked={rememberMe}
+                          onChange={(event) => setRememberMe(event.currentTarget.checked)}
+                          className="size-4 cursor-pointer rounded-xs border-line-strong accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                        />
+                        <span>Remember me</span>
+                      </label>
                     )}
                     <button type="submit" className={PRIMARY_BUTTON} disabled={busy}>
                       {submitting === 'email' && <Loader2 className="size-4 animate-spin" />}

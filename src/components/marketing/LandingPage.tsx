@@ -30,7 +30,7 @@ function Polaroid({
   );
 }
 
-export function LandingPage() {
+export function LandingPage({ authenticated = false }: { authenticated?: boolean }) {
   return (
     <div className="mkt-landing-page h-full overflow-x-hidden overflow-y-auto bg-app font-sans text-t1 lg:overflow-hidden">
       <div className="mkt-landing-shell relative flex min-h-full flex-col lg:h-full lg:min-h-0">
@@ -42,7 +42,7 @@ export function LandingPage() {
           />
         </div>
 
-        <Navbar />
+        <Navbar authenticated={authenticated} />
 
         <main className="mkt-landing-main relative z-10 mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col px-6 lg:pr-16 lg:pl-10 xl:pr-20 lg:pb-4">
           <div className="mkt-landing-hero-grid grid min-h-0 flex-1 items-center gap-12 pt-9 lg:mb-8 lg:grid-cols-[0.88fr_1.12fr] lg:gap-12 lg:pt-2">
@@ -78,7 +78,7 @@ export function LandingPage() {
                   size="md"
                   className="group h-11 gap-3 px-5 font-sans text-base"
                   onClick={() => {
-                    window.location.hash = '/login';
+                    window.location.hash = authenticated ? '/dashboard' : '/login';
                   }}
                 >
                   <span>Bring plans to life</span>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAuthStorage } from './auth-storage';
+import { createAuthStorage, getAuthPersistence, setAuthPersistence } from './auth-storage';
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
@@ -76,5 +76,44 @@ describe('createAuthStorage', () => {
     expect(() => storage.setItem(verifierKey, 'verifier-id')).not.toThrow();
     expect(storage.getItem(verifierKey)).toBe('verifier-id');
     expect(() => storage.removeItem(verifierKey)).not.toThrow();
+  });
+
+  it('keeps auth tokens in session storage when remember me is off', () => {
+    const persistent = memoryStorage();
+    const session = memoryStorage();
+    setAuthPersistence(false, persistent);
+    const storage = createAuthStorage(persistent, session);
+
+    storage.setItem('__convexAuthJWT_namespace', 'jwt');
+    storage.setItem('__convexAuthRefreshToken_namespace', 'refresh');
+
+    expect(getAuthPersistence(persistent)).toBe('session');
+    expect(persistent.getItem('__convexAuthJWT_namespace')).toBeNull();
+    expect(session.getItem('__convexAuthJWT_namespace')).toBe('jwt');
+    expect(storage.getItem('__convexAuthRefreshToken_namespace')).toBe('refresh');
+  });
+
+  it('persists auth tokens when remember me is on and clears stale session tokens', () => {
+    const persistent = memoryStorage();
+    const session = memoryStorage({ __convexAuthJWT_namespace: 'stale-jwt' });
+    setAuthPersistence(true, persistent);
+    const storage = createAuthStorage(persistent, session);
+
+    storage.setItem('__convexAuthJWT_namespace', 'current-jwt');
+
+    expect(getAuthPersistence(persistent)).toBe('persistent');
+    expect(persistent.getItem('__convexAuthJWT_namespace')).toBe('current-jwt');
+    expect(session.getItem('__convexAuthJWT_namespace')).toBeNull();
+  });
+
+  it('sign-out cleanup removes tokens from both storage areas', () => {
+    const persistent = memoryStorage({ __convexAuthJWT_namespace: 'persistent-jwt' });
+    const session = memoryStorage({ __convexAuthJWT_namespace: 'session-jwt' });
+    const storage = createAuthStorage(persistent, session);
+
+    storage.removeItem('__convexAuthJWT_namespace');
+
+    expect(persistent.getItem('__convexAuthJWT_namespace')).toBeNull();
+    expect(session.getItem('__convexAuthJWT_namespace')).toBeNull();
   });
 });
