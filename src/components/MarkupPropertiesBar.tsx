@@ -106,19 +106,19 @@ export function MarkupPropertiesBar() {
   const deleteMarkup = useProject((s) => s.deleteMarkup);
   const selectMarkup = useProject((s) => s.selectMarkup);
 
+  if (!markup) return null;
+
   return (
     <div
       className="fp-markup-properties z-35 flex h-10 shrink-0 items-center gap-3 overflow-x-auto border-b border-line bg-surface px-3 text-xs shadow-e1"
       aria-label="Selected markup properties"
     >
-      {markup && (
-        <MarkupControls
-          markup={markup}
-          updateMarkup={updateMarkup}
-          deleteMarkup={deleteMarkup}
-          selectMarkup={selectMarkup}
-        />
-      )}
+      <MarkupControls
+        markup={markup}
+        updateMarkup={updateMarkup}
+        deleteMarkup={deleteMarkup}
+        selectMarkup={selectMarkup}
+      />
     </div>
   );
 }
