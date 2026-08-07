@@ -155,7 +155,7 @@ export function ProjectPlansPage({
   return (
     <main className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
       <nav
-        className="fp-page-header flex min-w-0 items-center gap-2.5 border-b border-line pb-6"
+        className="flex min-w-0 items-center gap-2.5 border-b border-line pb-6"
         aria-label="Project breadcrumb"
       >
         <button
