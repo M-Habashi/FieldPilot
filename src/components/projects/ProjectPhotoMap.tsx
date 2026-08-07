@@ -279,6 +279,15 @@ export function ProjectPhotoMap({
   const selectedPhoto = selectedPhotos[0] ?? null;
   const panelVisible = photosPanelOpen || selectedPhotos.length > 0;
 
+  // The right pane is the list, the selection and the task picker together, so
+  // dismissing it clears all three.
+  const closePhotosPanel = useCallback(() => {
+    setSelectedPhotos([]);
+    setPhotosPanelOpen(false);
+    setTaskPickerOpen(false);
+    setDrilledId(null);
+  }, []);
+
   // Re-sync selection and the move target against the live query result so a
   // stale snapshot (e.g. after a restore) never feeds a stale
   // expectedPhotoUpdatedAt into a later mutation, and the detail panel shows
@@ -977,6 +986,22 @@ export function ProjectPhotoMap({
     };
   }, [handleMove, movingPhoto]);
 
+  // A click on bare map means "let me see the map", so it closes the right
+  // pane. Marker clicks select a photo instead, and in move mode the click
+  // above places one, so neither should dismiss anything.
+  useEffect(() => {
+    if (!mapInstance || !panelVisible || movingPhoto) return;
+    const onMapClick = (event: L.LeafletMouseEvent) => {
+      const target = event.originalEvent.target as HTMLElement | null;
+      if (target && target.closest && target.closest('.leaflet-marker-icon')) return;
+      closePhotosPanel();
+    };
+    mapInstance.on('click', onMapClick);
+    return () => {
+      mapInstance.off('click', onMapClick);
+    };
+  }, [closePhotosPanel, mapInstance, movingPhoto, panelVisible]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -1034,26 +1059,24 @@ export function ProjectPhotoMap({
     }
   }, []);
 
-  const handleLocatePhoto = useCallback((photo: MapPhoto) => {
-    const map = mapRef.current;
-    if (!map || !hasLocation(photo)) return;
-    map.flyTo(
-      [photo.attachment.latitude!, photo.attachment.longitude!],
-      Math.max(map.getZoom(), 16),
-    );
-    setPingPhotoId(photo.attachment._id);
-    window.setTimeout(() => {
-      setPingPhotoId((current) => (current === photo.attachment._id ? null : current));
-    }, 1400);
-    // Phones: hide the drawer so the user can actually see the located photo
-    // on the map; the Photos toolbar button reopens it.
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      setSelectedPhotos([]);
-      setPhotosPanelOpen(false);
-      setTaskPickerOpen(false);
-      setDrilledId(null);
-    }
-  }, []);
+  const handleLocatePhoto = useCallback(
+    (photo: MapPhoto) => {
+      const map = mapRef.current;
+      if (!map || !hasLocation(photo)) return;
+      map.flyTo(
+        [photo.attachment.latitude!, photo.attachment.longitude!],
+        Math.max(map.getZoom(), 16),
+      );
+      setPingPhotoId(photo.attachment._id);
+      window.setTimeout(() => {
+        setPingPhotoId((current) => (current === photo.attachment._id ? null : current));
+      }, 1400);
+      // Phones: hide the drawer so the user can actually see the located photo
+      // on the map; the Photos toolbar button reopens it.
+      if (window.matchMedia('(max-width: 767px)').matches) closePhotosPanel();
+    },
+    [closePhotosPanel],
+  );
 
   return (
     <section
@@ -1142,16 +1165,7 @@ export function ProjectPhotoMap({
             aria-pressed={panelVisible}
             active={panelVisible}
             title="Photos"
-            onClick={() => {
-              if (panelVisible) {
-                setSelectedPhotos([]);
-                setPhotosPanelOpen(false);
-                setTaskPickerOpen(false);
-                setDrilledId(null);
-              } else {
-                setPhotosPanelOpen(true);
-              }
-            }}
+            onClick={() => (panelVisible ? closePhotosPanel() : setPhotosPanelOpen(true))}
           />
         </ActionBarGroup>
       </ActionBar>
