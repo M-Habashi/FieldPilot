@@ -9,6 +9,7 @@ const TOUCH_DRAG_ARM_DELAY = 300;
 const TOUCH_DRAG_THRESHOLD = 10;
 
 interface PinLayerProps {
+  viewScale: number;
   isOverCancelZone: (clientX: number, clientY: number) => boolean;
   onTouchDragStart: (taskId: string, originX: number, originY: number) => void;
   onTouchDragMove: (taskId: string, clientX: number, clientY: number) => void;
@@ -16,6 +17,7 @@ interface PinLayerProps {
 }
 
 export function PinLayer({
+  viewScale,
   isOverCancelZone,
   onTouchDragStart,
   onTouchDragMove,
@@ -35,6 +37,7 @@ export function PinLayer({
         <Pin
           key={task.id}
           task={task}
+          viewScale={viewScale}
           selected={task.id === selectedTaskId}
           isOverCancelZone={isOverCancelZone}
           onTouchDragStart={onTouchDragStart}
@@ -52,6 +55,7 @@ interface PinProps extends PinLayerProps {
 }
 
 function Pin({
+  viewScale,
   task,
   selected,
   isOverCancelZone,
@@ -177,7 +181,13 @@ function Pin({
     <button
       type="button"
       className={cn('fp-pin pointer-events-auto', selected && 'fp-pin-selected')}
-      style={{ left: `${task.x * 100}%`, top: `${task.y * 100}%` }}
+      style={
+        {
+          left: `${task.x * 100}%`,
+          top: `${task.y * 100}%`,
+          '--fp-pin-view-scale': String(Math.max(0.01, viewScale)),
+        } as React.CSSProperties
+      }
       aria-label={`Pin ${task.seq}: ${task.title || 'untitled task'}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

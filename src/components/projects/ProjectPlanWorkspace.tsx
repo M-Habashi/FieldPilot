@@ -421,7 +421,7 @@ export function ProjectPlanWorkspace({
           }
           aria-hidden
         />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
           {activeView === 'map' ? (
             <ProjectPhotoMap project={project} role={role} userId={userId} />
           ) : (

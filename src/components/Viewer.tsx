@@ -859,12 +859,14 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
           className={cn(
             'absolute top-0 left-0',
             smoothView &&
-              'transition-[transform,width,height] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+              'transition-transform duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+            'will-change-transform',
           )}
           style={{
-            transform: `translate(${view.offset.x}px, ${view.offset.y}px)`,
-            width: pageBase.w * view.scale,
-            height: pageBase.h * view.scale,
+            transform: `translate3d(${view.offset.x}px, ${view.offset.y}px, 0) scale(${view.scale})`,
+            transformOrigin: 'top left',
+            width: pageBase.w,
+            height: pageBase.h,
           }}
         >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full bg-white shadow-e2" />
@@ -888,6 +890,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
             </div>
           )}
           <PinLayer
+            viewScale={view.scale}
             isOverCancelZone={isOverCancelZone}
             onTouchDragStart={onTouchDragStart}
             onTouchDragMove={onTouchDragMove}

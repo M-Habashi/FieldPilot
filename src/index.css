@@ -97,6 +97,15 @@ select {
   .fp-sidebar {
     background: var(--fp-bg-surface);
     border-right: 1px solid var(--fp-border-strong);
+    transition:
+      width var(--fp-motion-duration) var(--fp-motion-ease),
+      transform var(--fp-motion-duration) var(--fp-motion-ease),
+      box-shadow var(--fp-motion-duration) var(--fp-motion-ease);
+  }
+
+  .fp-sidebar-backdrop {
+    background: rgb(23 34 54 / 0.18);
+    transition: opacity var(--fp-motion-duration) var(--fp-motion-ease);
   }
 
   .fp-page-header {
@@ -175,11 +184,14 @@ select {
   .fp-pin {
     position: absolute;
     transform: translate(-50%, -100%);
-    width: var(--fp-pin-size);
-    height: var(--fp-pin-size);
+    width: calc(var(--fp-pin-size) / var(--fp-pin-view-scale, 1));
+    height: calc(var(--fp-pin-size) / var(--fp-pin-view-scale, 1));
     cursor: pointer;
     touch-action: none;
     z-index: 10;
+    transition:
+      width var(--fp-motion-duration) var(--fp-motion-ease),
+      height var(--fp-motion-duration) var(--fp-motion-ease);
   }
 
   .fp-pin-marker {

@@ -1057,7 +1057,10 @@ export function ProjectPhotoMap({
   }, []);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-app" aria-label="Project photo map">
+    <section
+      className="relative z-0 flex min-h-0 flex-1 flex-col bg-app"
+      aria-label="Project photo map"
+    >
       <header className="fp-map-toolbar flex h-12 shrink-0 items-center gap-1 border-b border-line-strong bg-surface px-3">
         <button
           type="button"

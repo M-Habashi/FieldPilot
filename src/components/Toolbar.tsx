@@ -29,7 +29,6 @@ import {
 } from 'lucide-react';
 import { useProject } from '../store/project';
 import { exportProject } from '../lib/transfer';
-import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Dropdown, DropdownItem, DropdownLabel } from './ui/dropdown-menu';
 import { Brand } from './Brand';
@@ -104,7 +103,6 @@ export function Toolbar({
   const showTaskList = useProject((s) => s.showTaskList);
   const closeTaskList = useProject((s) => s.closeTaskList);
   const taskCount = useProject((s) => Object.keys(s.tasks).length);
-  const sidebarCollapsed = useProject((s) => s.sidebarCollapsed);
   const markupTool = useProject((s) => s.markupTool);
   const setMarkupTool = useProject((s) => s.setMarkupTool);
   const currentPage = useProject((s) => s.currentPage);
@@ -122,18 +120,21 @@ export function Toolbar({
 
   return (
     <>
-      {/* One compact workspace bar. Left padding leaves room for the sidebar
-          edge toggle that sits at this intersection. */}
+      {/* One compact workspace bar. Its first control is the mobile navigation
+          button; desktop content starts directly beside the reserved sidebar rail. */}
       <header
         className="fp-actionbar z-40 flex shrink-0 items-center text-xs"
         aria-label="FieldPilot tools"
       >
-        <div
-          className={cn(
-            'flex min-w-0 flex-1 items-center gap-0.5 pr-2 transition-[padding-left] duration-(--fp-motion-duration) ease-(--fp-motion-ease) sm:gap-1 sm:pr-2.5',
-            sidebarCollapsed ? 'pl-7' : 'pl-[180px]',
-          )}
-        >
+        <div className="flex min-w-0 flex-1 items-center gap-0 px-1.5 sm:gap-1 sm:px-2.5">
+          <button
+            type="button"
+            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 md:hidden"
+            aria-label="Open navigation menu"
+            onClick={() => useProject.getState().toggleSidebarMobile()}
+          >
+            <Menu />
+          </button>
           <Dropdown
             align="left"
             trigger={
@@ -202,14 +203,6 @@ export function Toolbar({
             )}
           </Dropdown>
 
-          <button
-            type="button"
-            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 md:hidden"
-            aria-label="Open navigation menu"
-            onClick={() => useProject.getState().toggleSidebarMobile()}
-          >
-            <Menu />
-          </button>
           <Button
             variant="text"
             size="sm"
