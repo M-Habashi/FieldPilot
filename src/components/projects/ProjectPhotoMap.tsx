@@ -779,6 +779,11 @@ export function ProjectPhotoMap({
       initialMapView,
       initialMapZoom,
     );
+    // Leaflet's default prefix is a flag icon plus the library name; the plain
+    // link says the same thing in a third of the width.
+    map.attributionControl.setPrefix(
+      '<a href="https://leafletjs.com/" target="_blank" rel="noreferrer">Leaflet</a>',
+    );
     const standardLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',

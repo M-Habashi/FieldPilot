@@ -615,6 +615,26 @@ select {
   height: 12px;
 }
 
+/* Tile attribution has to stay, but the full Esri source list wrapped to two
+   lines across the bottom of the map on narrow screens. Hold it to a single
+   ellipsised line; hover or keyboard focus reveals the whole credit. */
+.leaflet-control-attribution {
+  max-width: 46vw;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: max-width var(--fp-motion-duration) var(--fp-motion-ease);
+}
+
+.leaflet-control-attribution:hover,
+.leaflet-control-attribution:focus-within {
+  max-width: 92vw;
+  white-space: normal;
+}
+
 /* When the photos drawer is open, slide the right-side map controls
    (zoom + layer toggle) left of it so they stay usable. Percentage-based
    so a full-width drawer on phones also clears them. */
