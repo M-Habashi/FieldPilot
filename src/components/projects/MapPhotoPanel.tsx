@@ -75,11 +75,11 @@ function MapPhotoLightbox({ photo, onClose }: { photo: MapPhoto; onClose: () => 
         <img
           src={photo.url}
           alt={photo.attachment.fileName}
-          className="max-h-full max-w-full rounded-lg object-contain shadow-e3"
+          className="fp-lightbox-image max-h-full max-w-full rounded-lg object-contain shadow-e3"
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <div className="flex flex-col items-center gap-2 text-white/70">
+        <div className="fp-lightbox-image flex flex-col items-center gap-2 text-white/70">
           <Camera className="size-10" />
           <p className="text-sm">Preview unavailable</p>
         </div>
@@ -300,12 +300,24 @@ export function MapPhotoPanel({
 
   if (!mounted) return null;
 
+  // Replays fp-drawer-view-in whenever the drawer's view changes, matching
+  // the tasks drawer's list <-> properties transitions.
+  const viewKey = !detail
+    ? 'list'
+    : stack && !drilled
+      ? 'stack'
+      : drilled
+        ? `drilled-${drilled.attachment._id}`
+        : 'single';
+
   const header = !detail ? (
     <h2 className="text-xs font-semibold text-t1">
       Photos <span className="font-mono font-normal text-t3">({photos.length})</span>
     </h2>
   ) : stack && !drilled ? (
-    <h2 className="text-xs font-semibold text-t1">{selectedPhotos.length} photos at this location</h2>
+    <h2 className="text-xs font-semibold text-t1">
+      {selectedPhotos.length} photos at this location
+    </h2>
   ) : drilled ? (
     <h2 className="truncate text-xs font-semibold text-t1">{drilled.attachment.fileName}</h2>
   ) : (
@@ -313,12 +325,7 @@ export function MapPhotoPanel({
   );
 
   const headerAction = !detail ? (
-    <Button
-      variant="text"
-      size="iconXs"
-      aria-label="Close photos list"
-      onClick={onClose}
-    >
+    <Button variant="text" size="iconXs" aria-label="Close photos list" onClick={onClose}>
       <X />
     </Button>
   ) : (
@@ -327,12 +334,7 @@ export function MapPhotoPanel({
         <Dropdown
           align="right"
           trigger={
-            <Button
-              variant="ghost"
-              size="iconXs"
-              aria-label="More actions"
-              title="More actions"
-            >
+            <Button variant="ghost" size="iconXs" aria-label="More actions" title="More actions">
               <MoreHorizontal />
             </Button>
           }
@@ -370,15 +372,6 @@ export function MapPhotoPanel({
           )}
         </Dropdown>
       )}
-      <button
-        type="button"
-        aria-label={drilled ? 'Back to stack' : 'Back to photos'}
-        title={drilled ? 'Back to stack' : 'Back to photos'}
-        className="flex size-8 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1"
-        onClick={() => (drilled ? setDrilledId(null) : onBackToList())}
-      >
-        <ChevronLeft className="size-4" />
-      </button>
     </div>
   );
 
@@ -403,186 +396,201 @@ export function MapPhotoPanel({
         </span>
       </div>
 
-      <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1.5">
-        {header}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {detail && (
+            <button
+              type="button"
+              aria-label={drilled ? 'Back to stack' : 'Back to photos'}
+              title={drilled ? 'Back to stack' : 'Back to photos'}
+              className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1"
+              onClick={() => (drilled ? setDrilledId(null) : onBackToList())}
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+          )}
+          <div className="min-w-0">{header}</div>
+        </div>
         {headerAction}
       </div>
 
-      {!detail ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
-          {photos.length === 0 ? (
-            <div className="flex flex-col items-center px-3 py-8 text-center">
-              <Camera className="mb-2 size-6 text-t3" />
-              <p className="text-xs text-t3">No photos match the current filter.</p>
-            </div>
-          ) : (
+      <div key={viewKey} className="fp-drawer-view flex min-h-0 flex-1 flex-col">
+        {!detail ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+            {photos.length === 0 ? (
+              <div className="flex flex-col items-center px-3 py-8 text-center">
+                <Camera className="mb-2 size-6 text-t3" />
+                <p className="text-xs text-t3">No photos match the current filter.</p>
+              </div>
+            ) : (
+              <ul>
+                {photos.map((photo) => (
+                  <li key={photo.attachment._id}>
+                    <PhotoRow
+                      photo={photo}
+                      selected={photo.attachment._id === selectedPhotos[0]?.attachment._id}
+                      onSelect={onSelect}
+                      onLocate={onLocate}
+                      onPlace={onPlace}
+                      onHover={onHoverPhoto}
+                      onHoverEnd={onHoverEnd}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : stack && !drilled ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
             <ul>
-              {photos.map((photo) => (
+              {selectedPhotos.map((photo) => (
                 <li key={photo.attachment._id}>
                   <PhotoRow
                     photo={photo}
-                    selected={photo.attachment._id === selectedPhotos[0]?.attachment._id}
-                    onSelect={onSelect}
-                    onLocate={onLocate}
-                    onPlace={onPlace}
+                    onSelect={(p) => setDrilledId(p.attachment._id)}
                     onHover={onHoverPhoto}
                     onHoverEnd={onHoverEnd}
                   />
                 </li>
               ))}
             </ul>
-          )}
-        </div>
-      ) : stack && !drilled ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
-          <ul>
-            {selectedPhotos.map((photo) => (
-              <li key={photo.attachment._id}>
-                <PhotoRow
-                  photo={photo}
-                  onSelect={(p) => setDrilledId(p.attachment._id)}
-                  onHover={onHoverPhoto}
-                  onHoverEnd={onHoverEnd}
+          </div>
+        ) : viewPhoto ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setLightboxPhoto(viewPhoto)}
+              aria-label="View photo full size"
+              className="block h-[28%] max-h-54 max-md:max-h-40 w-full shrink-0 cursor-zoom-in overflow-hidden bg-surface2"
+            >
+              {viewPhoto.url ? (
+                <img
+                  src={viewPhoto.url}
+                  alt={viewPhoto.attachment.fileName}
+                  className="h-full w-full object-cover"
                 />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : viewPhoto ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setLightboxPhoto(viewPhoto)}
-            aria-label="View photo full size"
-            className="block h-[38%] max-h-72 w-full shrink-0 cursor-zoom-in overflow-hidden bg-surface2"
-          >
-            {viewPhoto.url ? (
-              <img
-                src={viewPhoto.url}
-                alt={viewPhoto.attachment.fileName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="grid h-full w-full place-items-center">
-                <Camera className="size-8 text-t3" />
-              </span>
-            )}
-          </button>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            <dl className="space-y-2.5 text-xs">
-              <div>
-                <dt className="text-t3">Name</dt>
-                <dd className="mt-0.5 truncate font-medium text-t1">
-                  {viewPhoto.attachment.fileName}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-t3">Location</dt>
-                <dd className="mt-0.5 text-t1">
-                  <span className="font-mono">{formatLocation(viewPhoto)}</span>
-                  <span className="text-t3"> · {locationSourceLabel(viewPhoto)}</span>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-t3">Date uploaded</dt>
-                <dd className="mt-0.5 text-t1">
-                  {formatUploadDate.format(viewPhoto.attachment.createdAt)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-t3">Size</dt>
-                <dd className="mt-0.5 text-t1">{formatBytes(viewPhoto.attachment.size)}</dd>
-              </div>
-            </dl>
-
-            {canEdit && (
-              <section className="mt-4">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-t3">
-                  Assignment
-                </h3>
-                <div className="mt-1.5 flex items-center gap-2 rounded-md border border-line bg-surface2 px-2 py-1.5">
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ background: viewPhoto.task?.color ?? '#64748b' }}
-                  />
-                  {viewPhoto.task ? (
-                    <span className="min-w-0 truncate text-xs text-t1">
-                      <span className="font-mono text-t3">#{viewPhoto.task.seq}</span>{' '}
-                      {viewPhoto.task.title || 'Untitled task'}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-t3">Unassigned</span>
-                  )}
+              ) : (
+                <span className="grid h-full w-full place-items-center">
+                  <Camera className="size-8 text-t3" />
+                </span>
+              )}
+            </button>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              <dl className="space-y-2.5 text-xs">
+                <div>
+                  <dt className="text-t3">Name</dt>
+                  <dd className="mt-0.5 truncate font-medium text-t1">
+                    {viewPhoto.attachment.fileName}
+                  </dd>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => setPickerOpen(true)}
-                >
-                  <Link2 /> {viewPhoto.task ? 'Reassign task' : 'Assign task'}
-                </Button>
+                <div>
+                  <dt className="text-t3">Location</dt>
+                  <dd className="mt-0.5 text-t1">
+                    <span className="font-mono">{formatLocation(viewPhoto)}</span>
+                    <span className="text-t3"> · {locationSourceLabel(viewPhoto)}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-t3">Date uploaded</dt>
+                  <dd className="mt-0.5 text-t1">
+                    {formatUploadDate.format(viewPhoto.attachment.createdAt)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-t3">Size</dt>
+                  <dd className="mt-0.5 text-t1">{formatBytes(viewPhoto.attachment.size)}</dd>
+                </div>
+              </dl>
 
-                {pickerOpen && (
-                  <div className="mt-2 rounded-md border border-line bg-surface2 p-2">
-                    <p className="truncate text-xs text-t3">
-                      Assign photo{' '}
-                      <span className="font-medium text-t1">{viewPhoto.attachment.fileName}</span>{' '}
-                      to:
-                    </p>
-                    <input
-                      autoFocus
-                      value={taskSearch}
-                      onChange={(event) => setTaskSearch(event.target.value)}
-                      placeholder="Find a task…"
-                      className="mt-1 w-full bg-transparent text-xs text-t1 outline-none placeholder:text-t3"
+              {canEdit && (
+                <section className="mt-4">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-t3">
+                    Assignment
+                  </h3>
+                  <div className="mt-1.5 flex items-center gap-2 rounded-md border border-line bg-surface2 px-2 py-1.5">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ background: viewPhoto.task?.color ?? '#64748b' }}
                     />
-                    <div className="mt-1 max-h-40 overflow-y-auto">
-                      {taskMatches.map((task) => (
-                        <button
-                          type="button"
-                          key={task._id}
-                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-t2 transition-colors hover:bg-surface hover:text-t1"
-                          onClick={() => onAssign(viewPhoto, task._id)}
-                        >
-                          <span
-                            className="size-2.5 shrink-0 rounded-full"
-                            style={{ background: task.color ?? '#64748b' }}
-                          />
-                          <span className="shrink-0 font-mono text-t3">#{task.seq}</span>
-                          <span className="truncate">{task.title || 'Untitled task'}</span>
-                        </button>
-                      ))}
-                    </div>
-                    {viewPhoto.task && (
-                      <button
-                        type="button"
-                        className="mt-1 flex w-full items-center justify-center gap-2 border-t border-line pt-1.5 text-xs text-danger transition-colors hover:text-danger"
-                        onClick={() => onAssign(viewPhoto, undefined)}
-                      >
-                        <Link2Off className="size-3.5" /> Unassign task
-                      </button>
+                    {viewPhoto.task ? (
+                      <span className="min-w-0 truncate text-xs text-t1">
+                        <span className="font-mono text-t3">#{viewPhoto.task.seq}</span>{' '}
+                        {viewPhoto.task.title || 'Untitled task'}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-t3">Unassigned</span>
                     )}
                   </div>
-                )}
-              </section>
-            )}
-          </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => setPickerOpen(true)}
+                  >
+                    <Link2 /> {viewPhoto.task ? 'Reassign task' : 'Assign task'}
+                  </Button>
 
-          {canEdit && (
-            <div className="flex shrink-0 gap-1.5 border-t border-line px-3 py-2.5">
-              <Button
-                variant="danger"
-                size="sm"
-                className="flex-1"
-                onClick={() => onDelete(viewPhoto)}
-              >
-                <Trash2 /> Delete photo
-              </Button>
+                  {pickerOpen && (
+                    <div className="mt-2 rounded-md border border-line bg-surface2 p-2">
+                      <p className="truncate text-xs text-t3">
+                        Assign photo{' '}
+                        <span className="font-medium text-t1">{viewPhoto.attachment.fileName}</span>{' '}
+                        to:
+                      </p>
+                      <input
+                        autoFocus
+                        value={taskSearch}
+                        onChange={(event) => setTaskSearch(event.target.value)}
+                        placeholder="Find a task…"
+                        className="mt-1 w-full bg-transparent text-xs text-t1 outline-none placeholder:text-t3"
+                      />
+                      <div className="mt-1 max-h-40 overflow-y-auto">
+                        {taskMatches.map((task) => (
+                          <button
+                            type="button"
+                            key={task._id}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-t2 transition-colors hover:bg-surface hover:text-t1"
+                            onClick={() => onAssign(viewPhoto, task._id)}
+                          >
+                            <span
+                              className="size-2.5 shrink-0 rounded-full"
+                              style={{ background: task.color ?? '#64748b' }}
+                            />
+                            <span className="shrink-0 font-mono text-t3">#{task.seq}</span>
+                            <span className="truncate">{task.title || 'Untitled task'}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {viewPhoto.task && (
+                        <button
+                          type="button"
+                          className="mt-1 flex w-full items-center justify-center gap-2 border-t border-line pt-1.5 text-xs text-danger transition-colors hover:text-danger"
+                          onClick={() => onAssign(viewPhoto, undefined)}
+                        >
+                          <Link2Off className="size-3.5" /> Unassign task
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
-          )}
-        </>
-      ) : null}
+
+            {canEdit && (
+              <div className="flex shrink-0 gap-1.5 border-t border-line px-3 py-2.5">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => onDelete(viewPhoto)}
+                >
+                  <Trash2 /> Delete photo
+                </Button>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
 
       {lightboxPhoto && (
         <MapPhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />

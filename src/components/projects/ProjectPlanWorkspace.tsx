@@ -416,8 +416,8 @@ export function ProjectPlanWorkspace({
         <div
           className={
             sidebarCollapsed
-              ? 'w-14 shrink-0 transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease)'
-              : 'w-50 shrink-0 transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease)'
+              ? 'hidden shrink-0 transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease) md:block md:w-14'
+              : 'hidden shrink-0 transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease) md:block md:w-50'
           }
           aria-hidden
         />

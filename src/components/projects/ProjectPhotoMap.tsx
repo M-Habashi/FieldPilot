@@ -8,6 +8,7 @@ import {
   Link2,
   Link2Off,
   MapPinOff,
+  Menu,
   Move,
   Redo2,
   RotateCcw,
@@ -32,6 +33,7 @@ import {
 } from '../../lib/photo-map-undo';
 import { userFacingError } from '../../lib/errors';
 import { cn } from '../../lib/utils';
+import { useProject } from '../../store/project';
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/dialog';
 import { Dropdown, DropdownItem, DropdownLabel } from '../ui/dropdown-menu';
@@ -82,14 +84,37 @@ function taskColor(photo: MapPhoto): string {
   return photo.task?.color ?? '#64748b';
 }
 
-function createPhotoIcon(group: PhotoGroup, hoveredPhotoId: string | null = null): L.DivIcon {
+function createPhotoIcon(
+  group: PhotoGroup,
+  options: {
+    leadPhotoId?: string | null;
+    hoverActive?: boolean;
+    moving?: boolean;
+    justPlacedId?: string | null;
+    pingPhotoId?: string | null;
+  } = {},
+): L.DivIcon {
+  const {
+    leadPhotoId = null,
+    hoverActive = false,
+    moving = false,
+    justPlacedId = null,
+    pingPhotoId = null,
+  } = options;
   const lead = group.photos[0];
   const stack = document.createElement('div');
   stack.className = 'fp-photo-map-marker-stack';
   if (group.photos.length === 1) stack.classList.add('fp-photo-map-marker-stack--single');
   else if (group.photos.length === 2) stack.classList.add('fp-photo-map-marker-stack--pair');
-  if (hoveredPhotoId !== null && lead.attachment._id === hoveredPhotoId) {
+  if (hoverActive && leadPhotoId !== null && lead.attachment._id === leadPhotoId) {
     stack.classList.add('fp-photo-map-marker-stack--highlight');
+  }
+  if (moving) stack.classList.add('fp-photo-map-marker-stack--moving');
+  if (justPlacedId !== null && lead.attachment._id === justPlacedId) {
+    stack.classList.add('fp-photo-map-marker-stack--drop');
+  }
+  if (pingPhotoId !== null && lead.attachment._id === pingPhotoId) {
+    stack.classList.add('fp-photo-map-marker-stack--ping');
   }
   stack.style.setProperty('--fp-photo-task-color', taskColor(lead));
 
@@ -120,8 +145,15 @@ function createPhotoIcon(group: PhotoGroup, hoveredPhotoId: string | null = null
     stack.append(taskBadge);
   }
 
+  // The shell scales the whole marker about the icon anchor — 25% smaller in
+  // general, even more on phones — so the marker keeps pointing at its spot
+  // without touching any of the stack's internal pixel sizes.
+  const shell = document.createElement('div');
+  shell.className = 'fp-photo-map-marker-shell';
+  shell.append(stack);
+
   return L.divIcon({
-    html: stack,
+    html: shell,
     className: 'fp-photo-map-leaflet-icon',
     iconSize: [116, 132],
     iconAnchor: [58, 116],
@@ -217,7 +249,14 @@ export function ProjectPhotoMap({
   const [mapStyle, setMapStyle] = useState<'standard' | 'satellite'>('satellite');
   const [deleteTarget, setDeleteTarget] = useState<MapPhoto | null>(null);
   const [drilledId, setDrilledId] = useState<string | null>(null);
-  const [hoveredPhotoId, setHoveredPhotoId] = useState<string | null>(null);
+  // The photo currently on top of its stack marker: the LAST photo hovered in
+  // the list stays on top until another one is hovered. `hoverActive` keeps
+  // the enlarge/fan-out affordance transient (hover-only).
+  const [leadPhotoId, setLeadPhotoId] = useState<string | null>(null);
+  const [hoverActive, setHoverActive] = useState(false);
+  // Brief per-photo animation flags: drop-in after placement, ping after locate.
+  const [justPlacedId, setJustPlacedId] = useState<string | null>(null);
+  const [pingPhotoId, setPingPhotoId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const undoScope = `${project._id}:${userId}`;
   const [undoCount, setUndoCount] = useState(() => readPhotoUndo(undoScope).length);
@@ -239,6 +278,7 @@ export function ProjectPhotoMap({
     [filteredPhotos],
   );
   const selectedPhoto = selectedPhotos[0] ?? null;
+  const panelVisible = photosPanelOpen || selectedPhotos.length > 0;
 
   // Re-sync selection and the move target against the live query result so a
   // stale snapshot (e.g. after a restore) never feeds a stale
@@ -264,7 +304,17 @@ export function ProjectPhotoMap({
       const live = photoRows.find(
         (candidate) => candidate.attachment._id === current.attachment._id,
       );
-      return live && live !== current ? live : current;
+      if (!live || live === current) return current;
+      const positionChanged =
+        live.attachment.latitude !== current.attachment.latitude ||
+        live.attachment.longitude !== current.attachment.longitude;
+      if (positionChanged) {
+        // The move (or restore) committed: exit move mode only now, so the
+        // placed marker drops in directly where it landed instead of briefly
+        // re-rendering at the pre-move position.
+        return null;
+      }
+      return live;
     });
   }, [photoRows]);
 
@@ -275,16 +325,20 @@ export function ProjectPhotoMap({
       ? mappedPhotos.filter((photo) => photo.attachment._id !== movingPhoto.attachment._id)
       : mappedPhotos;
     const clustered = clusterPhotos(mapInstance, candidates);
-    if (!hoveredPhotoId) return clustered;
+    if (!leadPhotoId) return clustered;
     return clustered.map((group) => {
-      const index = group.photos.findIndex((p) => p.attachment._id === hoveredPhotoId);
+      const index = group.photos.findIndex((p) => p.attachment._id === leadPhotoId);
       if (index <= 0) return group;
       return {
         ...group,
-        photos: [group.photos[index], ...group.photos.slice(0, index), ...group.photos.slice(index + 1)],
+        photos: [
+          group.photos[index],
+          ...group.photos.slice(0, index),
+          ...group.photos.slice(index + 1),
+        ],
       };
     });
-  }, [mapInstance, mapReady, mappedPhotos, movingPhoto, hoveredPhotoId, viewportRevision]);
+  }, [mapInstance, mapReady, mappedPhotos, movingPhoto, leadPhotoId, viewportRevision]);
 
   const fitPhotos = useCallback(() => {
     const map = mapRef.current;
@@ -328,6 +382,10 @@ export function ProjectPhotoMap({
           previousLocation: locationSnapshot(photo),
           nextLocation: { ...location, source: 'manual' },
         });
+        setJustPlacedId(photo.attachment._id);
+        window.setTimeout(() => {
+          setJustPlacedId((current) => (current === photo.attachment._id ? null : current));
+        }, 500);
         notify({ tone: 'success', message: 'Photo location updated.' });
       } catch (error) {
         notify({
@@ -786,9 +844,7 @@ export function ProjectPhotoMap({
     const showSatellite = mapStyle === 'satellite';
     button.setAttribute('aria-pressed', String(showSatellite));
     button.title = showSatellite ? 'Show street map' : 'Show satellite view';
-    button.innerHTML = showSatellite
-      ? `${streetIconSvg}Map`
-      : `${satelliteIconSvg}Satellite`;
+    button.innerHTML = showSatellite ? `${streetIconSvg}Map` : `${satelliteIconSvg}Satellite`;
   }, [mapStyle]);
 
   useEffect(() => {
@@ -797,7 +853,7 @@ export function ProjectPhotoMap({
     layer.clearLayers();
     for (const group of groups) {
       const marker = L.marker([group.latitude, group.longitude], {
-        icon: createPhotoIcon(group, hoveredPhotoId),
+        icon: createPhotoIcon(group, { leadPhotoId, hoverActive, justPlacedId, pingPhotoId }),
       });
       let longPressTimer: number | null = null;
       let suppressNextClick = false;
@@ -838,8 +894,7 @@ export function ProjectPhotoMap({
         armLongPress(original);
       });
       marker.on('mouseup mouseout dragstart', clearLongPress);
-      marker.addTo(layer);
-      // Touch: mousedown never fires on touch-action:none elements, so arm
+      marker.addTo(layer); // Touch: mousedown never fires on touch-action:none elements, so arm
       // the long-press directly on the icon.
       const icon = marker.getElement();
       if (icon) {
@@ -850,7 +905,7 @@ export function ProjectPhotoMap({
         L.DomEvent.on(icon, 'touchend touchmove touchcancel', clearLongPress);
       }
     }
-  }, [groups, hoveredPhotoId, movingPhoto]);
+  }, [groups, hoverActive, justPlacedId, leadPhotoId, movingPhoto, pingPhotoId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -858,7 +913,7 @@ export function ProjectPhotoMap({
     const latitude = movingPhoto.attachment.latitude ?? map.getCenter().lat;
     const longitude = movingPhoto.attachment.longitude ?? map.getCenter().lng;
     const marker = L.marker([latitude, longitude], {
-      icon: createPhotoIcon({ latitude, longitude, photos: [movingPhoto] }),
+      icon: createPhotoIcon({ latitude, longitude, photos: [movingPhoto] }, { moving: true }),
       draggable: true,
       autoPan: true,
       zIndexOffset: 1000,
@@ -873,9 +928,12 @@ export function ProjectPhotoMap({
         Math.abs(latlng.lat - previousLat) > 1e-6 ||
         Math.abs(latlng.lng - previousLng) > 1e-6;
       if (actuallyMoved) {
+        // Exit happens via the live-data effect once the new position lands,
+        // so the photo never flashes back to its pre-move spot.
         void handleMove(movingPhoto, { latitude: latlng.lat, longitude: latlng.lng });
+      } else {
+        setMovingPhoto(null);
       }
-      setMovingPhoto(null);
     });
     marker.on('contextmenu', (event) => {
       const { left, top } = eventClientPosition(event.originalEvent as Event);
@@ -984,11 +1042,31 @@ export function ProjectPhotoMap({
       [photo.attachment.latitude!, photo.attachment.longitude!],
       Math.max(map.getZoom(), 16),
     );
+    setPingPhotoId(photo.attachment._id);
+    window.setTimeout(() => {
+      setPingPhotoId((current) => (current === photo.attachment._id ? null : current));
+    }, 1400);
+    // Phones: hide the drawer so the user can actually see the located photo
+    // on the map; the Photos toolbar button reopens it.
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setSelectedPhotos([]);
+      setPhotosPanelOpen(false);
+      setTaskPickerOpen(false);
+      setDrilledId(null);
+    }
   }, []);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-app" aria-label="Project photo map">
       <header className="fp-map-toolbar flex h-12 shrink-0 items-center gap-1 border-b border-line-strong bg-surface px-3">
+        <button
+          type="button"
+          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 md:hidden"
+          aria-label="Open navigation menu"
+          onClick={() => useProject.getState().toggleSidebarMobile()}
+        >
+          <Menu />
+        </button>
         <Button
           variant="text"
           size="sm"
@@ -1073,11 +1151,20 @@ export function ProjectPhotoMap({
           variant="toggle"
           size="iconSm"
           className="ml-auto"
-          aria-label={photosPanelOpen ? 'Close photos list' : 'Show photos list'}
-          aria-pressed={photosPanelOpen}
+          aria-label={panelVisible ? 'Close photos panel' : 'Show photos list'}
+          aria-pressed={panelVisible}
           title="Photos"
-          data-on={photosPanelOpen}
-          onClick={() => setPhotosPanelOpen((open) => !open)}
+          data-on={panelVisible}
+          onClick={() => {
+            if (panelVisible) {
+              setSelectedPhotos([]);
+              setPhotosPanelOpen(false);
+              setTaskPickerOpen(false);
+              setDrilledId(null);
+            } else {
+              setPhotosPanelOpen(true);
+            }
+          }}
         >
           <Images />
         </Button>
@@ -1106,10 +1193,25 @@ export function ProjectPhotoMap({
           setDrilledId={setDrilledId}
           onSelect={handleSelectPhoto}
           onLocate={handleLocatePhoto}
-          onPlace={(photo) => setMovingPhoto(photo)}
+          onPlace={(photo) => {
+            // Entering move mode from the panel closes the drawer: on phones
+            // the full-width drawer would otherwise cover the map the user
+            // needs to click or drag.
+            setSelectedPhotos([]);
+            setTaskPickerOpen(false);
+            setDrilledId(null);
+            setPhotosPanelOpen(false);
+            setMovingPhoto(photo);
+          }}
           onAssign={(photo, taskId) => void handleAssignment(photo, taskId)}
           onDelete={(photo) => setDeleteTarget(photo)}
-          onMove={(photo) => setMovingPhoto(photo)}
+          onMove={(photo) => {
+            setSelectedPhotos([]);
+            setTaskPickerOpen(false);
+            setDrilledId(null);
+            setPhotosPanelOpen(false);
+            setMovingPhoto(photo);
+          }}
           onRemoveFromMap={(photo) => void handleRemoveFromMap(photo)}
           onRestoreOriginal={(photo) => void handleRestoreOriginal(photo)}
           onClose={() => {
@@ -1124,19 +1226,12 @@ export function ProjectPhotoMap({
             setDrilledId(null);
             setPhotosPanelOpen(true);
           }}
-          onHoverPhoto={(photo) => setHoveredPhotoId(photo.attachment._id)}
-          onHoverEnd={() => setHoveredPhotoId(null)}
+          onHoverPhoto={(photo) => {
+            setLeadPhotoId(photo.attachment._id);
+            setHoverActive(true);
+          }}
+          onHoverEnd={() => setHoverActive(false)}
         />
-
-        {movingPhoto && (
-          <div className="pointer-events-none absolute top-3 left-1/2 z-[500] -translate-x-1/2">
-            <p className="rounded-full border border-line bg-surface/95 px-3 py-1 text-xs text-t2 shadow-e2">
-              {hasLocation(movingPhoto)
-                ? 'Move photo — drag it to the new spot · right-click / long-press for options · Esc to cancel'
-                : 'Click the map to place the selected photo · Esc to cancel'}
-            </p>
-          </div>
-        )}
 
         {mappedPhotos.length === 0 && (
           <div className="pointer-events-none absolute inset-0 z-[400] grid place-items-center p-6">

@@ -14,19 +14,19 @@ Before touching any code, copy the **Visual Validation Checklist** (section 13) 
 
 ## 1. Current architecture (read this first)
 
-| Piece | File | Notes |
-|---|---|---|
-| Map view | `src/components/projects/ProjectPhotoMap.tsx` (~1041 lines) | Leaflet map, markers, toolbar, overlays, context menu, status bar. This is the main file you will change. |
-| Workspace frame | `src/components/projects/ProjectPlanWorkspace.tsx` | Renders `Sidebar` (absolute, z-50) + a width spacer + either the plan viewer or `ProjectPhotoMap` (line 425). |
-| Left sidebar | `src/components/Sidebar.tsx` | Two states: collapsed 56px (`w-14`) / expanded 200px (`w-50`). Collapse state lives in the zustand store (`useProject.sidebarCollapsed`, `toggleSidebar()` at `src/store/project.ts:792`). |
-| Marker styles | `src/index.css` lines 302–437 | `.fp-photo-map-marker-stack` and friends. |
-| Status bar styles | `src/index.css` line 91 (`.fp-statusbar`) | 32px bar. |
-| Task list (pattern to copy) | `src/components/TaskList.tsx` + `src/components/RightDrawer.tsx` + toggle button in `src/components/Toolbar.tsx:458–466` | The photos list must look/behave like this. |
-| Lightbox (pattern to copy) | `src/components/Lightbox.tsx` | **Do not reuse directly** — it is bound to the plan-store task photos. Copy its markup pattern into a map-local component. |
-| Slide-in animation hook | `src/hooks/usePresence.ts` | Use for the new panels (same pattern as `RightDrawer`). |
-| Confirm dialog | `src/components/ui/dialog.tsx` (`ConfirmDialog`) | Used in `ProjectPlansPage.tsx` — copy that usage. |
-| Backend (no changes needed) | `convex/attachments.ts` | Mutations already exist: `trashPhoto`, `restorePhoto`, `setPhotoLocation`, `clearPhotoLocation`, `restoreOriginalLocation`, `assignPhoto`. Attachment fields available for the properties panel: `fileName`, `size`, `createdAt`, `latitude/longitude`, `originalLatitude/originalLongitude`, `locationSource`, `contentType`. |
-| Undo/redo | `src/lib/photo-map-undo.ts` + `pushUndo` in the map component | Reuse `handleTrash`, `handleMove`, `handleAssignment`, `handleRestoreOriginal` — they already push undo entries. |
+| Piece                       | File                                                                                                                     | Notes                                                                                                                                                                                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Map view                    | `src/components/projects/ProjectPhotoMap.tsx` (~1041 lines)                                                              | Leaflet map, markers, toolbar, overlays, context menu, status bar. This is the main file you will change.                                                                                                                                                                                                                      |
+| Workspace frame             | `src/components/projects/ProjectPlanWorkspace.tsx`                                                                       | Renders `Sidebar` (absolute, z-50) + a width spacer + either the plan viewer or `ProjectPhotoMap` (line 425).                                                                                                                                                                                                                  |
+| Left sidebar                | `src/components/Sidebar.tsx`                                                                                             | Two states: collapsed 56px (`w-14`) / expanded 200px (`w-50`). Collapse state lives in the zustand store (`useProject.sidebarCollapsed`, `toggleSidebar()` at `src/store/project.ts:792`).                                                                                                                                     |
+| Marker styles               | `src/index.css` lines 302–437                                                                                            | `.fp-photo-map-marker-stack` and friends.                                                                                                                                                                                                                                                                                      |
+| Status bar styles           | `src/index.css` line 91 (`.fp-statusbar`)                                                                                | 32px bar.                                                                                                                                                                                                                                                                                                                      |
+| Task list (pattern to copy) | `src/components/TaskList.tsx` + `src/components/RightDrawer.tsx` + toggle button in `src/components/Toolbar.tsx:458–466` | The photos list must look/behave like this.                                                                                                                                                                                                                                                                                    |
+| Lightbox (pattern to copy)  | `src/components/Lightbox.tsx`                                                                                            | **Do not reuse directly** — it is bound to the plan-store task photos. Copy its markup pattern into a map-local component.                                                                                                                                                                                                     |
+| Slide-in animation hook     | `src/hooks/usePresence.ts`                                                                                               | Use for the new panels (same pattern as `RightDrawer`).                                                                                                                                                                                                                                                                        |
+| Confirm dialog              | `src/components/ui/dialog.tsx` (`ConfirmDialog`)                                                                         | Used in `ProjectPlansPage.tsx` — copy that usage.                                                                                                                                                                                                                                                                              |
+| Backend (no changes needed) | `convex/attachments.ts`                                                                                                  | Mutations already exist: `trashPhoto`, `restorePhoto`, `setPhotoLocation`, `clearPhotoLocation`, `restoreOriginalLocation`, `assignPhoto`. Attachment fields available for the properties panel: `fileName`, `size`, `createdAt`, `latitude/longitude`, `originalLatitude/originalLongitude`, `locationSource`, `contentType`. |
+| Undo/redo                   | `src/lib/photo-map-undo.ts` + `pushUndo` in the map component                                                            | Reuse `handleTrash`, `handleMove`, `handleAssignment`, `handleRestoreOriginal` — they already push undo entries.                                                                                                                                                                                                               |
 
 Line numbers are from the current commit and may drift as you edit — treat them as pointers, not gospel.
 
@@ -34,9 +34,10 @@ Line numbers are from the current commit and may drift as you edit — treat the
 
 ## 2. Fix 1 — Sidebar collapse arrow overlaps the map toolbar's Undo button
 
-**Problem.** `Sidebar.tsx:50–62` renders the collapse chevron `absolute top-1 left-full`, i.e. floating *outside* the sidebar on top of the content area. In map view it lands exactly on the Undo button (`ProjectPhotoMap.tsx:674`, first button of the `h-12` toolbar), blocking clicks.
+**Problem.** `Sidebar.tsx:50–62` renders the collapse chevron `absolute top-1 left-full`, i.e. floating _outside_ the sidebar on top of the content area. In map view it lands exactly on the Undo button (`ProjectPhotoMap.tsx:674`, first button of the `h-12` toolbar), blocking clicks.
 
 **Change.**
+
 1. **Delete the floating chevron button** from `Sidebar.tsx` entirely.
 2. **Make the sidebar's right border the control.** Add a full-height drag handle:
    - `<div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabIndex={0}>` positioned `absolute inset-y-0 -right-1 w-2 cursor-col-resize z-10` inside the `<aside>`.
@@ -56,6 +57,7 @@ Line numbers are from the current commit and may drift as you edit — treat the
 **Problem.** Delete exists only in the right-click context menu (`ProjectPhotoMap.tsx:1001–1007`). It must also be reachable from the photo detail UI.
 
 **Change.**
+
 1. In the new right-side detail panel (Fix 11), add a danger **Delete photo** button at the bottom of the actions.
 2. Clicking it opens `ConfirmDialog` (see `ProjectPlansPage.tsx` usage): title `Delete <fileName>?`, description "The photo is removed from the project. You can restore it with Undo.", confirm label `Delete photo`, `danger`.
 3. On confirm call the existing `handleTrash(photo)` (`ProjectPhotoMap.tsx:336`) — it already pushes an undo entry and clears selection.
@@ -70,6 +72,7 @@ Line numbers are from the current commit and may drift as you edit — treat the
 **Problem.** `ProjectPhotoMap.tsx:772–782` uses the `LocateFixed` icon (reads as "my location") on a custom absolutely-positioned button that looks nothing like the Leaflet zoom in/out buttons below it.
 
 **Change.**
+
 1. Remove that custom `Button` block.
 2. Add the fit action **as a native Leaflet control appended into the zoom control's own `leaflet-bar`**, so it is pixel-consistent (same size, borders, radius, hover):
    - In the map-init effect (lines 581–605), after creating the zoom control, call `const zoomContainer = zoomControl.getContainer()` (after `addTo(map)`) and `L.DomUtil.create('a', 'fp-leaflet-fit', zoomContainer)`.
@@ -88,6 +91,7 @@ Line numbers are from the current commit and may drift as you edit — treat the
 **Problem (root cause).** The map wrapper (`ProjectPhotoMap.tsx:770`, `div.relative min-h-0 flex-1`) creates **no stacking context**. Leaflet's internal panes/controls carry z-indexes of 200–1000, so they escape and compete with the app header (`z-60`), the sidebar (`z-50`), and the right drawer (`z-30`) — markers and controls paint over the chrome.
 
 **Change.**
+
 1. Add Tailwind's `isolate` class (`isolation: isolate`) to that wrapper div: `className={cn('relative min-h-0 flex-1 isolate', movingPhoto && 'cursor-crosshair')}`.
 2. Inside the now-isolated context, the context menu's `z-[1000]` (line 963) can tie with Leaflet's `.leaflet-top`/`.leaflet-bottom` (z-index 1000) — bump the context menu to `z-[1100]`. The new panels (Fixes 9/11) sit at `z-[500]`–`z-[600]` inside the same context, which is fine.
 3. Verify nothing else in the app relied on map internals leaking out (nothing should).
@@ -101,6 +105,7 @@ Line numbers are from the current commit and may drift as you edit — treat the
 **Problem.** The current picker (inline in the top-left card, `ProjectPhotoMap.tsx:912–957`) visually groups the "Unassign task" row above the tasks, shows no task colors even though tasks have a `color` field, and — when a stack is selected — silently targets only the first photo.
 
 **Change (the picker moves into the new right-side panel, Fix 11).**
+
 1. The panel's **Assignment** section always shows the current state first: task color dot (`task.color`, fallback `#64748b` — same fallback as `taskColor()` at line 71), `#seq`, title; or "Unassigned".
 2. An `Assign task` / `Reassign task` button expands the picker **inline in the panel**:
    - Header line naming the target: "Assign photo `<fileName>` to:" (truncated) — it is always explicit which photo is being assigned.
@@ -119,6 +124,7 @@ Line numbers are from the current commit and may drift as you edit — treat the
 **Problem.** Move is currently click-to-place (map `click` handler, lines 650–661) while the map stays pannable — so trying to drag a photo just drags the map.
 
 **Change.**
+
 1. When `movingPhoto` is set (toolbar Move toggle or context menu "Move location"), enter a real move mode:
    - `map.dragging.disable()` and `map.boxZoom.disable()` in an effect on `movingPhoto`; re-enable on exit **and on unmount**.
    - Exclude the moving photo from `clusterPhotos` and render it as its own marker with `draggable: true`, `autoPan: true`, and `zIndexOffset: 1000` so it floats above clusters while dragged.
@@ -136,16 +142,16 @@ Line numbers are from the current commit and may drift as you edit — treat the
 
 **Change.** Double the marker geometry in `src/index.css` (lines 302–411) and in `createPhotoIcon` (`ProjectPhotoMap.tsx:101–107`):
 
-| Token | Now | New |
-|---|---|---|
-| `.fp-photo-map-marker-preview` | 46×46px | 92×92px |
-| `.fp-photo-map-marker-stack` | 48×54px | 96×108px |
-| `::before` / `::after` cards | 42×42px | 84×84px |
-| `iconSize` | `[58, 66]` | `[116, 132]` |
-| `iconAnchor` | `[29, 58]` | `[58, 116]` |
-| count badge | 19px / 10px font | ~30px / 13px font |
-| task pin badge | 14px | ~22px |
-| `markerOverlapPx` (line 63) | 28 | 56 |
+| Token                          | Now              | New               |
+| ------------------------------ | ---------------- | ----------------- |
+| `.fp-photo-map-marker-preview` | 46×46px          | 92×92px           |
+| `.fp-photo-map-marker-stack`   | 48×54px          | 96×108px          |
+| `::before` / `::after` cards   | 42×42px          | 84×84px           |
+| `iconSize`                     | `[58, 66]`       | `[116, 132]`      |
+| `iconAnchor`                   | `[29, 58]`       | `[58, 116]`       |
+| count badge                    | 19px / 10px font | ~30px / 13px font |
+| task pin badge                 | 14px             | ~22px             |
+| `markerOverlapPx` (line 63)    | 28               | 56                |
 
 Keep the hover `scale(1.45)` (it is relative). Keep borders at 2px unless the visual check shows they look thin at 2× — bumping to 3px is allowed; record the choice in the checklist. Re-tune the absolute offsets of the count badge and task pin so they sit on the doubled card correctly.
 
@@ -158,6 +164,7 @@ Keep the hover `scale(1.45)` (it is relative). Keep borders at 2px unless the vi
 **Problem.** `.fp-photo-map-marker-stack::before` and `::after` (`index.css:318–342`) always paint two empty backing cards, so a single photo looks like a stack of blank boxes.
 
 **Change.**
+
 1. In `createPhotoIcon`, add a modifier class from `group.photos.length`: `fp-photo-map-marker-stack--single` (1), `--pair` (2), none (3+).
 2. CSS: `--single` hides both `::before` and `::after` (`content: none`); `--pair` hides only `::after`; 3+ unchanged. The count badge logic (only when >1) already exists and stays.
 
@@ -168,6 +175,7 @@ Keep the hover `scale(1.45)` (it is relative). Keep borders at 2px unless the vi
 ## 10. Fix 8 — "Restore" is vague: make it explicit and only reachable via right-click while moving
 
 **Change.**
+
 1. The new detail panel (Fix 11) has **no Restore button at all** (the old card's button, lines 896–908, disappears with the card).
 2. The right-click context menu shows **"Restore original GPS location"** **only while move mode is active** (`movingPhoto !== null`). Label it with the target coordinates when known, e.g. `Restore original GPS location (51.50740, -0.12776)`; keep it disabled with a tooltip when `originalLatitude === undefined`.
 3. While move mode is active the context menu contains **only**: `Restore original GPS location` and `Cancel move`. All other items are hidden. Outside move mode there is no restore item anywhere.
@@ -182,6 +190,7 @@ Keep the hover `scale(1.45)` (it is relative). Keep borders at 2px unless the vi
 **Problem.** The only photo listing is the "Unmapped photos" floating card at the bottom-left of the map (lines 796–826). The user wants a proper list on the side, toggled like the task list.
 
 **Change.**
+
 1. **Delete the bottom-left unmapped-photos `<aside>` entirely.**
 2. Add a toggle button to the map toolbar, next to Filter: lucide `Images` icon, `aria-pressed` reflecting state — mirroring the task-list toggle pattern in `Toolbar.tsx:458–466`.
 3. New left-docked panel **inside the map wrapper** (so it inherits the Fix-4 isolation): `absolute inset-y-0 left-0 z-[500]`, width ~`270px`, surface styling like the drawer (`fp-panel` / `bg-surface border-r border-line-strong shadow-e2`), animated with `usePresence` exactly like `RightDrawer.tsx`.
@@ -199,6 +208,7 @@ Keep the hover `scale(1.45)` (it is relative). Keep borders at 2px unless the vi
 ## 12. Fix 10 — Remove the weird label
 
 **Change.**
+
 1. Delete the toolbar status text `<p className="ml-2 text-xs text-t3">` (lines 763–767 — "N mapped photos" / "Click the map to place the selected photo."). Counts now live in the status bar (Fix 13).
 2. Replace its move-mode hint with a small floating pill shown only while `movingPhoto`: centered at the top of the map (`absolute top-3 left-1/2 -translate-x-1/2 z-[500]`), e.g. `Move photo — drag it to the new spot · right-click for options · Esc to cancel`.
 3. Keep the "Filtered" chip in the status bar (it is meaningful; it is **not** the label being removed).
@@ -208,6 +218,7 @@ Keep the hover `scale(1.45)` (it is relative). Keep borders at 2px unless the vi
 ## 13. Fix 11 + 12 — Right-side photo panel, lightbox, and stack drill-in
 
 **Change.**
+
 1. **Delete the top-left selected-photo card** (lines 828–959) including its inline task picker.
 2. New right-docked panel inside the map wrapper: `absolute inset-y-0 right-0 z-[500]`, width `var(--fp-drawer-width)` (reuse the existing token so it matches the plan view's drawer), `usePresence` animation. Suggested file: `src/components/projects/MapPhotoDetailPanel.tsx`. Open whenever `selectedPhotos.length > 0`.
 3. **Single photo** (`selectedPhotos.length === 1`):

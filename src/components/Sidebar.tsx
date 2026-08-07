@@ -24,6 +24,8 @@ export function Sidebar({
   const collapsed = useProject((s) => s.sidebarCollapsed);
   const toggleSidebar = useProject((s) => s.toggleSidebar);
   const setSidebarCollapsed = useProject((s) => s.setSidebarCollapsed);
+  const mobileOpen = useProject((s) => s.sidebarMobileOpen);
+  const setMobileOpen = useProject((s) => s.setSidebarMobileOpen);
   const dragStateRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
 
   const onHandlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -64,12 +66,21 @@ export function Sidebar({
     }
   };
 
+  // Phones: the rail becomes an off-canvas drawer, hidden until the hamburger
+  // button opens it. Desktop keeps the collapsed/expanded rail behavior.
+  const navTo = (navigate?: () => void) => () => {
+    navigate?.();
+    setMobileOpen(false);
+  };
+
   return (
     <aside
       className={cn(
-        'fp-sidebar absolute inset-y-0 left-0 z-50 flex flex-col transition-[width,box-shadow] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
-        collapsed ? 'w-14' : 'w-50',
-        !collapsed && 'shadow-e2',
+        'fp-sidebar absolute inset-y-0 left-0 z-50 flex flex-col transition-[width,box-shadow,transform] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+        collapsed ? 'md:w-14' : 'md:w-50',
+        'max-md:w-64 max-md:shadow-e3',
+        mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
+        !collapsed && 'md:shadow-e2',
       )}
       aria-label="Primary"
     >
@@ -78,15 +89,15 @@ export function Sidebar({
           icon={<Layers />}
           label="Plans"
           active={activeItem === 'plans'}
-          collapsed={collapsed}
-          onClick={onShowPlans}
+          collapsed={collapsed && !mobileOpen}
+          onClick={navTo(onShowPlans)}
         />
         <SidebarItem
           icon={<Map />}
           label="Map"
           active={activeItem === 'map'}
-          collapsed={collapsed}
-          onClick={onShowMap}
+          collapsed={collapsed && !mobileOpen}
+          onClick={navTo(onShowMap)}
         />
       </nav>
 
@@ -97,7 +108,7 @@ export function Sidebar({
         tabIndex={0}
         onPointerDown={onHandlePointerDown}
         onKeyDown={onHandleKeyDown}
-        className="fp-resize-handle group absolute inset-y-0 -right-1 z-10 flex w-2 cursor-col-resize items-center justify-center"
+        className="fp-resize-handle group absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize items-center justify-center md:flex"
       >
         <span className="pointer-events-none flex h-7 w-1.5 items-center justify-center rounded-full bg-line-strong opacity-0 transition-opacity duration-(--fp-dur-fast) group-hover:opacity-100 group-focus-visible:opacity-100">
           <ChevronsLeftRight className="size-3 text-t2" />

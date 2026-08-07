@@ -13,6 +13,7 @@ import {
   ListTodo,
   LogOut,
   Magnet,
+  Menu,
   MessageSquareText,
   Minus,
   MousePointer2,
@@ -201,6 +202,14 @@ export function Toolbar({
             )}
           </Dropdown>
 
+          <button
+            type="button"
+            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 md:hidden"
+            aria-label="Open navigation menu"
+            onClick={() => useProject.getState().toggleSidebarMobile()}
+          >
+            <Menu />
+          </button>
           <Button
             variant="text"
             size="sm"
@@ -465,7 +474,9 @@ export function Toolbar({
             >
               <ListTodo />
               <span className="hidden sm:inline">Tasks</span>
-              {taskCount > 0 && <span className="hidden font-mono text-[10px] sm:inline">{taskCount}</span>}
+              {taskCount > 0 && (
+                <span className="hidden font-mono text-[10px] sm:inline">{taskCount}</span>
+              )}
             </Button>
           </div>
         </div>

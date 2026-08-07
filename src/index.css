@@ -276,6 +276,22 @@ select {
     backdrop-filter: blur(6px);
     animation: fp-fade-in var(--fp-dur-fast) var(--fp-ease) both;
   }
+
+  /* The photo itself zooms in gently on top of the backdrop fade. */
+  .fp-lightbox-image {
+    animation: fp-lightbox-zoom-in var(--fp-dur-med) var(--fp-ease) both;
+  }
+
+  @keyframes fp-lightbox-zoom-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 }
 
 /* The button's hit-area is rectangular, but the visible pin is not. This must
@@ -302,6 +318,23 @@ select {
 .fp-photo-map-leaflet-icon {
   background: transparent;
   border: 0;
+}
+
+/* Scale the whole photo marker down — 25% smaller generally, even more on
+   phones. Scaling about the icon anchor keeps the marker pointing at its
+   exact map location. */
+.fp-photo-map-marker-shell {
+  position: relative;
+  width: 116px;
+  height: 132px;
+  transform-origin: 58px 116px; /* matches iconAnchor */
+  transform: scale(0.75);
+}
+
+@media (max-width: 767px) {
+  .fp-photo-map-marker-shell {
+    transform: scale(0.6);
+  }
 }
 
 .fp-photo-map-marker-stack {
@@ -436,6 +469,62 @@ select {
   transform: translate(16px, 12px) rotate(10deg);
 }
 
+/* A freshly placed photo's marker drops in — the map's echo of the plan
+   pins' fp-pin-drop. Plays once on the render right after placement. */
+.fp-photo-map-marker-stack--drop {
+  animation: fp-photo-map-marker-drop var(--fp-dur-med) var(--fp-ease) both;
+}
+
+@keyframes fp-photo-map-marker-drop {
+  0% {
+    opacity: 0;
+    transform: translate(-9px, -12px) scale(0.85);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(2px, -1px) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* The draggable moving marker is framed statically — accent border + soft
+   halo — so move mode reads as a selection state without continuous motion.
+   The locate action keeps a one-shot ring. Must follow the --single/--pair
+   rules so the ring re-enables ::after. */
+.fp-photo-map-marker-stack--moving .fp-photo-map-marker-preview {
+  border-color: var(--fp-accent);
+  box-shadow: 0 0 0 5px rgb(23 103 201 / 0.22);
+}
+
+.fp-photo-map-marker-stack--ping::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 92px;
+  height: 92px;
+  border: 3px solid var(--fp-accent);
+  border-radius: 18px;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  animation: fp-marker-ping-once 1.2s var(--fp-ease) both;
+}
+
+@keyframes fp-marker-ping-once {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
 .fp-map-context-item {
   display: flex;
   width: 100%;
@@ -512,6 +601,23 @@ select {
 
 .fp-map-panel-open .leaflet-right {
   right: min(var(--fp-drawer-width), 92%);
+}
+
+/* Phones: the photos drawer overlays the map, so right-side map controls
+   (zoom/fit/layer toggle) would overlap it. Hide them while it's open. */
+@media (max-width: 767px) {
+  .fp-map-panel-open .leaflet-right {
+    display: none;
+  }
+}
+
+/* Phones: keep a strip of map visible next to a drawer so there is always
+   something to tap to dismiss it. Unlayered so it beats the
+   max-w-[var(--fp-drawer-width)] utility. */
+@media (max-width: 767px) {
+  .fp-panel {
+    max-width: 86vw;
+  }
 }
 
 /* Touch: bigger hit targets for the zoom/fit bar and the resize handles. */

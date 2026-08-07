@@ -43,7 +43,7 @@ export function Lightbox() {
         <img
           src={url}
           alt=""
-          className="max-h-full max-w-full rounded-lg object-contain shadow-e3"
+          className="fp-lightbox-image max-h-full max-w-full rounded-lg object-contain shadow-e3"
           onClick={(e) => e.stopPropagation()}
         />
       )}
