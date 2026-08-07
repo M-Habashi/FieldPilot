@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import {
   ArrowUpRight,
-  ChevronDown,
   Circle,
   Cloud,
   Download,
@@ -13,7 +12,6 @@ import {
   ListTodo,
   LogOut,
   Magnet,
-  Menu,
   MessageSquareText,
   Minus,
   MousePointer2,
@@ -29,6 +27,14 @@ import {
 } from 'lucide-react';
 import { useProject } from '../store/project';
 import { exportProject } from '../lib/transfer';
+import {
+  ActionBar,
+  ActionBarBadge,
+  ActionBarButton,
+  ActionBarDot,
+  ActionBarGroup,
+  ActionBarSeparator,
+} from './ui/action-bar';
 import { Button } from './ui/button';
 import { Dropdown, DropdownItem, DropdownLabel } from './ui/dropdown-menu';
 import { Brand } from './Brand';
@@ -114,36 +120,26 @@ export function Toolbar({
   const undo = useProject((s) => s.undo);
   const redo = useProject((s) => s.redo);
   const taskListActive = taskListOpen && selectedTaskId === null;
+  const measuring =
+    markupTool === 'calibrate' ||
+    markupTool === 'dimension' ||
+    markupTool === 'radius' ||
+    markupTool === 'diameter' ||
+    markupTool === 'arc';
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <>
-      {/* One compact workspace bar. Its first control is the mobile navigation
-          button; desktop content starts directly beside the reserved sidebar rail. */}
-      <header
-        className="fp-actionbar z-40 flex shrink-0 items-center text-xs"
-        aria-label="FieldPilot tools"
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-0 px-1.5 sm:gap-1 sm:px-2.5">
-          <button
-            type="button"
-            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 md:hidden"
-            aria-label="Open navigation menu"
-            onClick={() => useProject.getState().toggleSidebarMobile()}
-          >
-            <Menu />
-          </button>
+      {/* One compact workspace bar, shared with every other tab via ActionBar.
+          Its first control is the mobile navigation button; desktop content
+          starts directly beside the reserved sidebar rail. */}
+      <ActionBar label="Plan tools" onOpenNav={() => useProject.getState().toggleSidebarMobile()}>
+        <ActionBarGroup>
           <Dropdown
             align="left"
-            trigger={
-              <Button variant="text" size="sm" aria-label="File">
-                <FolderOpen className="sm:hidden" />
-                <span className="hidden sm:inline">File</span>
-                <ChevronDown className="hidden sm:block" />
-              </Button>
-            }
+            trigger={<ActionBarButton icon={<FolderOpen />} label="File" menu />}
           >
             {(close) => (
               <>
@@ -203,57 +199,47 @@ export function Toolbar({
             )}
           </Dropdown>
 
-          <Button
-            variant="text"
-            size="sm"
-            aria-label="Undo"
+          <ActionBarSeparator />
+
+          <ActionBarButton
+            icon={<Undo2 />}
+            label="Undo"
+            labelFrom="lg"
+            title="Undo (Ctrl/Cmd+Z)"
             disabled={!hasDoc || !canUndo}
             onClick={undo}
-            title="Undo (Ctrl/Cmd+Z)"
-          >
-            <Undo2 />
-            <span className="hidden lg:inline">Undo</span>
-          </Button>
-          <Button
-            variant="text"
-            size="sm"
-            aria-label="Redo"
+          />
+          <ActionBarButton
+            icon={<Redo2 />}
+            label="Redo"
+            labelFrom="lg"
+            title="Redo (Ctrl/Cmd+Y)"
             disabled={!hasDoc || !canRedo}
             onClick={redo}
-            title="Redo (Ctrl/Cmd+Y)"
-          >
-            <Redo2 />
-            <span className="hidden lg:inline">Redo</span>
-          </Button>
+          />
 
-          <Button
-            variant="text"
-            size="sm"
-            data-active={addPinMode}
-            className={addPinMode ? 'text-accent hover:text-accent-hover' : undefined}
+          <ActionBarSeparator />
+
+          <ActionBarButton
+            icon={<Pin />}
+            label="Add pin"
+            title="Add pin (P)"
+            active={addPinMode}
             aria-pressed={addPinMode}
             disabled={!hasDoc}
             onClick={() => setAddPinMode(!addPinMode)}
-            title="Add pin (P)"
-          >
-            <Pin />
-            <span className="hidden sm:inline">Add pin</span>
-          </Button>
+          />
           <Dropdown
             align="left"
             trigger={
-              <Button
-                variant="text"
-                size="sm"
-                data-active={Boolean(markupTool)}
-                className={markupTool ? 'text-accent hover:text-accent-hover' : undefined}
-                disabled={!hasDoc}
+              <ActionBarButton
+                icon={<Shapes />}
+                label="Markup"
                 aria-label="Markup tools"
-              >
-                <Shapes />
-                <span className="hidden sm:inline">Markup</span>
-                <ChevronDown className="hidden sm:block" />
-              </Button>
+                active={Boolean(markupTool)}
+                disabled={!hasDoc}
+                menu
+              />
             }
           >
             {(close) => {
@@ -337,38 +323,21 @@ export function Toolbar({
           <Dropdown
             align="left"
             trigger={
-              <Button
-                variant="text"
-                size="sm"
-                data-active={
-                  markupTool === 'calibrate' ||
-                  markupTool === 'dimension' ||
-                  markupTool === 'radius' ||
-                  markupTool === 'diameter' ||
-                  markupTool === 'arc'
-                }
-                className={
-                  markupTool === 'calibrate' ||
-                  markupTool === 'dimension' ||
-                  markupTool === 'radius' ||
-                  markupTool === 'diameter' ||
-                  markupTool === 'arc'
-                    ? 'text-accent hover:text-accent-hover'
-                    : undefined
-                }
-                disabled={!hasDoc}
+              <ActionBarButton
+                icon={<Ruler />}
+                label="Measure"
                 aria-label="Measurement tools"
+                active={measuring}
+                disabled={!hasDoc}
+                menu
                 title={
                   calibrated
                     ? `Sheet ${currentPage} is calibrated`
                     : `Sheet ${currentPage} is not calibrated`
                 }
               >
-                <Ruler />
-                <span className="hidden sm:inline">Measure</span>
-                <span className={`size-1.5 rounded-full ${calibrated ? 'bg-ok' : 'bg-warn'}`} />
-                <ChevronDown className="hidden sm:block" />
-              </Button>
+                <ActionBarDot tone={calibrated ? 'ok' : 'warn'} />
+              </ActionBarButton>
             }
           >
             {(close) => (
@@ -436,44 +405,35 @@ export function Toolbar({
               </>
             )}
           </Dropdown>
-          <Button
-            variant="text"
-            size="sm"
-            data-active={snappingEnabled}
-            className={snappingEnabled ? 'text-accent hover:text-accent-hover' : undefined}
+          <ActionBarButton
+            icon={<Magnet />}
+            label="Snap"
             aria-label={snappingEnabled ? 'Turn snapping off' : 'Turn snapping on'}
             aria-pressed={snappingEnabled}
+            active={snappingEnabled}
             disabled={!hasDoc}
             onClick={() => setSnappingEnabled(!snappingEnabled)}
             title={`Snap to plan points: ${snappingEnabled ? 'On' : 'Off'}`}
           >
-            <Magnet />
-            <span className="hidden sm:inline">Snap</span>
-            <span className="hidden font-mono text-[10px] sm:inline">
-              {snappingEnabled ? 'On' : 'Off'}
-            </span>
-          </Button>
-          <div className="ml-auto flex items-center gap-1">
-            <Button
-              variant="text"
-              size="sm"
-              data-active={taskListOpen && selectedTaskId === null}
-              className={taskListActive ? 'text-accent hover:text-accent-hover' : undefined}
-              aria-pressed={taskListActive}
-              aria-label={taskListActive ? 'Close tasks' : 'Show tasks'}
-              disabled={!hasDoc}
-              onClick={() => (taskListActive ? closeTaskList() : showTaskList())}
-              title={taskListActive ? 'Close tasks' : 'Show tasks'}
-            >
-              <ListTodo />
-              <span className="hidden sm:inline">Tasks</span>
-              {taskCount > 0 && (
-                <span className="hidden font-mono text-[10px] sm:inline">{taskCount}</span>
-              )}
-            </Button>
-          </div>
-        </div>
-      </header>
+            <ActionBarBadge>{snappingEnabled ? 'On' : 'Off'}</ActionBarBadge>
+          </ActionBarButton>
+        </ActionBarGroup>
+
+        <ActionBarGroup align="end">
+          <ActionBarButton
+            icon={<ListTodo />}
+            label="Tasks"
+            aria-label={taskListActive ? 'Close tasks' : 'Show tasks'}
+            aria-pressed={taskListActive}
+            active={taskListActive}
+            disabled={!hasDoc}
+            onClick={() => (taskListActive ? closeTaskList() : showTaskList())}
+            title={taskListActive ? 'Close tasks' : 'Show tasks'}
+          >
+            {taskCount > 0 && <ActionBarBadge>{taskCount}</ActionBarBadge>}
+          </ActionBarButton>
+        </ActionBarGroup>
+      </ActionBar>
 
       <input
         ref={pdfInputRef}

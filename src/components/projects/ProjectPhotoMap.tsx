@@ -8,7 +8,6 @@ import {
   Link2,
   Link2Off,
   MapPinOff,
-  Menu,
   Move,
   Redo2,
   RotateCcw,
@@ -34,7 +33,7 @@ import {
 import { userFacingError } from '../../lib/errors';
 import { cn } from '../../lib/utils';
 import { useProject } from '../../store/project';
-import { Button } from '../ui/button';
+import { ActionBar, ActionBarButton, ActionBarGroup, ActionBarSeparator } from '../ui/action-bar';
 import { ConfirmDialog } from '../ui/dialog';
 import { Dropdown, DropdownItem, DropdownLabel } from '../ui/dropdown-menu';
 import { useNotify } from '../ui/use-notify';
@@ -1061,117 +1060,101 @@ export function ProjectPhotoMap({
       className="relative z-0 flex min-h-0 flex-1 flex-col bg-app"
       aria-label="Project photo map"
     >
-      <header className="fp-map-toolbar flex h-12 shrink-0 items-center gap-1 border-b border-line-strong bg-surface px-3">
-        <button
-          type="button"
-          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-t2 transition-colors duration-(--fp-dur-fast) hover:bg-surface2 hover:text-t1 md:hidden"
-          aria-label="Open navigation menu"
-          onClick={() => useProject.getState().toggleSidebarMobile()}
-        >
-          <Menu />
-        </button>
-        <Button
-          variant="text"
-          size="sm"
-          aria-label="Undo"
-          title="Undo (Ctrl/Cmd+Z)"
-          disabled={!canEdit || undoCount === 0}
-          onClick={() => void handleUndo()}
-        >
-          <Undo2 />
-          <span className="hidden lg:inline">Undo</span>
-        </Button>
-        <Button
-          variant="text"
-          size="sm"
-          aria-label="Redo"
-          title="Redo (Ctrl/Cmd+Y)"
-          disabled={!canEdit || redoCount === 0}
-          onClick={() => void handleRedo()}
-        >
-          <Redo2 />
-          <span className="hidden lg:inline">Redo</span>
-        </Button>
-        <span className="mx-1 h-5 w-px bg-line" aria-hidden />
-        <Button
-          variant="toggle"
-          size="iconSm"
-          aria-label="Add photos"
-          title="Add photos"
-          disabled={!canEdit || uploading}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Camera />
-        </Button>
-        <Dropdown
-          align="left"
-          trigger={
-            <Button
-              variant="toggle"
-              size="iconSm"
-              aria-label="Filter photos"
-              title="Filter photos"
-              data-on={filter !== 'all'}
-            >
-              <Filter />
-            </Button>
-          }
-        >
-          {(close) => (
-            <>
-              <DropdownLabel>Show photos</DropdownLabel>
-              {(['all', 'assigned', 'unassigned'] as const).map((option) => (
-                <DropdownItem
-                  key={option}
-                  onClick={() => {
-                    setFilter(option);
-                    close();
-                  }}
-                  className={filter === option ? 'bg-accent-soft text-accent' : undefined}
-                >
-                  {option === 'all'
-                    ? 'All photos'
-                    : option === 'assigned'
-                      ? 'Assigned'
-                      : 'Unassigned'}
-                </DropdownItem>
-              ))}
-              {filter !== 'all' && (
-                <DropdownItem
-                  className="mt-1 border-t border-line pt-2 text-danger hover:text-danger"
-                  onClick={() => {
-                    setFilter('all');
-                    close();
-                  }}
-                >
-                  <X /> Clear filter
-                </DropdownItem>
-              )}
-            </>
-          )}
-        </Dropdown>
-        <Button
-          variant="toggle"
-          size="iconSm"
-          className="ml-auto"
-          aria-label={panelVisible ? 'Close photos panel' : 'Show photos list'}
-          aria-pressed={panelVisible}
-          title="Photos"
-          data-on={panelVisible}
-          onClick={() => {
-            if (panelVisible) {
-              setSelectedPhotos([]);
-              setPhotosPanelOpen(false);
-              setTaskPickerOpen(false);
-              setDrilledId(null);
-            } else {
-              setPhotosPanelOpen(true);
+      <ActionBar label="Map tools" onOpenNav={() => useProject.getState().toggleSidebarMobile()}>
+        <ActionBarGroup>
+          <ActionBarButton
+            icon={<Undo2 />}
+            label="Undo"
+            labelFrom="lg"
+            title="Undo (Ctrl/Cmd+Z)"
+            disabled={!canEdit || undoCount === 0}
+            onClick={() => void handleUndo()}
+          />
+          <ActionBarButton
+            icon={<Redo2 />}
+            label="Redo"
+            labelFrom="lg"
+            title="Redo (Ctrl/Cmd+Y)"
+            disabled={!canEdit || redoCount === 0}
+            onClick={() => void handleRedo()}
+          />
+
+          <ActionBarSeparator />
+
+          <ActionBarButton
+            icon={<Camera />}
+            label="Add photos"
+            disabled={!canEdit || uploading}
+            onClick={() => fileInputRef.current?.click()}
+          />
+          <Dropdown
+            align="left"
+            trigger={
+              <ActionBarButton
+                icon={<Filter />}
+                label="Filter"
+                aria-label="Filter photos"
+                active={filter !== 'all'}
+                menu
+              />
             }
-          }}
-        >
-          <Images />
-        </Button>
-      </header>
+          >
+            {(close) => (
+              <>
+                <DropdownLabel>Show photos</DropdownLabel>
+                {(['all', 'assigned', 'unassigned'] as const).map((option) => (
+                  <DropdownItem
+                    key={option}
+                    onClick={() => {
+                      setFilter(option);
+                      close();
+                    }}
+                    className={filter === option ? 'bg-accent-soft text-accent' : undefined}
+                  >
+                    {option === 'all'
+                      ? 'All photos'
+                      : option === 'assigned'
+                        ? 'Assigned'
+                        : 'Unassigned'}
+                  </DropdownItem>
+                ))}
+                {filter !== 'all' && (
+                  <DropdownItem
+                    className="mt-1 border-t border-line pt-2 text-danger hover:text-danger"
+                    onClick={() => {
+                      setFilter('all');
+                      close();
+                    }}
+                  >
+                    <X /> Clear filter
+                  </DropdownItem>
+                )}
+              </>
+            )}
+          </Dropdown>
+        </ActionBarGroup>
+
+        <ActionBarGroup align="end">
+          <ActionBarButton
+            icon={<Images />}
+            label="Photos"
+            aria-label={panelVisible ? 'Close photos panel' : 'Show photos list'}
+            aria-pressed={panelVisible}
+            active={panelVisible}
+            title="Photos"
+            onClick={() => {
+              if (panelVisible) {
+                setSelectedPhotos([]);
+                setPhotosPanelOpen(false);
+                setTaskPickerOpen(false);
+                setDrilledId(null);
+              } else {
+                setPhotosPanelOpen(true);
+              }
+            }}
+          />
+        </ActionBarGroup>
+      </ActionBar>
 
       <div
         className={cn(
