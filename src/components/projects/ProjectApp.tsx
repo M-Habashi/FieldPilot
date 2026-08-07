@@ -35,6 +35,8 @@ export function ProjectApp() {
       <ProjectPlanWorkspace
         key={activeSheetId}
         project={activeRow.project}
+        role={activeRow.membership.role}
+        userId={user?._id ?? 'pending-user'}
         sheetId={activeSheetId}
         onBackToProject={() => setActiveSheetId(null)}
       />

@@ -129,15 +129,16 @@ export function Toolbar({
       >
         <div
           className={cn(
-            'flex min-w-0 flex-1 items-center gap-1 pr-2.5 transition-[padding-left] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
-            sidebarCollapsed ? 'pl-9' : 'pl-[180px]',
+            'flex min-w-0 flex-1 items-center gap-0.5 pr-2 transition-[padding-left] duration-(--fp-motion-duration) ease-(--fp-motion-ease) sm:gap-1 sm:pr-2.5',
+            sidebarCollapsed ? 'pl-7' : 'pl-[180px]',
           )}
         >
           <Dropdown
             align="left"
             trigger={
-              <Button variant="text" size="sm">
-                <span>File</span>
+              <Button variant="text" size="sm" aria-label="File">
+                <FolderOpen className="sm:hidden" />
+                <span className="hidden sm:inline">File</span>
                 <ChevronDown className="hidden sm:block" />
               </Button>
             }
@@ -199,6 +200,29 @@ export function Toolbar({
               </>
             )}
           </Dropdown>
+
+          <Button
+            variant="text"
+            size="sm"
+            aria-label="Undo"
+            disabled={!hasDoc || !canUndo}
+            onClick={undo}
+            title="Undo (Ctrl/Cmd+Z)"
+          >
+            <Undo2 />
+            <span className="hidden lg:inline">Undo</span>
+          </Button>
+          <Button
+            variant="text"
+            size="sm"
+            aria-label="Redo"
+            disabled={!hasDoc || !canRedo}
+            onClick={redo}
+            title="Redo (Ctrl/Cmd+Y)"
+          >
+            <Redo2 />
+            <span className="hidden lg:inline">Redo</span>
+          </Button>
 
           <Button
             variant="text"
@@ -431,30 +455,6 @@ export function Toolbar({
             <Button
               variant="text"
               size="sm"
-              className="hidden sm:inline-flex"
-              aria-label="Undo"
-              disabled={!hasDoc || !canUndo}
-              onClick={undo}
-              title="Undo (Ctrl/Cmd+Z)"
-            >
-              <Undo2 />
-              <span className="hidden lg:inline">Undo</span>
-            </Button>
-            <Button
-              variant="text"
-              size="sm"
-              className="hidden sm:inline-flex"
-              aria-label="Redo"
-              disabled={!hasDoc || !canRedo}
-              onClick={redo}
-              title="Redo (Ctrl/Cmd+Y)"
-            >
-              <Redo2 />
-              <span className="hidden lg:inline">Redo</span>
-            </Button>
-            <Button
-              variant="text"
-              size="sm"
               data-active={taskListOpen && selectedTaskId === null}
               className={taskListActive ? 'text-accent hover:text-accent-hover' : undefined}
               aria-pressed={taskListActive}
@@ -465,7 +465,7 @@ export function Toolbar({
             >
               <ListTodo />
               <span className="hidden sm:inline">Tasks</span>
-              {taskCount > 0 && <span className="font-mono text-[10px]">{taskCount}</span>}
+              {taskCount > 0 && <span className="hidden font-mono text-[10px] sm:inline">{taskCount}</span>}
             </Button>
           </div>
         </div>

@@ -1,4 +1,5 @@
-import { ChevronRight, Layers } from 'lucide-react';
+import { useRef } from 'react';
+import { ChevronsLeftRight, Layers, Map } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useProject } from '../store/project';
 
@@ -6,12 +7,62 @@ import { useProject } from '../store/project';
  * Left rail. Two genuinely distinct states (no clipped wide sidebar):
  *  - collapsed → a narrow 56px icon-only rail (labels hidden, icons centered)
  *  - expanded  → a 200px rail with icon + label
- * A compact chevron sits just outside the rail's top edge and follows that
- * edge as the sidebar expands.
+ * The right border is the control: drag it (right of the 128px midpoint
+ * expands, left collapses), click it to toggle, or focus it and use the
+ * arrow keys. The handle floats just outside the rail's edge so it never
+ * overlaps the app content beside it.
  */
-export function Sidebar({ onShowPlans }: { onShowPlans?: () => void } = {}) {
+export function Sidebar({
+  onShowPlans,
+  onShowMap,
+  activeItem = 'plans',
+}: {
+  onShowPlans?: () => void;
+  onShowMap?: () => void;
+  activeItem?: 'plans' | 'map';
+} = {}) {
   const collapsed = useProject((s) => s.sidebarCollapsed);
   const toggleSidebar = useProject((s) => s.toggleSidebar);
+  const setSidebarCollapsed = useProject((s) => s.setSidebarCollapsed);
+  const dragStateRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
+
+  const onHandlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget;
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is a convenience; window listeners below still work.
+    }
+    dragStateRef.current = { startX: event.clientX, startY: event.clientY, moved: false };
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const state = dragStateRef.current;
+      if (!state) return;
+      const dx = moveEvent.clientX - state.startX;
+      const dy = moveEvent.clientY - state.startY;
+      if (Math.hypot(dx, dy) >= 4) state.moved = true;
+      setSidebarCollapsed(moveEvent.clientX <= 128);
+    };
+    const onPointerUp = () => {
+      const state = dragStateRef.current;
+      dragStateRef.current = null;
+      if (state && !state.moved) toggleSidebar();
+      handle.blur();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  const onHandleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      setSidebarCollapsed(true);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      setSidebarCollapsed(false);
+    }
+  };
 
   return (
     <aside
@@ -26,25 +77,32 @@ export function Sidebar({ onShowPlans }: { onShowPlans?: () => void } = {}) {
         <SidebarItem
           icon={<Layers />}
           label="Plans"
-          active
+          active={activeItem === 'plans'}
           collapsed={collapsed}
           onClick={onShowPlans}
         />
+        <SidebarItem
+          icon={<Map />}
+          label="Map"
+          active={activeItem === 'map'}
+          collapsed={collapsed}
+          onClick={onShowMap}
+        />
       </nav>
 
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="absolute top-1 left-full flex size-8 items-center justify-center rounded-md text-t3 transition-[color,background-color,transform] duration-(--fp-motion-duration) ease-(--fp-motion-ease) hover:bg-surface2 hover:text-t1 cursor-pointer"
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        tabIndex={0}
+        onPointerDown={onHandlePointerDown}
+        onKeyDown={onHandleKeyDown}
+        className="fp-resize-handle group absolute inset-y-0 -right-1 z-10 flex w-2 cursor-col-resize items-center justify-center"
       >
-        <ChevronRight
-          className={cn(
-            'size-4 shrink-0 transition-transform duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
-            !collapsed && 'rotate-180',
-          )}
-        />
-      </button>
+        <span className="pointer-events-none flex h-7 w-1.5 items-center justify-center rounded-full bg-line-strong opacity-0 transition-opacity duration-(--fp-dur-fast) group-hover:opacity-100 group-focus-visible:opacity-100">
+          <ChevronsLeftRight className="size-3 text-t2" />
+        </span>
+      </div>
     </aside>
   );
 }
@@ -79,7 +137,9 @@ function SidebarItem({
     <button
       type="button"
       className={className}
+      aria-label={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
+      title={collapsed ? label : undefined}
       onClick={onClick}
     >
       {content}

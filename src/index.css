@@ -299,6 +299,253 @@ select {
     grabbing;
 }
 
+.fp-photo-map-leaflet-icon {
+  background: transparent;
+  border: 0;
+}
+
+.fp-photo-map-marker-stack {
+  position: relative;
+  width: 96px;
+  height: 108px;
+  cursor: pointer;
+  filter: drop-shadow(0 12px 20px rgb(15 23 42 / 0.24));
+  transition:
+    transform var(--fp-dur-fast) var(--fp-ease),
+    filter var(--fp-dur-fast) var(--fp-ease);
+}
+
+.fp-photo-map-marker-stack::before,
+.fp-photo-map-marker-stack::after {
+  position: absolute;
+  width: 84px;
+  height: 84px;
+  content: '';
+  border: 3px solid var(--fp-photo-task-color, var(--fp-border-strong));
+  border-radius: 18px;
+  background: var(--fp-bg-surface);
+  transition: transform var(--fp-dur-fast) var(--fp-ease);
+}
+
+/* 1 photo = one clean card; 2 photos = one backing card; 3+ keep the fan. */
+.fp-photo-map-marker-stack--single::before,
+.fp-photo-map-marker-stack--single::after {
+  content: none;
+}
+
+.fp-photo-map-marker-stack--pair::after {
+  content: none;
+}
+
+.fp-photo-map-marker-stack::before {
+  top: 8px;
+  left: 4px;
+  transform: rotate(-5deg);
+  opacity: 0.78;
+}
+
+.fp-photo-map-marker-stack::after {
+  top: 4px;
+  left: 10px;
+  transform: rotate(4deg);
+  opacity: 0.88;
+}
+
+.fp-photo-map-marker-preview {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 2px;
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  border: 3px solid var(--fp-photo-task-color, var(--fp-text-3));
+  border-radius: 18px;
+  background-color: var(--fp-bg-surface-2);
+  background-position: center;
+  background-size: cover;
+  transition:
+    width var(--fp-dur-fast) var(--fp-ease),
+    height var(--fp-dur-fast) var(--fp-ease),
+    transform var(--fp-dur-fast) var(--fp-ease);
+}
+
+.fp-photo-map-marker-preview--empty {
+  background-image: linear-gradient(135deg, var(--fp-bg-surface-2), var(--fp-bg-surface));
+}
+
+.fp-photo-map-marker-count {
+  position: absolute;
+  z-index: 4;
+  right: -4px;
+  bottom: 10px;
+  display: grid;
+  min-width: 30px;
+  height: 30px;
+  padding-inline: 8px;
+  place-items: center;
+  border: 3px solid var(--fp-bg-surface);
+  border-radius: 999px;
+  background: var(--fp-text-1);
+  color: var(--fp-bg-surface);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fp-photo-map-marker-task {
+  position: absolute;
+  z-index: 4;
+  top: 72px;
+  left: 38px;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--fp-bg-surface);
+  border-radius: 999px 999px 999px 0;
+  background: var(--fp-photo-task-color, var(--fp-text-3));
+  transform: rotate(-45deg);
+}
+
+.fp-photo-map-marker-stack:hover {
+  z-index: 20;
+  transform: translate(-18px, -20px) scale(1.45);
+  filter: drop-shadow(0 28px 30px rgb(15 23 42 / 0.28));
+}
+
+.fp-photo-map-marker-stack:hover::before {
+  transform: translate(-16px, 12px) rotate(-10deg);
+}
+
+.fp-photo-map-marker-stack:hover::after {
+  transform: translate(16px, 12px) rotate(10deg);
+}
+
+/* Hovering a photo in the list highlights its marker exactly like a map
+   hover: lifted, enlarged, fanning out the stack. */
+.fp-photo-map-marker-stack--highlight {
+  z-index: 20;
+  transform: translate(-18px, -20px) scale(1.45);
+  filter: drop-shadow(0 28px 30px rgb(15 23 42 / 0.28));
+}
+
+.fp-photo-map-marker-stack--highlight::before {
+  transform: translate(-16px, 12px) rotate(-10deg);
+}
+
+.fp-photo-map-marker-stack--highlight::after {
+  transform: translate(16px, 12px) rotate(10deg);
+}
+
+.fp-map-context-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--fp-radius-xs);
+  color: var(--fp-text-2);
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--fp-dur-fast) var(--fp-ease),
+    background var(--fp-dur-fast) var(--fp-ease);
+}
+
+.fp-map-context-item:hover {
+  background: var(--fp-bg-surface-2);
+  color: var(--fp-text-1);
+}
+
+.fp-map-context-item > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Fit-photos segment appended to the Leaflet zoom control bar. Everything
+   else (size, borders, hover) comes from the .leaflet-bar rules. */
+.leaflet-bar a.fp-leaflet-fit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leaflet-bar a.fp-leaflet-fit svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Street/satellite layer toggle, rendered as a Leaflet control at the
+   map's top-right corner. */
+.fp-leaflet-layer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #333;
+  font-family: var(--fp-font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid rgb(0 0 0 / 0.2);
+  border-radius: 4px;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+}
+
+.fp-leaflet-layer-toggle:hover {
+  background: #f4f4f4;
+}
+
+.fp-leaflet-layer-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* When the photos drawer is open, slide the right-side map controls
+   (zoom + layer toggle) left of it so they stay usable. Percentage-based
+   so a full-width drawer on phones also clears them. */
+.leaflet-right {
+  transition: right var(--fp-motion-duration) var(--fp-motion-ease);
+}
+
+.fp-map-panel-open .leaflet-right {
+  right: min(var(--fp-drawer-width), 92%);
+}
+
+/* Touch: bigger hit targets for the zoom/fit bar and the resize handles. */
+@media (pointer: coarse) {
+  .leaflet-bar a {
+    width: 34px;
+    height: 34px;
+    line-height: 34px;
+  }
+
+  .leaflet-bar a.fp-leaflet-fit svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .fp-resize-handle {
+    width: 24px;
+  }
+}
+
+/* The stack's backing cards show the second and third photos in the
+   cluster instead of blank cards. */
+.fp-photo-map-marker-stack::before {
+  background-image: var(--fp-stack-img-1);
+  background-position: center;
+  background-size: cover;
+}
+
+.fp-photo-map-marker-stack::after {
+  background-image: var(--fp-stack-img-2);
+  background-position: center;
+  background-size: cover;
+}
+
 .fp-cursor-pin {
   cursor:
     url('/cursors/pin-dark.svg') 16 16,

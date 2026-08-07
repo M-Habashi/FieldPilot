@@ -234,6 +234,7 @@ interface ProjectState {
   showTaskList(): void;
   closeTaskList(): void;
   toggleSidebar(): void;
+  setSidebarCollapsed(collapsed: boolean): void;
   setLightbox(photoId: string | null): void;
   replaceProject(tasks: Record<string, Task>, nextSeq: number): void;
   replaceMarkups(
@@ -791,6 +792,10 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   toggleSidebar() {
     set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed }));
+  },
+
+  setSidebarCollapsed(collapsed) {
+    set({ sidebarCollapsed: collapsed });
   },
 
   setLightbox(photoId) {

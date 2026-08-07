@@ -107,6 +107,10 @@ export default defineSchema({
     priority: taskPriority,
     category: v.string(),
     color: v.optional(v.string()),
+    // Retained for older task records already stored in the shared development deployment.
+    quantityUnit: v.optional(v.string()),
+    currencyCode: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
     assigneeText: v.optional(v.string()),
     assigneeUserId: v.optional(v.id('users')),
     dueDate: v.optional(v.string()),
@@ -132,7 +136,7 @@ export default defineSchema({
 
   attachments: defineTable({
     projectId: v.id('projects'),
-    taskId: v.id('tasks'),
+    taskId: v.optional(v.id('tasks')),
     kind: v.union(v.literal('photo'), v.literal('file')),
     storageRef: v.id('_storage'),
     fileName: v.string(),
@@ -140,6 +144,15 @@ export default defineSchema({
     size: v.number(),
     uploadedBy: v.id('users'),
     createdAt: v.number(),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    originalLatitude: v.optional(v.number()),
+    originalLongitude: v.optional(v.number()),
+    locationSource: v.optional(v.union(v.literal('exif'), v.literal('manual'))),
+    locationUpdatedAt: v.optional(v.number()),
+    photoUpdatedAt: v.optional(v.number()),
+    photoMapVersion: v.optional(v.literal(1)),
+    deletedAt: v.optional(v.number()),
   })
     .index('by_task', ['taskId'])
     .index('by_project_createdAt', ['projectId', 'createdAt'])
