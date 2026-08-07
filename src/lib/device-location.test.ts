@@ -99,4 +99,26 @@ describe('describeSuggestionOutcome', () => {
       'suggested (accuracy 12 m)',
     );
   });
+
+  it('skips the freshness checks for a camera capture with no EXIF timestamp', () => {
+    expect(
+      describeSuggestionOutcome({
+        takenAt: null,
+        now,
+        device: at(51, 0, 12),
+        fromCamera: true,
+      }),
+    ).toBe('suggested (accuracy 12 m)');
+  });
+
+  it('still applies the accuracy ceiling to a camera capture', () => {
+    expect(
+      describeSuggestionOutcome({
+        takenAt: null,
+        now,
+        device: at(51, 0, 900),
+        fromCamera: true,
+      }),
+    ).toBe(`accuracy 900 m > ${DEVICE_LOCATION_MAX_ACCURACY_M} m`);
+  });
 });

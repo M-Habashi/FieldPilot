@@ -24,7 +24,12 @@ export const DEVICE_LOCATION_MAX_ACCURACY_M = 100;
 
 const GEOLOCATION_TIMEOUT_MS = 10_000;
 
-/** A photo with no capture time is treated as stale — we cannot prove it is not. */
+/**
+ * A photo with no capture time is treated as stale — we cannot prove it is not.
+ * Callers skip this check entirely for a photo the browser's camera just
+ * produced: that one is fresh by construction, which matters on Android where
+ * camera output does not reliably carry DateTimeOriginal.
+ */
 export function isPhotoFreshEnough(takenAt: number | null, now: number): boolean {
   if (takenAt === null) return false;
   const age = now - takenAt;
@@ -86,11 +91,14 @@ export function describeSuggestionOutcome(input: {
   takenAt: number | null;
   now: number;
   device: DeviceLocationResult | null;
+  fromCamera?: boolean;
 }): string {
-  if (input.takenAt === null) return 'no capture time in EXIF';
-  if (!isPhotoFreshEnough(input.takenAt, input.now)) {
-    const minutes = Math.round((input.now - input.takenAt) / 60_000);
-    return `photo ${minutes} min old`;
+  if (!input.fromCamera) {
+    if (input.takenAt === null) return 'no capture time in EXIF';
+    if (!isPhotoFreshEnough(input.takenAt, input.now)) {
+      const minutes = Math.round((input.now - input.takenAt) / 60_000);
+      return `photo ${minutes} min old`;
+    }
   }
   if (input.device === null) return 'device location not attempted';
   if (input.device.status === 'unsupported') return 'geolocation unavailable — needs HTTPS';

@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   Camera,
   Filter,
+  ImagePlus,
   Images,
   Link2,
   Link2Off,
@@ -241,6 +242,7 @@ export function ProjectPhotoMap({
   const hasFittedRef = useRef(false);
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const suggestionPannedRef = useRef<string | null>(null);
   const { notify } = useNotify();
@@ -279,6 +281,14 @@ export function ProjectPhotoMap({
   const [justPlacedId, setJustPlacedId] = useState<string | null>(null);
   const [pingPhotoId, setPingPhotoId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Android's system photo picker has no camera entry, and `multiple` suppresses
+  // the camera on the gallery input anyway, so a phone needs its own capture
+  // button to reach the camera at all. Keyed off a coarse pointer rather than
+  // width: this is about having a usable camera, not a narrow viewport.
+  const [showCameraButton, setShowCameraButton] = useState(false);
+  useEffect(() => {
+    setShowCameraButton(window.matchMedia('(pointer: coarse)').matches);
+  }, []);
   const undoScope = `${project._id}:${userId}`;
   const [undoCount, setUndoCount] = useState(() => readPhotoUndo(undoScope).length);
   const [redoCount, setRedoCount] = useState(() => readPhotoRedo(undoScope).length);
@@ -720,7 +730,7 @@ export function ProjectPhotoMap({
   }, [contextMenu]);
 
   const uploadPhotos = useCallback(
-    async (files: File[]) => {
+    async (files: File[], { fromCamera = false }: { fromCamera?: boolean } = {}) => {
       if (!canEdit || uploading) return;
       setUploading(true);
       try {
@@ -741,7 +751,9 @@ export function ProjectPhotoMap({
           if (!location) {
             const takenAt = await extractPhotoTakenAt(file);
             const now = Date.now();
-            if (isPhotoFreshEnough(takenAt, now)) {
+            // A camera capture was created by this very tap, so it is fresh
+            // whether or not the camera bothered to write a timestamp.
+            if (fromCamera || isPhotoFreshEnough(takenAt, now)) {
               if (deviceResult === undefined) deviceResult = await readDeviceLocation();
               if (deviceResult.status === 'ok' && isUsableDeviceLocation(deviceResult.location)) {
                 suggestion = deviceResult.location;
@@ -753,6 +765,7 @@ export function ProjectPhotoMap({
                   takenAt,
                   now,
                   device: deviceResult ?? null,
+                  fromCamera,
                 })}`,
               );
             }
@@ -1247,8 +1260,16 @@ export function ProjectPhotoMap({
 
           <ActionBarSeparator />
 
+          {showCameraButton && (
+            <ActionBarButton
+              icon={<Camera />}
+              label="Take photo"
+              disabled={!canEdit || uploading}
+              onClick={() => cameraInputRef.current?.click()}
+            />
+          )}
           <ActionBarButton
-            icon={<Camera />}
+            icon={<ImagePlus />}
             label="Add photos"
             disabled={!canEdit || uploading}
             onClick={() => fileInputRef.current?.click()}
@@ -1382,7 +1403,8 @@ export function ProjectPhotoMap({
               <MapPinOff className="mx-auto mb-2 size-5 text-t3" />
               <p className="text-sm font-semibold text-t1">No mapped photos</p>
               <p className="mt-1 text-xs leading-5 text-t2">
-                Add a phone photo with GPS, or choose an unmapped photo and use Move location.
+                Take a photo on site, add one with GPS, or choose an unmapped photo and use Move
+                location.
               </p>
             </div>
           </div>
@@ -1534,6 +1556,22 @@ export function ProjectPhotoMap({
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
           if (files.length) void uploadPhotos(files);
+          event.target.value = '';
+        }}
+      />
+
+      {/* `capture` forces the camera and rules out the gallery, so it needs its
+          own input. No `multiple`: a capture returns one photo, and asking for
+          several is what makes Android drop the camera option. */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          if (files.length) void uploadPhotos(files, { fromCamera: true });
           event.target.value = '';
         }}
       />
