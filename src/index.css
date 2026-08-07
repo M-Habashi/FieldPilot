@@ -438,6 +438,42 @@ select {
   transform: rotate(-45deg);
 }
 
+/* Device-location suggestion shown while placing an unmapped photo. Dashed and
+   hollow so it never reads as a placed pin. */
+.fp-photo-map-suggestion {
+  display: inline-flex;
+  padding: 6px 12px;
+  align-items: center;
+  border: 2px dashed var(--fp-accent);
+  border-radius: 999px;
+  background: var(--fp-bg-surface);
+  box-shadow: 0 6px 16px rgb(15 23 42 / 0.22);
+  color: var(--fp-accent);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--fp-dur-fast) var(--fp-ease),
+    transform var(--fp-dur-fast) var(--fp-ease);
+}
+
+.fp-photo-map-suggestion:hover {
+  background: var(--fp-accent-soft);
+  transform: scale(1.05);
+}
+
+/* The reported accuracy radius, drawn to scale — a wide ring is an honest
+   signal that the fix was poor. */
+.fp-photo-map-suggestion-range {
+  fill: var(--fp-accent);
+  fill-opacity: 0.1;
+  stroke: var(--fp-accent);
+  stroke-dasharray: 5 5;
+  stroke-opacity: 0.55;
+  stroke-width: 2;
+}
+
 .fp-photo-map-marker-stack:hover {
   z-index: 20;
   transform: translate(-18px, -20px) scale(1.45);

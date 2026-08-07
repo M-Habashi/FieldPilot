@@ -18,7 +18,19 @@ import {
 import { useConvex, useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
-import { extractPhotoLocation, type PhotoLocation } from '../../lib/photo-location';
+import {
+  extractPhotoLocation,
+  extractPhotoTakenAt,
+  type PhotoLocation,
+} from '../../lib/photo-location';
+import {
+  describeSuggestionOutcome,
+  isPhotoFreshEnough,
+  isUsableDeviceLocation,
+  readDeviceLocation,
+  type DeviceLocation,
+  type DeviceLocationResult,
+} from '../../lib/device-location';
 import {
   clearPhotoRedo,
   popPhotoRedo,
@@ -184,7 +196,15 @@ function clusterPhotos(map: L.Map, photos: MapPhoto[]): PhotoGroup[] {
   return groups;
 }
 
-function locationSnapshot(photo: MapPhoto): (PhotoLocation & { source: 'exif' | 'manual' }) | null {
+function suggestedLocation(photo: MapPhoto): PhotoLocation | null {
+  const { suggestedLatitude, suggestedLongitude } = photo.attachment;
+  if (suggestedLatitude === undefined || suggestedLongitude === undefined) return null;
+  return { latitude: suggestedLatitude, longitude: suggestedLongitude };
+}
+
+function locationSnapshot(
+  photo: MapPhoto,
+): (PhotoLocation & { source: 'exif' | 'manual' | 'device' }) | null {
   if (!hasLocation(photo) || !photo.attachment.locationSource) return null;
   return {
     latitude: photo.attachment.latitude,
@@ -222,6 +242,7 @@ export function ProjectPhotoMap({
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const suggestionPannedRef = useRef<string | null>(null);
   const { notify } = useNotify();
   const convex = useConvex();
   const photoRows = useQuery(api.attachments.listProjectPhotos, { projectId: project._id });
@@ -376,12 +397,13 @@ export function ProjectPhotoMap({
   );
 
   const handleMove = useCallback(
-    async (photo: MapPhoto, location: PhotoLocation) => {
+    async (photo: MapPhoto, location: PhotoLocation, source: 'manual' | 'device' = 'manual') => {
       try {
         const result = await setPhotoLocation({
           attachmentId: photo.attachment._id,
           latitude: location.latitude,
           longitude: location.longitude,
+          source,
           expectedPhotoUpdatedAt: photo.attachment.photoUpdatedAt,
         });
         pushUndo({
@@ -389,7 +411,7 @@ export function ProjectPhotoMap({
           attachmentId: photo.attachment._id,
           expectedPhotoUpdatedAt: result.photoUpdatedAt,
           previousLocation: locationSnapshot(photo),
-          nextLocation: { ...location, source: 'manual' },
+          nextLocation: { ...location, source },
         });
         setJustPlacedId(photo.attachment._id);
         window.setTimeout(() => {
@@ -553,6 +575,7 @@ export function ProjectPhotoMap({
           attachmentId: operation.attachmentId as Id<'attachments'>,
           latitude: operation.previousLocation.latitude,
           longitude: operation.previousLocation.longitude,
+          source: operation.previousLocation.source,
           expectedPhotoUpdatedAt: operation.expectedPhotoUpdatedAt,
         });
       }
@@ -615,6 +638,7 @@ export function ProjectPhotoMap({
           attachmentId: operation.attachmentId as Id<'attachments'>,
           latitude: operation.nextLocation.latitude,
           longitude: operation.nextLocation.longitude,
+          source: operation.nextLocation.source,
           expectedPhotoUpdatedAt: operation.expectedPhotoUpdatedAt,
         });
       }
@@ -701,9 +725,38 @@ export function ProjectPhotoMap({
       setUploading(true);
       try {
         let unmapped = 0;
+        let suggested = 0;
+        const diagnostics: string[] = [];
+        // `undefined` means "not asked yet". One read serves the whole batch,
+        // and a failure is remembered so a denied prompt or a timeout is not
+        // retried per photo.
+        let deviceResult: DeviceLocationResult | undefined = undefined;
         for (const file of files) {
           if (!file.type.startsWith('image/')) continue;
           const location = await extractPhotoLocation(file);
+          // Fall back to the uploader's own position, but only for a photo
+          // taken moments ago — see PHOTO_FRESHNESS_WINDOW_MS. This is stored
+          // as a suggestion, never as the location.
+          let suggestion: DeviceLocation | null = null;
+          if (!location) {
+            const takenAt = await extractPhotoTakenAt(file);
+            const now = Date.now();
+            if (isPhotoFreshEnough(takenAt, now)) {
+              if (deviceResult === undefined) deviceResult = await readDeviceLocation();
+              if (deviceResult.status === 'ok' && isUsableDeviceLocation(deviceResult.location)) {
+                suggestion = deviceResult.location;
+              }
+            }
+            if (import.meta.env.DEV) {
+              diagnostics.push(
+                `${file.name}: ${describeSuggestionOutcome({
+                  takenAt,
+                  now,
+                  device: deviceResult ?? null,
+                })}`,
+              );
+            }
+          }
           const upload = await generateUploadUrl({ projectId: project._id });
           const response = await fetch(upload.uploadUrl, {
             method: 'POST',
@@ -729,6 +782,13 @@ export function ProjectPhotoMap({
                   locationSource: location.source,
                 }
               : {}),
+            ...(suggestion
+              ? {
+                  suggestedLatitude: suggestion.latitude,
+                  suggestedLongitude: suggestion.longitude,
+                  suggestedAccuracy: suggestion.accuracy,
+                }
+              : {}),
           });
           const photoState = await convex.query(api.attachments.getPhotoMapState, { attachmentId });
           if (photoState.photoUpdatedAt !== undefined) {
@@ -739,12 +799,22 @@ export function ProjectPhotoMap({
             });
           }
           if (!location) unmapped += 1;
+          if (suggestion) suggested += 1;
         }
+        const plural = unmapped === 1 ? '' : 's';
+        const summary = !unmapped
+          ? 'Photos added to the map.'
+          : suggested
+            ? `${unmapped} photo${plural} need a location — ${suggested} can be placed where you are now.`
+            : `${unmapped} photo${plural} could not be assigned to a location.`;
         notify({
           tone: unmapped ? 'warning' : 'success',
-          message: unmapped
-            ? `${unmapped} photo${unmapped === 1 ? '' : 's'} could not be assigned to a location.`
-            : 'Photos added to the map.',
+          // Dev builds spell out which gate rejected each photo; on a phone
+          // there is usually no console to check.
+          message:
+            import.meta.env.DEV && diagnostics.length
+              ? `${summary} [${diagnostics.join('; ')}]`
+              : summary,
         });
       } catch (error) {
         notify({
@@ -985,6 +1055,60 @@ export function ProjectPhotoMap({
     }
     return () => {
       marker.remove();
+    };
+  }, [handleMove, movingPhoto]);
+
+  // The device-location suggestion appears as a ghost marker while an unmapped
+  // photo is being placed, ringed by its own accuracy radius so the user can
+  // see how vague the fix was. Tapping it accepts; tapping bare map still
+  // places by hand via the click-to-place effect below.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !movingPhoto || hasLocation(movingPhoto)) {
+      suggestionPannedRef.current = null;
+      return;
+    }
+    const suggestion = suggestedLocation(movingPhoto);
+    if (!suggestion) {
+      suggestionPannedRef.current = null;
+      return;
+    }
+    const center: L.LatLngExpression = [suggestion.latitude, suggestion.longitude];
+    const accuracy = movingPhoto.attachment.suggestedAccuracy;
+    const layers: L.Layer[] = [];
+    if (accuracy !== undefined) {
+      layers.push(
+        L.circle(center, {
+          radius: accuracy,
+          interactive: false,
+          className: 'fp-photo-map-suggestion-range',
+        }),
+      );
+    }
+    const marker = L.marker(center, {
+      icon: L.divIcon({
+        className: 'fp-photo-map-suggestion-icon',
+        html: '<span class="fp-photo-map-suggestion">Place here</span>',
+        iconSize: [112, 30],
+        iconAnchor: [56, 34],
+      }),
+      zIndexOffset: 900,
+    });
+    marker.on('click', (event) => {
+      L.DomEvent.stop(event);
+      void handleMove(movingPhoto, suggestion, 'device');
+      setMovingPhoto(null);
+    });
+    layers.push(marker);
+    for (const layer of layers) layer.addTo(map);
+    // Live query updates re-create `movingPhoto`, so pan only when the photo
+    // being placed actually changes — otherwise the map snaps back mid-drag.
+    if (suggestionPannedRef.current !== movingPhoto.attachment._id) {
+      suggestionPannedRef.current = movingPhoto.attachment._id;
+      map.setView(center, Math.max(map.getZoom(), 17));
+    }
+    return () => {
+      for (const layer of layers) layer.remove();
     };
   }, [handleMove, movingPhoto]);
 

@@ -35,7 +35,25 @@ function formatLocation(photo: MapPhoto): string {
 function locationSourceLabel(photo: MapPhoto): string {
   if (photo.attachment.locationSource === 'exif') return 'Phone GPS';
   if (photo.attachment.locationSource === 'manual') return 'Manually placed';
+  if (photo.attachment.locationSource === 'device') return 'Device location, confirmed';
   return 'Location unavailable';
+}
+
+/**
+ * Where the uploader's device was at upload time. Offered as a starting point
+ * for placing an unmapped photo — it is never the photo's location, since the
+ * uploader need not have been standing where the camera was.
+ */
+function deviceSuggestion(
+  photo: MapPhoto,
+): { latitude: number; longitude: number; accuracy?: number } | null {
+  const { suggestedLatitude, suggestedLongitude, suggestedAccuracy } = photo.attachment;
+  if (suggestedLatitude === undefined || suggestedLongitude === undefined) return null;
+  return {
+    latitude: suggestedLatitude,
+    longitude: suggestedLongitude,
+    accuracy: suggestedAccuracy,
+  };
 }
 
 const formatUploadDate = new Intl.DateTimeFormat(undefined, {
@@ -169,8 +187,15 @@ function PhotoRow({
         <button
           type="button"
           aria-label={`Place ${photo.attachment.fileName} on map`}
-          title="Place on map"
-          className="flex size-8 shrink-0 cursor-pointer items-center justify-center text-t3 transition-colors duration-(--fp-dur-fast) hover:text-accent"
+          title={
+            deviceSuggestion(photo)
+              ? 'Place on map — a device location was captured at upload'
+              : 'Place on map'
+          }
+          className={cn(
+            'flex size-8 shrink-0 cursor-pointer items-center justify-center transition-colors duration-(--fp-dur-fast) hover:text-accent',
+            deviceSuggestion(photo) ? 'text-accent/70' : 'text-t3',
+          )}
           onClick={() => onPlace(photo)}
         >
           <MapPinPlus className="size-3.5" />
@@ -487,8 +512,35 @@ export function MapPhotoPanel({
                   <dt className="text-t3">Location</dt>
                   <dd className="mt-0.5 text-t1">
                     <span className="font-mono">{formatLocation(viewPhoto)}</span>
-                    <span className="text-t3"> · {locationSourceLabel(viewPhoto)}</span>
+                    {isMapped(viewPhoto) && (
+                      <span className="text-t3"> · {locationSourceLabel(viewPhoto)}</span>
+                    )}
                   </dd>
+                  {!isMapped(viewPhoto) &&
+                    (() => {
+                      const suggestion = deviceSuggestion(viewPhoto);
+                      if (!suggestion) return null;
+                      return (
+                        <dd className="mt-1.5 rounded-md border border-line bg-surface2 px-2 py-1.5 text-[11px] leading-4 text-t2">
+                          Your device was here when this photo was uploaded
+                          {suggestion.accuracy !== undefined &&
+                            `, to within ${Math.round(suggestion.accuracy)} m`}
+                          :{' '}
+                          <span className="font-mono text-t1">
+                            {suggestion.latitude.toFixed(5)}, {suggestion.longitude.toFixed(5)}
+                          </span>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="mt-1 block cursor-pointer font-medium text-accent transition-colors duration-(--fp-dur-fast) hover:text-accent-hover"
+                              onClick={() => onPlace(viewPhoto)}
+                            >
+                              Show it on the map
+                            </button>
+                          )}
+                        </dd>
+                      );
+                    })()}
                 </div>
                 <div>
                   <dt className="text-t3">Date uploaded</dt>

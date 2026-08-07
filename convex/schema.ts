@@ -148,7 +148,15 @@ export default defineSchema({
     longitude: v.optional(v.number()),
     originalLatitude: v.optional(v.number()),
     originalLongitude: v.optional(v.number()),
-    locationSource: v.optional(v.union(v.literal('exif'), v.literal('manual'))),
+    // Where the uploader's device was when the photo was uploaded. Only a
+    // suggestion for placing an unmapped photo — never a location on its own,
+    // because it says where the uploader stood, not where the camera was.
+    suggestedLatitude: v.optional(v.number()),
+    suggestedLongitude: v.optional(v.number()),
+    suggestedAccuracy: v.optional(v.number()),
+    locationSource: v.optional(
+      v.union(v.literal('exif'), v.literal('manual'), v.literal('device')),
+    ),
     locationUpdatedAt: v.optional(v.number()),
     photoUpdatedAt: v.optional(v.number()),
     photoMapVersion: v.optional(v.literal(1)),

@@ -46,6 +46,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
+      // Phone testing needs a real HTTPS origin, because geolocation only runs
+      // in a secure context and a LAN IP is not one. These are the tunnel
+      // domains that provide it; Vite otherwise rejects their Host header.
+      allowedHosts: ['.trycloudflare.com', '.ts.net', '.ngrok-free.app'],
     },
   };
 });

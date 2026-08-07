@@ -5,8 +5,8 @@ export type PhotoUndoOperation =
       kind: 'location';
       attachmentId: string;
       expectedPhotoUpdatedAt: number;
-      previousLocation: (PhotoLocation & { source: 'exif' | 'manual' }) | null;
-      nextLocation: (PhotoLocation & { source: 'exif' | 'manual' }) | null;
+      previousLocation: (PhotoLocation & { source: 'exif' | 'manual' | 'device' }) | null;
+      nextLocation: (PhotoLocation & { source: 'exif' | 'manual' | 'device' }) | null;
     }
   | {
       kind: 'assignment';

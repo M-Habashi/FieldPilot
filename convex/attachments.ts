@@ -109,7 +109,12 @@ export const completeUpload = mutation({
     longitude: v.optional(v.number()),
     originalLatitude: v.optional(v.number()),
     originalLongitude: v.optional(v.number()),
-    locationSource: v.optional(v.union(v.literal('exif'), v.literal('manual'))),
+    suggestedLatitude: v.optional(v.number()),
+    suggestedLongitude: v.optional(v.number()),
+    suggestedAccuracy: v.optional(v.number()),
+    locationSource: v.optional(
+      v.union(v.literal('exif'), v.literal('manual'), v.literal('device')),
+    ),
   },
   handler: async (ctx, args) => {
     const uploadedBy = await requireUser(ctx);
@@ -140,6 +145,23 @@ export const completeUpload = mutation({
       (args.originalLatitude === undefined || args.originalLongitude === undefined)
     ) {
       throw new Error('The original photo location needs both latitude and longitude.');
+    }
+    const hasSuggestedLocation =
+      args.suggestedLatitude !== undefined || args.suggestedLongitude !== undefined;
+    if (
+      hasSuggestedLocation &&
+      (args.suggestedLatitude === undefined || args.suggestedLongitude === undefined)
+    ) {
+      throw new Error('The suggested photo location needs both latitude and longitude.');
+    }
+    if (
+      hasSuggestedLocation &&
+      (args.suggestedLatitude! < -90 ||
+        args.suggestedLatitude! > 90 ||
+        args.suggestedLongitude! < -180 ||
+        args.suggestedLongitude! > 180)
+    ) {
+      throw new Error('The suggested location is outside the valid latitude or longitude range.');
     }
     const storedFile = await consumeUploadClaim(ctx, {
       uploadClaimId: args.uploadClaimId,
@@ -179,6 +201,13 @@ export const completeUpload = mutation({
             originalLongitude: args.originalLongitude,
           }
         : {}),
+      ...(hasSuggestedLocation
+        ? {
+            suggestedLatitude: args.suggestedLatitude,
+            suggestedLongitude: args.suggestedLongitude,
+            suggestedAccuracy: args.suggestedAccuracy,
+          }
+        : {}),
     });
   },
 });
@@ -188,6 +217,9 @@ export const setPhotoLocation = mutation({
     attachmentId: v.id('attachments'),
     latitude: v.number(),
     longitude: v.number(),
+    // 'device' means the user confirmed the device-location suggestion, which
+    // is a GPS fix rather than a point picked off the basemap by eye.
+    source: v.optional(v.union(v.literal('manual'), v.literal('device'))),
     expectedPhotoUpdatedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -212,7 +244,7 @@ export const setPhotoLocation = mutation({
     await ctx.db.patch(attachment._id, {
       latitude: args.latitude,
       longitude: args.longitude,
-      locationSource: 'manual',
+      locationSource: args.source ?? 'manual',
       locationUpdatedAt: now,
       photoUpdatedAt: now,
     });
