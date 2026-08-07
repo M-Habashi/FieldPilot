@@ -221,6 +221,7 @@ export function ProjectPhotoMap({
   const hasFittedRef = useRef(false);
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const { notify } = useNotify();
   const convex = useConvex();
   const photoRows = useQuery(api.attachments.listProjectPhotos, { projectId: project._id });
@@ -680,6 +681,19 @@ export function ProjectPhotoMap({
     selectedPhotos.length,
     taskPickerOpen,
   ]);
+
+  // Dismiss the photo context menu on any press outside it. The listener is
+  // attached after the press that opened the menu has been dispatched, so it
+  // never closes the menu on the same gesture.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
+      setContextMenu(null);
+    };
+    globalThis.document.addEventListener('pointerdown', onPointerDown);
+    return () => globalThis.document.removeEventListener('pointerdown', onPointerDown);
+  }, [contextMenu]);
 
   const uploadPhotos = useCallback(
     async (files: File[]) => {
@@ -1247,6 +1261,7 @@ export function ProjectPhotoMap({
 
         {contextMenu && canEdit && (
           <div
+            ref={contextMenuRef}
             className="fixed z-[1100] w-52 rounded-lg border border-line bg-surface p-1 shadow-e3"
             style={{ left: contextMenu.left, top: contextMenu.top }}
             role="menu"
