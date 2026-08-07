@@ -184,6 +184,10 @@ select {
   .fp-pin {
     position: absolute;
     transform: translate(-50%, -100%);
+    /* The pin sits inside the zoomed plan layer, so every fixed length inside
+       it has to be counter-scaled to stay the same size on screen. One local
+       unit — use `calc(N * var(--fp-pin-px))` instead of `Npx` below. */
+    --fp-pin-px: calc(1px / var(--fp-pin-view-scale, 1));
     width: calc(var(--fp-pin-size) / var(--fp-pin-view-scale, 1));
     height: calc(var(--fp-pin-size) / var(--fp-pin-view-scale, 1));
     cursor: pointer;
@@ -204,7 +208,7 @@ select {
     background: var(--pin-color, var(--fp-accent));
     /* Neutral outline is always present so pins retain contrast on pale plans,
        regardless of their task color or selection state. */
-    border: 2px solid var(--fp-text-2);
+    border: calc(2 * var(--fp-pin-px, 1px)) solid var(--fp-text-2);
     border-radius: var(--fp-pin-radius);
     transform: rotate(-45deg);
     box-shadow: var(--fp-shadow-e2);
@@ -220,9 +224,10 @@ select {
   .fp-pin-marker::after {
     content: '';
     position: absolute;
-    inset: -5px;
+    inset: calc(-5 * var(--fp-pin-px, 1px));
     pointer-events: none;
-    border: 3px solid color-mix(in srgb, var(--pin-color, var(--fp-accent)) 30%, transparent);
+    border: calc(3 * var(--fp-pin-px, 1px)) solid
+      color-mix(in srgb, var(--pin-color, var(--fp-accent)) 30%, transparent);
     border-radius: inherit;
     opacity: 0;
     transition: opacity var(--fp-dur-fast) var(--fp-ease);
@@ -233,10 +238,16 @@ select {
     transform: rotate(45deg);
     color: #fff;
     font-family: var(--fp-font-mono);
-    font-size: 11px;
+    font-size: calc(11 * var(--fp-pin-px, 1px));
     font-weight: 700;
     line-height: 1;
     user-select: none;
+  }
+
+  /* Sized off the label so the done check matches the sequence number. */
+  .fp-pin-check {
+    width: 1.2em;
+    height: 1.2em;
   }
 
   .fp-pin:hover .fp-pin-marker {

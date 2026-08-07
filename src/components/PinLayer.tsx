@@ -199,7 +199,7 @@ function Pin({
         style={{ '--pin-color': pinColor(task) } as React.CSSProperties}
       >
         <span className="fp-pin-label">
-          {done ? <Check size={13} strokeWidth={3.5} /> : task.seq}
+          {done ? <Check className="fp-pin-check" strokeWidth={3.5} /> : task.seq}
         </span>
       </span>
     </button>
