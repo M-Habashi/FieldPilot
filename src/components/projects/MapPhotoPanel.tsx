@@ -92,8 +92,10 @@ function MapPhotoLightbox({ photo, onClose }: { photo: MapPhoto; onClose: () => 
         <img
           src={photo.url}
           alt={photo.attachment.fileName}
+          draggable={false}
           decoding="async"
-          className="fp-lightbox-image max-h-full max-w-full rounded-lg object-contain shadow-e3"
+          className="fp-photo-no-callout fp-lightbox-image max-h-full max-w-full rounded-lg object-contain shadow-e3"
+          onContextMenu={(event) => event.preventDefault()}
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
@@ -149,9 +151,11 @@ function PhotoRow({
             <img
               src={photo.url}
               alt=""
+              draggable={false}
               loading="lazy"
               decoding="async"
-              className="h-full w-full object-cover"
+              className="fp-photo-no-callout h-full w-full object-cover"
+              onContextMenu={(event) => event.preventDefault()}
             />
           ) : (
             <Camera className="size-3.5 text-t3" />
@@ -499,9 +503,11 @@ export function MapPhotoPanel({
                 <img
                   src={viewPhoto.url}
                   alt={viewPhoto.attachment.fileName}
+                  draggable={false}
                   decoding="async"
                   fetchPriority="high"
-                  className="h-full w-full object-cover"
+                  className="fp-photo-no-callout h-full w-full object-cover"
+                  onContextMenu={(event) => event.preventDefault()}
                 />
               ) : (
                 <span className="grid h-full w-full place-items-center">

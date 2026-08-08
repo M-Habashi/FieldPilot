@@ -49,10 +49,12 @@ body {
   color: var(--fp-text-1);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  overscroll-behavior: none;
-  /* The app owns its own internal scrolling; the document itself never scrolls,
-     so there is no browser-level horizontal or vertical overflow scrollbar. */
-  overflow: hidden;
+  /* Keep sideways browser navigation contained, but let vertical overscroll
+     reach the document so mobile pull-to-refresh works from every page. */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 :focus-visible {
@@ -317,6 +319,18 @@ select {
 .fp-photo-map-leaflet-icon {
   background: transparent;
   border: 0;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS otherwise offers its image callout over the app's own long-press menu. */
+.fp-photo-map-leaflet-icon *,
+.fp-photo-no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Scale the whole photo marker down — 25% smaller generally, even more on

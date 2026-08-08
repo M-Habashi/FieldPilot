@@ -56,7 +56,15 @@ import { useNotify } from '../ui/use-notify';
 import { MapPhotoPanel } from './MapPhotoPanel';
 
 type ProjectRole = 'owner' | 'admin' | 'member' | 'viewer';
-type PhotoFilter = 'all' | 'assigned' | 'unassigned';
+type PhotoFilter = 'all' | 'assigned' | 'unassigned' | `task:${string}`;
+
+function taskPhotoFilter(taskId: string): PhotoFilter {
+  return `task:${taskId}`;
+}
+
+function taskIdFromPhotoFilter(filter: PhotoFilter): string | null {
+  return filter.startsWith('task:') ? filter.slice(5) : null;
+}
 
 export interface MapPhoto {
   attachment: Doc<'attachments'>;
@@ -330,6 +338,8 @@ export function ProjectPhotoMap({
       photos.filter((photo) => {
         if (filter === 'assigned') return photo.task !== null;
         if (filter === 'unassigned') return photo.task === null;
+        const taskId = taskIdFromPhotoFilter(filter);
+        if (taskId) return photo.task?._id === taskId;
         return true;
       }),
     [filter, photos],
@@ -1090,6 +1100,7 @@ export function ProjectPhotoMap({
         setContextMenu(null);
       });
       marker.on('contextmenu', (event) => {
+        event.originalEvent.preventDefault();
         showContextMenu(event.originalEvent as Event);
       });
       marker.on('mousedown', (event) => {
@@ -1174,6 +1185,7 @@ export function ProjectPhotoMap({
       zIndexOffset: 1000,
     });
     marker.on('contextmenu', (event) => {
+      event.originalEvent.preventDefault();
       const { left, top } = eventClientPosition(event.originalEvent as Event);
       setContextMenu({ left, top, photo: movingPhoto });
     });
@@ -1401,6 +1413,7 @@ export function ProjectPhotoMap({
           )}
           <Dropdown
             align="left"
+            className="max-h-[min(70vh,24rem)] overflow-y-auto"
             trigger={
               <ActionBarButton
                 icon={<Filter />}
@@ -1430,6 +1443,35 @@ export function ProjectPhotoMap({
                         : 'Unassigned'}
                   </DropdownItem>
                 ))}
+                {(tasks?.length ?? 0) > 0 && (
+                  <>
+                    <DropdownLabel>Task</DropdownLabel>
+                    {tasks?.map((task) => {
+                      const option = taskPhotoFilter(task._id);
+                      return (
+                        <DropdownItem
+                          key={task._id}
+                          onClick={() => {
+                            setFilter(option);
+                            close();
+                          }}
+                          className={cn(
+                            'whitespace-nowrap',
+                            filter === option && 'bg-accent-soft text-accent',
+                          )}
+                        >
+                          <span
+                            className="size-2 shrink-0 rounded-full"
+                            style={{ background: task.color ?? '#64748b' }}
+                          />
+                          <span className="truncate">
+                            #{task.seq} {task.title || 'Untitled task'}
+                          </span>
+                        </DropdownItem>
+                      );
+                    })}
+                  </>
+                )}
                 {filter !== 'all' && (
                   <DropdownItem
                     className="mt-1 border-t border-line pt-2 text-danger hover:text-danger"
