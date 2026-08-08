@@ -1,4 +1,10 @@
-import { deviceLocationFailureReasons, type DeviceLocationFailureReason } from './device-location';
+// The .js specifier matters: the Vercel function build compiles this module to
+// ESM without rewriting import paths, and Node's ESM loader requires the
+// extension. Vite and tsc both resolve it back to the .ts source.
+import {
+  deviceLocationFailureReasons,
+  type DeviceLocationFailureReason,
+} from './device-location.js';
 
 const diagnosticEvents = [
   'attempt_started',
