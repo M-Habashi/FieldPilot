@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEVICE_LOCATION_MAX_ACCURACY_M,
   PHOTO_FRESHNESS_WINDOW_MS,
   isPhotoFreshEnough,
   isUsableDeviceLocation,
+  readDeviceLocation,
 } from './device-location';
 
 const now = 1_700_000_000_000;
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('isPhotoFreshEnough', () => {
   it('accepts a photo taken moments ago', () => {
@@ -59,5 +62,32 @@ describe('isUsableDeviceLocation', () => {
     expect(isUsableDeviceLocation({ latitude: 51.5, longitude: -0.12, accuracy: Number.NaN })).toBe(
       false,
     );
+  });
+});
+
+describe('readDeviceLocation', () => {
+  it('uses a quick cached fix so iPhone uploads do not wait for a GPS lock', async () => {
+    let requestedOptions: PositionOptions | undefined;
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition(
+          success: PositionCallback,
+          _error: PositionErrorCallback,
+          options?: PositionOptions,
+        ) {
+          requestedOptions = options;
+          success({
+            coords: { latitude: 39.7, longitude: -86.1, accuracy: 18 },
+          } as GeolocationPosition);
+        },
+      },
+    });
+
+    await expect(readDeviceLocation()).resolves.toMatchObject({ status: 'ok' });
+    expect(requestedOptions).toEqual({
+      enableHighAccuracy: false,
+      timeout: 5_000,
+      maximumAge: 5 * 60_000,
+    });
   });
 });

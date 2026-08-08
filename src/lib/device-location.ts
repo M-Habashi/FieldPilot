@@ -22,7 +22,7 @@ export const PHOTO_FRESHNESS_WINDOW_MS = 10 * 60 * 1000;
  */
 export const DEVICE_LOCATION_MAX_ACCURACY_M = 100;
 
-const GEOLOCATION_TIMEOUT_MS = 10_000;
+const GEOLOCATION_TIMEOUT_MS = 5_000;
 
 /**
  * A photo with no capture time is treated as stale — we cannot prove it is not.
@@ -69,11 +69,13 @@ export async function readDeviceLocation(): Promise<DeviceLocationResult> {
         }),
       (error) => resolve({ status: 'failed', code: error.code }),
       {
-        enableHighAccuracy: true,
+        // Start with the quickest available iOS fix. Requiring the GPS radio
+        // here can time out in Chrome even when location access is granted.
+        enableHighAccuracy: false,
         timeout: GEOLOCATION_TIMEOUT_MS,
-        // A fix from the last minute is close enough and saves waiting on the
-        // GPS radio for every batch.
-        maximumAge: 60_000,
+        // A recent cached fix is appropriate for a photo captured by this tap
+        // and avoids making the upload wait for a fresh GPS lock.
+        maximumAge: 5 * 60_000,
       },
     );
   });
