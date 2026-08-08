@@ -27,7 +27,6 @@ import {
   type PhotoLocation,
 } from '../../lib/photo-location';
 import {
-  describeSuggestionOutcome,
   isPhotoFreshEnough,
   isUsableDeviceLocation,
   readDeviceLocation,
@@ -57,6 +56,7 @@ import { MapPhotoPanel } from './MapPhotoPanel';
 
 type ProjectRole = 'owner' | 'admin' | 'member' | 'viewer';
 type PhotoFilter = 'all' | 'assigned' | 'unassigned' | `task:${string}`;
+type PhotoLocationAccessIssue = 'denied' | 'unavailable';
 
 function taskPhotoFilter(taskId: string): PhotoFilter {
   return `task:${taskId}`;
@@ -84,9 +84,25 @@ interface ContextMenuState {
   photo: MapPhoto;
 }
 
+interface PendingDeviceLocationRequest {
+  promise: Promise<DeviceLocationResult>;
+}
+
+interface PendingLocationlessCapture {
+  files: File[];
+  locationRequest: PendingDeviceLocationRequest;
+}
+
 const initialMapView: L.LatLngExpression = [20, 0];
 const initialMapZoom = 2;
 const markerOverlapPx = 56;
+const nativeCaptureFreshnessMs = 2 * 60 * 1000;
+
+function isLikelyNativeCameraCapture(file: File, now = Date.now()): boolean {
+  if (!Number.isFinite(file.lastModified) || file.lastModified <= 0) return false;
+  const age = now - file.lastModified;
+  return age >= -30_000 && age <= nativeCaptureFreshnessMs;
+}
 
 const fitIconSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
@@ -263,7 +279,8 @@ export function ProjectPhotoMap({
   const hasFittedRef = useRef(false);
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const mobilePhotoInputRef = useRef<HTMLInputElement>(null);
+  const pendingLocationlessCaptureRef = useRef<PendingLocationlessCapture | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const moveMarkerRef = useRef<L.Marker | null>(null);
   const coarsePointerRef = useRef(false);
@@ -303,6 +320,10 @@ export function ProjectPhotoMap({
   const [photosPanelOpen, setPhotosPanelOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'standard' | 'satellite'>('satellite');
   const [deleteTarget, setDeleteTarget] = useState<MapPhoto | null>(null);
+  const [checkingCaptureLocation, setCheckingCaptureLocation] = useState(false);
+  const [locationAccessIssue, setLocationAccessIssue] = useState<PhotoLocationAccessIssue | null>(
+    null,
+  );
   // Photos that arrived without a location, held so the upload can offer to
   // place them straight away rather than leaving them in a list to be found.
   const [placePromptIds, setPlacePromptIds] = useState<Id<'attachments'>[]>([]);
@@ -351,7 +372,6 @@ export function ProjectPhotoMap({
   );
   const selectedPhoto = selectedPhotos[0] ?? null;
   const panelVisible = photosPanelOpen || selectedPhotos.length > 0;
-
   // The right pane is the list, the selection and the task picker together, so
   // dismissing it clears all three.
   const closePhotosPanel = useCallback(() => {
@@ -807,45 +827,59 @@ export function ProjectPhotoMap({
   }, [contextMenu]);
 
   const uploadPhotos = useCallback(
-    async (files: File[], { fromCamera = false }: { fromCamera?: boolean } = {}) => {
+    async (
+      files: File[],
+      {
+        fromCamera = false,
+        deviceLocationRequest,
+        continueWithoutLocation = false,
+      }: {
+        fromCamera?: boolean;
+        deviceLocationRequest?: PendingDeviceLocationRequest;
+        continueWithoutLocation?: boolean;
+      } = {},
+    ) => {
       if (!canEdit || uploading) return;
       setUploading(true);
       try {
         let unmapped = 0;
         let suggested = 0;
         const unmappedIds: Id<'attachments'>[] = [];
-        const diagnostics: string[] = [];
         // `undefined` means "not asked yet". One read serves the whole batch,
         // and a failure is remembered so a denied prompt or a timeout is not
         // retried per photo.
         let deviceResult: DeviceLocationResult | undefined = undefined;
         for (const file of files) {
           if (!file.type.startsWith('image/')) continue;
-          const location = await extractPhotoLocation(file);
+          const exifLocation = await extractPhotoLocation(file);
           // Fall back to the uploader's own position, but only for a photo
-          // taken moments ago — see PHOTO_FRESHNESS_WINDOW_MS. This is stored
-          // as a suggestion, never as the location.
+          // taken moments ago — see PHOTO_FRESHNESS_WINDOW_MS. A camera capture
+          // or fresh mobile picker upload can use that fix directly. Desktop
+          // gallery files keep the more cautious suggestion behavior.
+          let devicePhotoLocation: DeviceLocation | null = null;
           let suggestion: DeviceLocation | null = null;
-          if (!location) {
-            const takenAt = await extractPhotoTakenAt(file);
+          let takenAt: number | null = null;
+          let freshEnough = fromCamera;
+          if (!exifLocation) {
+            takenAt = await extractPhotoTakenAt(file);
             const now = Date.now();
+            const useDeviceAsLocation = fromCamera || deviceLocationRequest !== undefined;
+            freshEnough = fromCamera || isPhotoFreshEnough(takenAt, now);
             // A camera capture was created by this very tap, so it is fresh
             // whether or not the camera bothered to write a timestamp.
-            if (fromCamera || isPhotoFreshEnough(takenAt, now)) {
-              if (deviceResult === undefined) deviceResult = await readDeviceLocation();
-              if (deviceResult.status === 'ok' && isUsableDeviceLocation(deviceResult.location)) {
-                suggestion = deviceResult.location;
+            if (freshEnough && (fromCamera || deviceLocationRequest)) {
+              if (deviceResult === undefined) {
+                deviceResult = await (deviceLocationRequest?.promise ?? readDeviceLocation());
               }
-            }
-            if (import.meta.env.DEV) {
-              diagnostics.push(
-                `${file.name}: ${describeSuggestionOutcome({
-                  takenAt,
-                  now,
-                  device: deviceResult ?? null,
-                  fromCamera,
-                })}`,
-              );
+              if (deviceResult.status === 'ok') {
+                // A fresh mobile photo came from this device's current area.
+                // Even a coarse iOS fix is more useful than forcing the user
+                // to place every field photo manually.
+                if (useDeviceAsLocation) devicePhotoLocation = deviceResult.location;
+                else if (isUsableDeviceLocation(deviceResult.location)) {
+                  suggestion = deviceResult.location;
+                }
+              }
             }
           }
           const upload = await generateUploadUrl({ projectId: project._id });
@@ -864,15 +898,21 @@ export function ProjectPhotoMap({
             fileName: file.name,
             contentType: file.type || 'application/octet-stream',
             size: file.size,
-            ...(location
+            ...(exifLocation
               ? {
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                  originalLatitude: location.originalLatitude,
-                  originalLongitude: location.originalLongitude,
-                  locationSource: location.source,
+                  latitude: exifLocation.latitude,
+                  longitude: exifLocation.longitude,
+                  originalLatitude: exifLocation.originalLatitude,
+                  originalLongitude: exifLocation.originalLongitude,
+                  locationSource: exifLocation.source,
                 }
-              : {}),
+              : devicePhotoLocation
+                ? {
+                    latitude: devicePhotoLocation.latitude,
+                    longitude: devicePhotoLocation.longitude,
+                    locationSource: 'device' as const,
+                  }
+                : {}),
             ...(suggestion
               ? {
                   suggestedLatitude: suggestion.latitude,
@@ -881,7 +921,9 @@ export function ProjectPhotoMap({
                 }
               : {}),
           });
-          const photoState = await convex.query(api.attachments.getPhotoMapState, { attachmentId });
+          const photoState = await convex.query(api.attachments.getPhotoMapState, {
+            attachmentId,
+          });
           if (photoState.photoUpdatedAt !== undefined) {
             pushUndo({
               kind: 'trash',
@@ -889,7 +931,7 @@ export function ProjectPhotoMap({
               expectedPhotoUpdatedAt: photoState.photoUpdatedAt,
             });
           }
-          if (!location) {
+          if (!exifLocation && !devicePhotoLocation) {
             unmapped += 1;
             unmappedIds.push(attachmentId);
           }
@@ -898,19 +940,18 @@ export function ProjectPhotoMap({
         const plural = unmapped === 1 ? '' : 's';
         const summary = !unmapped
           ? 'Photos added to the map.'
-          : suggested
-            ? `${unmapped} photo${plural} need a location — ${suggested} can be placed where you are now.`
-            : `${unmapped} photo${plural} could not be assigned to a location.`;
+          : continueWithoutLocation
+            ? `${unmapped} photo${plural} added without a map location.`
+            : suggested
+              ? `${unmapped} photo${plural} need a location — ${suggested} can be placed where you are now.`
+              : `${unmapped} photo${plural} could not be assigned to a location.`;
         notify({
-          tone: unmapped ? 'warning' : 'success',
-          // Dev builds spell out which gate rejected each photo; on a phone
-          // there is usually no console to check.
-          message:
-            import.meta.env.DEV && diagnostics.length
-              ? `${summary} [${diagnostics.join('; ')}]`
-              : summary,
+          tone: unmapped && !continueWithoutLocation ? 'warning' : 'success',
+          message: summary,
         });
-        if (unmappedIds.length) setPlacePromptIds(unmappedIds);
+        if (unmappedIds.length && !continueWithoutLocation) {
+          setPlacePromptIds(unmappedIds);
+        }
       } catch (error) {
         notify({
           tone: 'error',
@@ -1304,6 +1345,35 @@ export function ProjectPhotoMap({
     setContextMenu(null);
   };
 
+  const handleMobilePhotoSelection = useCallback(
+    async (files: File[]) => {
+      const [file] = files;
+      if (!file) return;
+      if (files.length !== 1 || !isLikelyNativeCameraCapture(file)) {
+        void uploadPhotos(files);
+        return;
+      }
+
+      setCheckingCaptureLocation(true);
+      const locationRequest: PendingDeviceLocationRequest = {
+        promise: readDeviceLocation(),
+      };
+      const result = await locationRequest.promise;
+      setCheckingCaptureLocation(false);
+
+      if (result.status === 'ok') {
+        void uploadPhotos(files, { fromCamera: true, deviceLocationRequest: locationRequest });
+        return;
+      }
+
+      pendingLocationlessCaptureRef.current = { files, locationRequest };
+      setLocationAccessIssue(
+        result.status === 'failed' && result.code === 1 ? 'denied' : 'unavailable',
+      );
+    },
+    [uploadPhotos],
+  );
+
   const handleSelectPhoto = useCallback((photo: MapPhoto) => {
     setSelectedPhotos([photo]);
     setTaskFocusRequested(false);
@@ -1369,40 +1439,12 @@ export function ProjectPhotoMap({
           <ActionBarSeparator />
 
           {showCameraButton ? (
-            // Android's picker has no camera entry, so the two sources have to
-            // be offered explicitly rather than left to the OS chooser.
-            <Dropdown
-              align="left"
-              trigger={
-                <ActionBarButton
-                  icon={<Camera />}
-                  label="Add photos"
-                  disabled={!canEdit || uploading}
-                  menu
-                />
-              }
-            >
-              {(close) => (
-                <>
-                  <DropdownItem
-                    onClick={() => {
-                      cameraInputRef.current?.click();
-                      close();
-                    }}
-                  >
-                    <Camera /> Take a photo
-                  </DropdownItem>
-                  <DropdownItem
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                      close();
-                    }}
-                  >
-                    <ImagePlus /> Choose existing photos
-                  </DropdownItem>
-                </>
-              )}
-            </Dropdown>
+            <ActionBarButton
+              icon={<Camera />}
+              label="Add photos"
+              disabled={!canEdit || uploading || checkingCaptureLocation}
+              onClick={() => mobilePhotoInputRef.current?.click()}
+            />
           ) : (
             <ActionBarButton
               icon={<ImagePlus />}
@@ -1713,6 +1755,33 @@ export function ProjectPhotoMap({
       </footer>
 
       <ConfirmDialog
+        open={locationAccessIssue !== null}
+        title={locationAccessIssue === 'denied' ? 'Location access denied' : 'Location unavailable'}
+        description={
+          locationAccessIssue === 'denied'
+            ? 'FieldPilot can’t place this photo on the map automatically because location access is off. To enable automatic placement, allow location access for this browser in your phone’s settings.'
+            : 'FieldPilot can’t get your current location, so this photo won’t be placed on the map automatically. Check location access for this browser in your phone’s settings.'
+        }
+        confirmLabel="Continue anyway"
+        showCancel={false}
+        onCancel={() => {
+          setLocationAccessIssue(null);
+          pendingLocationlessCaptureRef.current = null;
+        }}
+        onConfirm={() => {
+          const pendingCapture = pendingLocationlessCaptureRef.current;
+          setLocationAccessIssue(null);
+          pendingLocationlessCaptureRef.current = null;
+          if (!pendingCapture) return;
+          void uploadPhotos(pendingCapture.files, {
+            fromCamera: true,
+            deviceLocationRequest: pendingCapture.locationRequest,
+            continueWithoutLocation: true,
+          });
+        }}
+      />
+
+      <ConfirmDialog
         open={placePromptIds.length > 0}
         title={
           placePromptIds.length === 1
@@ -1764,19 +1833,17 @@ export function ProjectPhotoMap({
         }}
       />
 
-      {/* `capture` forces the camera and rules out the gallery, so it needs its
-          own input. No `multiple`: a capture returns one photo, and asking for
-          several is what makes Android drop the camera option. */}
+      {/* With neither `capture` nor `multiple`, iPhone presents its own native
+          source chooser instead of FieldPilot duplicating that decision. */}
       <input
-        ref={cameraInputRef}
+        ref={mobilePhotoInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
-          if (files.length) void uploadPhotos(files, { fromCamera: true });
           event.target.value = '';
+          if (files.length) void handleMobilePhotoSelection(files);
         }}
       />
     </section>

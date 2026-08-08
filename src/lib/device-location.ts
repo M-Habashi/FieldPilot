@@ -50,9 +50,7 @@ export type DeviceLocationResult =
 /**
  * Never rejects: every failure path — no support, denied permission, timeout,
  * position unavailable — comes back as a result the caller treats exactly like
- * a missing EXIF location, so a denied prompt costs the user nothing. The
- * failure reason is preserved only so `describeSuggestionOutcome` can report
- * it during on-device testing.
+ * a missing EXIF location, so a denied prompt costs the user nothing.
  */
 export async function readDeviceLocation(): Promise<DeviceLocationResult> {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -79,38 +77,4 @@ export async function readDeviceLocation(): Promise<DeviceLocationResult> {
       },
     );
   });
-}
-
-/**
- * Why a photo did or did not get a suggestion, in one short phrase. All four
- * rejection paths look identical to the user ("needs a location"), which makes
- * an on-device test inconclusive — especially on iOS from a Windows machine,
- * where there is no console to inspect. Surfaced in dev builds only.
- */
-export function describeSuggestionOutcome(input: {
-  takenAt: number | null;
-  now: number;
-  device: DeviceLocationResult | null;
-  fromCamera?: boolean;
-}): string {
-  if (!input.fromCamera) {
-    if (input.takenAt === null) return 'no capture time in EXIF';
-    if (!isPhotoFreshEnough(input.takenAt, input.now)) {
-      const minutes = Math.round((input.now - input.takenAt) / 60_000);
-      return `photo ${minutes} min old`;
-    }
-  }
-  if (input.device === null) return 'device location not attempted';
-  if (input.device.status === 'unsupported') return 'geolocation unavailable — needs HTTPS';
-  if (input.device.status === 'failed') {
-    if (input.device.code === 1) return 'location denied (or insecure origin)';
-    if (input.device.code === 2) return 'position unavailable';
-    if (input.device.code === 3) return 'location timed out';
-    return `location error ${input.device.code}`;
-  }
-  const accuracy = Math.round(input.device.location.accuracy);
-  if (!isUsableDeviceLocation(input.device.location)) {
-    return `accuracy ${accuracy} m > ${DEVICE_LOCATION_MAX_ACCURACY_M} m`;
-  }
-  return `suggested (accuracy ${accuracy} m)`;
 }

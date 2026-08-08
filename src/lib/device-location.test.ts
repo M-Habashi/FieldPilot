@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DEVICE_LOCATION_MAX_ACCURACY_M,
   PHOTO_FRESHNESS_WINDOW_MS,
-  describeSuggestionOutcome,
   isPhotoFreshEnough,
   isUsableDeviceLocation,
 } from './device-location';
@@ -60,65 +59,5 @@ describe('isUsableDeviceLocation', () => {
     expect(isUsableDeviceLocation({ latitude: 51.5, longitude: -0.12, accuracy: Number.NaN })).toBe(
       false,
     );
-  });
-});
-
-describe('describeSuggestionOutcome', () => {
-  const at = (latitude: number, longitude: number, accuracy: number) =>
-    ({ status: 'ok', location: { latitude, longitude, accuracy } }) as const;
-
-  it('distinguishes a missing capture time from a stale photo', () => {
-    expect(describeSuggestionOutcome({ takenAt: null, now, device: null })).toBe(
-      'no capture time in EXIF',
-    );
-    expect(
-      describeSuggestionOutcome({ takenAt: now - 45 * 60_000, now, device: at(51, 0, 5) }),
-    ).toBe('photo 45 min old');
-  });
-
-  it('names the geolocation failure so a silent null is diagnosable', () => {
-    expect(
-      describeSuggestionOutcome({ takenAt: now, now, device: { status: 'failed', code: 1 } }),
-    ).toBe('location denied (or insecure origin)');
-    expect(
-      describeSuggestionOutcome({ takenAt: now, now, device: { status: 'failed', code: 3 } }),
-    ).toBe('location timed out');
-    expect(
-      describeSuggestionOutcome({ takenAt: now, now, device: { status: 'unsupported' } }),
-    ).toBe('geolocation unavailable — needs HTTPS');
-  });
-
-  it('reports the accuracy that failed the ceiling', () => {
-    expect(describeSuggestionOutcome({ takenAt: now, now, device: at(51, 0, 340) })).toBe(
-      `accuracy 340 m > ${DEVICE_LOCATION_MAX_ACCURACY_M} m`,
-    );
-  });
-
-  it('confirms a suggestion with its accuracy', () => {
-    expect(describeSuggestionOutcome({ takenAt: now, now, device: at(51, 0, 12) })).toBe(
-      'suggested (accuracy 12 m)',
-    );
-  });
-
-  it('skips the freshness checks for a camera capture with no EXIF timestamp', () => {
-    expect(
-      describeSuggestionOutcome({
-        takenAt: null,
-        now,
-        device: at(51, 0, 12),
-        fromCamera: true,
-      }),
-    ).toBe('suggested (accuracy 12 m)');
-  });
-
-  it('still applies the accuracy ceiling to a camera capture', () => {
-    expect(
-      describeSuggestionOutcome({
-        takenAt: null,
-        now,
-        device: at(51, 0, 900),
-        fromCamera: true,
-      }),
-    ).toBe(`accuracy 900 m > ${DEVICE_LOCATION_MAX_ACCURACY_M} m`);
   });
 });

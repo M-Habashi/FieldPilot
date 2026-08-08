@@ -6,8 +6,10 @@ import { useModalFocus } from '../../hooks/useModalFocus';
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   confirmLabel?: string;
+  confirmDisabled?: boolean;
+  showCancel?: boolean;
   danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -18,6 +20,8 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = 'Confirm',
+  confirmDisabled,
+  showCancel = true,
   danger,
   onConfirm,
   onCancel,
@@ -49,23 +53,26 @@ export function ConfirmDialog({
           {title}
         </h2>
         {description && (
-          <p id={descriptionId} className="mt-1.5 text-sm text-t2">
+          <div id={descriptionId} className="mt-1.5 text-sm text-t2">
             {description}
-          </p>
+          </div>
         )}
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            className="h-9 rounded-md border border-line bg-surface px-3.5 text-sm font-medium text-t1 hover:bg-surface2 cursor-pointer"
-            onClick={onCancel}
-          >
-            Cancel
-          </button>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          {showCancel && (
+            <button
+              type="button"
+              className="h-9 cursor-pointer rounded-md border border-line bg-surface px-3.5 text-sm font-medium text-t1 hover:bg-surface2"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          )}
           <button
             type="button"
             autoFocus
+            disabled={confirmDisabled}
             className={cn(
-              'h-9 rounded-md px-3.5 text-sm font-medium cursor-pointer text-white',
+              'h-9 whitespace-nowrap rounded-md px-3.5 text-sm font-medium cursor-pointer text-white disabled:cursor-wait disabled:opacity-60',
               danger ? 'bg-danger hover:opacity-90' : 'bg-accent hover:bg-accent-hover',
             )}
             onClick={onConfirm}
