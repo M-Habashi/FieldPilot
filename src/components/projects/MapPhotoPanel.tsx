@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Camera,
   ChevronLeft,
   ChevronsLeftRight,
-  Link2,
-  Link2Off,
   LocateFixed,
   MapPinOff,
   MapPinPlus,
@@ -21,6 +19,7 @@ import { cn, formatBytes } from '../../lib/utils';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { Button } from '../ui/button';
 import { Dropdown, DropdownItem } from '../ui/dropdown-menu';
+import { Select } from '../ui/select';
 import type { MapPhoto } from './ProjectPhotoMap';
 
 function isMapped(photo: MapPhoto): boolean {
@@ -225,10 +224,8 @@ export function MapPhotoPanel({
   canEdit,
   tasks,
   listOpen,
-  pickerOpen,
-  setPickerOpen,
-  taskSearch,
-  setTaskSearch,
+  focusTaskSelect,
+  onTaskSelectFocused,
   drilledId,
   setDrilledId,
   onSelectStackPhoto,
@@ -250,10 +247,8 @@ export function MapPhotoPanel({
   canEdit: boolean;
   tasks: Doc<'tasks'>[];
   listOpen: boolean;
-  pickerOpen: boolean;
-  setPickerOpen: (open: boolean) => void;
-  taskSearch: string;
-  setTaskSearch: (search: string) => void;
+  focusTaskSelect: boolean;
+  onTaskSelectFocused: () => void;
   drilledId: string | null;
   setDrilledId: (id: string | null) => void;
   onSelectStackPhoto: (photo: MapPhoto) => void;
@@ -287,14 +282,16 @@ export function MapPhotoPanel({
     ? (selectedPhotos.find((p) => p.attachment._id === drilledId) ?? null)
     : null;
   const viewPhoto = (stack ? drilled : selectedPhotos[0]) ?? null;
+  const taskSelectRef = useRef<HTMLButtonElement>(null);
 
-  const taskMatches = useMemo(() => {
-    const query = taskSearch.trim().toLowerCase();
-    return tasks.filter(
-      (task) =>
-        !query || task.title.toLowerCase().includes(query) || String(task.seq).includes(query),
-    );
-  }, [taskSearch, tasks]);
+  useEffect(() => {
+    if (!focusTaskSelect || !viewPhoto) return;
+    const frame = window.requestAnimationFrame(() => {
+      taskSelectRef.current?.focus();
+      onTaskSelectFocused();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusTaskSelect, onTaskSelectFocused, viewPhoto]);
 
   const onHandlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const handle = event.currentTarget;
@@ -395,12 +392,13 @@ export function MapPhotoPanel({
               )}
               <DropdownItem
                 disabled={viewPhoto.attachment.originalLatitude === undefined}
+                className="whitespace-nowrap"
                 onClick={() => {
                   onRestoreOriginal(viewPhoto);
                   close();
                 }}
               >
-                <RotateCcw /> Restore original GPS location
+                <RotateCcw /> Restore original location
               </DropdownItem>
             </>
           )}
@@ -566,76 +564,28 @@ export function MapPhotoPanel({
               </dl>
 
               {canEdit && (
-                <section className="mt-4">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-t3">
-                    Assignment
-                  </h3>
-                  <div className="mt-1.5 flex items-center gap-2 rounded-md border border-line bg-surface2 px-2 py-1.5">
-                    <span
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{ background: viewPhoto.task?.color ?? '#64748b' }}
-                    />
-                    {viewPhoto.task ? (
-                      <span className="min-w-0 truncate text-xs text-t1">
-                        <span className="font-mono text-t3">#{viewPhoto.task.seq}</span>{' '}
-                        {viewPhoto.task.title || 'Untitled task'}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-t3">Unassigned</span>
-                    )}
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => setPickerOpen(true)}
-                  >
-                    <Link2 /> {viewPhoto.task ? 'Reassign task' : 'Assign task'}
-                  </Button>
-
-                  {pickerOpen && (
-                    <div className="mt-2 rounded-md border border-line bg-surface2 p-2">
-                      <p className="truncate text-xs text-t3">
-                        Assign photo{' '}
-                        <span className="font-medium text-t1">{viewPhoto.attachment.fileName}</span>{' '}
-                        to:
-                      </p>
-                      <input
-                        autoFocus
-                        value={taskSearch}
-                        onChange={(event) => setTaskSearch(event.target.value)}
-                        placeholder="Find a task…"
-                        className="mt-1 w-full bg-transparent text-xs text-t1 outline-none placeholder:text-t3"
-                      />
-                      <div className="mt-1 max-h-40 overflow-y-auto">
-                        {taskMatches.map((task) => (
-                          <button
-                            type="button"
-                            key={task._id}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-t2 transition-colors hover:bg-surface hover:text-t1"
-                            onClick={() => onAssign(viewPhoto, task._id)}
-                          >
-                            <span
-                              className="size-2.5 shrink-0 rounded-full"
-                              style={{ background: task.color ?? '#64748b' }}
-                            />
-                            <span className="shrink-0 font-mono text-t3">#{task.seq}</span>
-                            <span className="truncate">{task.title || 'Untitled task'}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {viewPhoto.task && (
-                        <button
-                          type="button"
-                          className="mt-1 flex w-full items-center justify-center gap-2 border-t border-line pt-1.5 text-xs text-danger transition-colors hover:text-danger"
-                          onClick={() => onAssign(viewPhoto, undefined)}
-                        >
-                          <Link2Off className="size-3.5" /> Unassign task
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </section>
+                <div className="mt-4">
+                  <label htmlFor="fp-map-photo-task" className="mb-0.5 block text-xs text-t3">
+                    Task
+                  </label>
+                  <Select
+                    ref={taskSelectRef}
+                    id="fp-map-photo-task"
+                    value={viewPhoto.task?._id ?? ''}
+                    className="h-8 rounded-md border border-line-strong bg-surface px-2"
+                    options={[
+                      { value: '', label: 'Unassigned' },
+                      ...tasks.map((task) => ({
+                        value: task._id,
+                        label: `#${task.seq} ${task.title || 'Untitled task'}`,
+                        color: task.color,
+                      })),
+                    ]}
+                    onValueChange={(value) =>
+                      onAssign(viewPhoto, value ? (value as Id<'tasks'>) : undefined)
+                    }
+                  />
+                </div>
               )}
             </div>
 

@@ -350,8 +350,8 @@ select {
 .fp-photo-map-marker-stack::before,
 .fp-photo-map-marker-stack::after {
   position: absolute;
-  width: 84px;
-  height: 84px;
+  width: 92px;
+  height: 92px;
   content: '';
   border: 3px solid var(--fp-photo-task-color, var(--fp-border-strong));
   border-radius: 18px;
@@ -370,17 +370,17 @@ select {
 }
 
 .fp-photo-map-marker-stack::before {
-  top: 8px;
-  left: 4px;
-  transform: rotate(-5deg);
-  opacity: 0.78;
+  top: 11px;
+  left: -10px;
+  transform: rotate(-7deg);
+  opacity: 0.94;
 }
 
 .fp-photo-map-marker-stack::after {
-  top: 4px;
-  left: 10px;
-  transform: rotate(4deg);
-  opacity: 0.88;
+  top: 9px;
+  left: 14px;
+  transform: rotate(6deg);
+  opacity: 0.9;
 }
 
 .fp-photo-map-marker-preview {
@@ -586,6 +586,7 @@ select {
   color: var(--fp-text-2);
   font-size: 0.75rem;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     color var(--fp-dur-fast) var(--fp-ease),

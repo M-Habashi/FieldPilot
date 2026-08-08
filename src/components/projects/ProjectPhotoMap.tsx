@@ -8,7 +8,6 @@ import {
   ImagePlus,
   Images,
   Link2,
-  Link2Off,
   MapPinOff,
   MapPinPlus,
   Move,
@@ -288,8 +287,7 @@ export function ProjectPhotoMap({
   const [mapReady, setMapReady] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<MapPhoto[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
-  const [taskSearch, setTaskSearch] = useState('');
+  const [taskFocusRequested, setTaskFocusRequested] = useState(false);
   const [movingPhoto, setMovingPhoto] = useState<MapPhoto | null>(null);
   // Where the move marker currently sits, mirrored out of Leaflet so the
   // confirm button never has to reach into the map to find it.
@@ -349,7 +347,7 @@ export function ProjectPhotoMap({
   const closePhotosPanel = useCallback(() => {
     setSelectedPhotos([]);
     setPhotosPanelOpen(false);
-    setTaskPickerOpen(false);
+    setTaskFocusRequested(false);
     setDrilledId(null);
   }, []);
 
@@ -573,7 +571,7 @@ export function ProjectPhotoMap({
           previousTaskId: photo.attachment.taskId ?? null,
           nextTaskId: taskId ?? null,
         });
-        setTaskPickerOpen(false);
+        setTaskFocusRequested(false);
         setContextMenu(null);
         notify({
           tone: 'success',
@@ -603,11 +601,11 @@ export function ProjectPhotoMap({
         });
         setSelectedPhotos([]);
         setContextMenu(null);
-        setTaskPickerOpen(false);
+        setTaskFocusRequested(false);
         setMovingPhoto((current) =>
           current?.attachment._id === photo.attachment._id ? null : current,
         );
-        notify({ tone: 'success', message: 'Photo removed. Use Undo to restore it.' });
+        notify({ tone: 'success', message: 'Photo deleted.' });
       } catch (error) {
         notify({
           tone: 'error',
@@ -744,19 +742,17 @@ export function ProjectPhotoMap({
   const dismissTopLayer = useCallback(() => {
     if (contextMenu) setContextMenu(null);
     else if (movingPhoto) setMovingPhoto(null);
-    else if (taskPickerOpen) setTaskPickerOpen(false);
     else if (drilledId) setDrilledId(null);
     else if (selectedPhotos.length > 0) {
       setSelectedPhotos([]);
-      setTaskPickerOpen(false);
+      setTaskFocusRequested(false);
       setPhotosPanelOpen(true);
     } else if (photosPanelOpen) setPhotosPanelOpen(false);
-  }, [contextMenu, drilledId, movingPhoto, photosPanelOpen, selectedPhotos.length, taskPickerOpen]);
+  }, [contextMenu, drilledId, movingPhoto, photosPanelOpen, selectedPhotos.length]);
 
   useBackGuard(
     contextMenu !== null ||
       movingPhoto !== null ||
-      taskPickerOpen ||
       drilledId !== null ||
       selectedPhotos.length > 0 ||
       photosPanelOpen,
@@ -1090,7 +1086,7 @@ export function ProjectPhotoMap({
         }
         clearTouchPreview();
         setSelectedPhotos(group.photos);
-        setTaskPickerOpen(false);
+        setTaskFocusRequested(false);
         setContextMenu(null);
       });
       marker.on('contextmenu', (event) => {
@@ -1290,16 +1286,15 @@ export function ProjectPhotoMap({
     hasFittedRef.current = true;
   }, [fitPhotos, mapReady, mappedPhotos.length]);
 
-  const openTaskPicker = (photo: MapPhoto) => {
+  const openTaskAssignment = (photo: MapPhoto) => {
     setSelectedPhotos([photo]);
-    setTaskSearch('');
-    setTaskPickerOpen(true);
+    setTaskFocusRequested(true);
     setContextMenu(null);
   };
 
   const handleSelectPhoto = useCallback((photo: MapPhoto) => {
     setSelectedPhotos([photo]);
-    setTaskPickerOpen(false);
+    setTaskFocusRequested(false);
     const map = mapRef.current;
     if (map && hasLocation(photo)) {
       map.flyTo(
@@ -1479,10 +1474,8 @@ export function ProjectPhotoMap({
           canEdit={canEdit}
           tasks={tasks ?? []}
           listOpen={photosPanelOpen}
-          pickerOpen={taskPickerOpen}
-          setPickerOpen={setTaskPickerOpen}
-          taskSearch={taskSearch}
-          setTaskSearch={setTaskSearch}
+          focusTaskSelect={taskFocusRequested}
+          onTaskSelectFocused={() => setTaskFocusRequested(false)}
           drilledId={drilledId}
           setDrilledId={setDrilledId}
           onSelectStackPhoto={handleSelectStackPhoto}
@@ -1493,7 +1486,7 @@ export function ProjectPhotoMap({
             // the full-width drawer would otherwise cover the map the user
             // needs to click or drag.
             setSelectedPhotos([]);
-            setTaskPickerOpen(false);
+            setTaskFocusRequested(false);
             setDrilledId(null);
             setPhotosPanelOpen(false);
             setMovingPhoto(photo);
@@ -1502,7 +1495,7 @@ export function ProjectPhotoMap({
           onDelete={(photo) => setDeleteTarget(photo)}
           onMove={(photo) => {
             setSelectedPhotos([]);
-            setTaskPickerOpen(false);
+            setTaskFocusRequested(false);
             setDrilledId(null);
             setPhotosPanelOpen(false);
             setMovingPhoto(photo);
@@ -1511,13 +1504,13 @@ export function ProjectPhotoMap({
           onRestoreOriginal={(photo) => void handleRestoreOriginal(photo)}
           onClose={() => {
             setSelectedPhotos([]);
-            setTaskPickerOpen(false);
+            setTaskFocusRequested(false);
             setDrilledId(null);
             setPhotosPanelOpen(false);
           }}
           onBackToList={() => {
             setSelectedPhotos([]);
-            setTaskPickerOpen(false);
+            setTaskFocusRequested(false);
             setDrilledId(null);
             setPhotosPanelOpen(true);
           }}
@@ -1578,7 +1571,7 @@ export function ProjectPhotoMap({
                   disabled={movingPhoto.attachment.originalLatitude === undefined}
                   title={
                     movingPhoto.attachment.originalLatitude === undefined
-                      ? 'This photo has no original GPS location.'
+                      ? 'This photo has no original location.'
                       : undefined
                   }
                   className="fp-map-context-item disabled:cursor-not-allowed disabled:opacity-45"
@@ -1588,9 +1581,7 @@ export function ProjectPhotoMap({
                   }}
                 >
                   <RotateCcw />
-                  {movingPhoto.attachment.originalLatitude === undefined
-                    ? 'Restore original GPS location'
-                    : `Restore original GPS location (${movingPhoto.attachment.originalLatitude.toFixed(5)}, ${movingPhoto.attachment.originalLongitude!.toFixed(5)})`}
+                  Restore original location
                 </button>
                 <button
                   type="button"
@@ -1608,19 +1599,10 @@ export function ProjectPhotoMap({
                 <button
                   type="button"
                   className="fp-map-context-item"
-                  onClick={() => openTaskPicker(contextMenu.photo)}
+                  onClick={() => openTaskAssignment(contextMenu.photo)}
                 >
-                  <Link2 /> {contextMenu.photo.task ? 'Reassign task' : 'Assign task'}
+                  <Link2 /> Assign Task
                 </button>
-                {contextMenu.photo.task && (
-                  <button
-                    type="button"
-                    className="fp-map-context-item"
-                    onClick={() => void handleAssignment(contextMenu.photo, undefined)}
-                  >
-                    <Link2Off /> Unassign task
-                  </button>
-                )}
                 <button
                   type="button"
                   className="fp-map-context-item"
@@ -1645,7 +1627,7 @@ export function ProjectPhotoMap({
                   disabled={contextMenu.photo.attachment.originalLatitude === undefined}
                   title={
                     contextMenu.photo.attachment.originalLatitude === undefined
-                      ? 'This photo has no original GPS location.'
+                      ? 'This photo has no original location.'
                       : undefined
                   }
                   className="fp-map-context-item disabled:cursor-not-allowed disabled:opacity-45"
@@ -1655,14 +1637,15 @@ export function ProjectPhotoMap({
                   }}
                 >
                   <RotateCcw />
-                  {contextMenu.photo.attachment.originalLatitude === undefined
-                    ? 'Restore original GPS location'
-                    : `Restore original GPS location (${contextMenu.photo.attachment.originalLatitude.toFixed(5)}, ${contextMenu.photo.attachment.originalLongitude!.toFixed(5)})`}
+                  Restore original location
                 </button>
                 <button
                   type="button"
                   className="fp-map-context-item text-danger hover:text-danger"
-                  onClick={() => void handleTrash(contextMenu.photo)}
+                  onClick={() => {
+                    setDeleteTarget(contextMenu.photo);
+                    setContextMenu(null);
+                  }}
                 >
                   <Trash2 /> Delete photo
                 </button>
@@ -1715,8 +1698,7 @@ export function ProjectPhotoMap({
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`Delete ${deleteTarget?.attachment.fileName ?? 'photo'}?`}
-        description="The photo is removed from the project. You can restore it with Undo."
+        title="Are you sure you want to delete this photo?"
         confirmLabel="Delete photo"
         danger
         onCancel={() => setDeleteTarget(null)}
