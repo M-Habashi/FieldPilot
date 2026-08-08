@@ -1,4 +1,4 @@
-import { sanitizePhotoDiagnostic } from '../src/lib/photo-diagnostics';
+import { sanitizePhotoDiagnostic } from '../src/lib/photo-diagnostics.js';
 
 interface DiagnosticRequest {
   method?: string;
