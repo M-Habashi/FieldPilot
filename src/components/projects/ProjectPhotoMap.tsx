@@ -259,6 +259,15 @@ export function ProjectPhotoMap({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const moveMarkerRef = useRef<L.Marker | null>(null);
+  const coarsePointerRef = useRef(false);
+  const touchPreviewRef = useRef<{ photoId: string; element: HTMLElement } | null>(null);
+  const clearTouchPreview = useCallback(() => {
+    const preview = touchPreviewRef.current;
+    if (!preview) return;
+    preview.element.classList.remove('fp-photo-map-marker-stack--touch-preview');
+    preview.element.closest('.leaflet-marker-icon')?.removeAttribute('aria-pressed');
+    touchPreviewRef.current = null;
+  }, []);
   const { notify } = useNotify();
   const convex = useConvex();
   const photoRows = useQuery(api.attachments.listProjectPhotos, { projectId: project._id });
@@ -292,11 +301,13 @@ export function ProjectPhotoMap({
   // place them straight away rather than leaving them in a list to be found.
   const [placePromptIds, setPlacePromptIds] = useState<Id<'attachments'>[]>([]);
   const [drilledId, setDrilledId] = useState<string | null>(null);
-  // The photo currently on top of its stack marker: the LAST photo hovered in
-  // the list stays on top until another one is hovered. `hoverActive` keeps
-  // the enlarge/fan-out affordance transient (hover-only).
+  // The last photo chosen in the stack pane stays on top. Hover is tracked
+  // separately so desktop users can preview another row without replacing
+  // that persistent selection.
   const [leadPhotoId, setLeadPhotoId] = useState<string | null>(null);
-  const [hoverActive, setHoverActive] = useState(false);
+  const [hoverPhotoId, setHoverPhotoId] = useState<string | null>(null);
+  const activeLeadPhotoId = hoverPhotoId ?? leadPhotoId;
+  const hoverActive = hoverPhotoId !== null;
   // Brief per-photo animation flags: drop-in after placement, ping after locate.
   const [justPlacedId, setJustPlacedId] = useState<string | null>(null);
   const [pingPhotoId, setPingPhotoId] = useState<string | null>(null);
@@ -307,7 +318,9 @@ export function ProjectPhotoMap({
   // width: this is about having a usable camera, not a narrow viewport.
   const [showCameraButton, setShowCameraButton] = useState(false);
   useEffect(() => {
-    setShowCameraButton(window.matchMedia('(pointer: coarse)').matches);
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    coarsePointerRef.current = coarsePointer;
+    setShowCameraButton(coarsePointer);
   }, []);
   const undoScope = `${project._id}:${userId}`;
   const [undoCount, setUndoCount] = useState(() => readPhotoUndo(undoScope).length);
@@ -385,9 +398,9 @@ export function ProjectPhotoMap({
       ? mappedPhotos.filter((photo) => photo.attachment._id !== movingPhoto.attachment._id)
       : mappedPhotos;
     const clustered = clusterPhotos(mapInstance, candidates);
-    if (!leadPhotoId) return clustered;
+    if (!activeLeadPhotoId) return clustered;
     return clustered.map((group) => {
-      const index = group.photos.findIndex((p) => p.attachment._id === leadPhotoId);
+      const index = group.photos.findIndex((p) => p.attachment._id === activeLeadPhotoId);
       if (index <= 0) return group;
       return {
         ...group,
@@ -398,7 +411,7 @@ export function ProjectPhotoMap({
         ],
       };
     });
-  }, [mapInstance, mapReady, mappedPhotos, movingPhoto, leadPhotoId, viewportRevision]);
+  }, [activeLeadPhotoId, mapInstance, mapReady, mappedPhotos, movingPhoto, viewportRevision]);
 
   const fitPhotos = useCallback(() => {
     const map = mapRef.current;
@@ -1023,11 +1036,18 @@ export function ProjectPhotoMap({
   useEffect(() => {
     const layer = markerLayerRef.current;
     if (!layer) return;
+    clearTouchPreview();
     layer.clearLayers();
     for (const group of groups) {
       const marker = L.marker([group.latitude, group.longitude], {
-        icon: createPhotoIcon(group, { leadPhotoId, hoverActive, justPlacedId, pingPhotoId }),
+        icon: createPhotoIcon(group, {
+          leadPhotoId: activeLeadPhotoId,
+          hoverActive,
+          justPlacedId,
+          pingPhotoId,
+        }),
       });
+      let touchPreviewElement: HTMLElement | null = null;
       let longPressTimer: number | null = null;
       let suppressNextClick = false;
       const clearLongPress = () => {
@@ -1043,6 +1063,7 @@ export function ProjectPhotoMap({
       };
       const showContextMenu = (originalEvent: Event) => {
         clearLongPress();
+        clearTouchPreview();
         const { left, top } = eventClientPosition(originalEvent);
         setContextMenu({ left, top, photo: group.photos[0] });
       };
@@ -1052,9 +1073,22 @@ export function ProjectPhotoMap({
           return;
         }
         if (movingPhoto) return;
-        // A marker tap must open immediately on touch. The previous two-step
-        // "raise, then open" interaction rebuilt every marker after the first
-        // tap and made the panel feel unresponsive on mobile.
+        const leadPhotoId = group.photos[0].attachment._id;
+        const alreadyPreviewing =
+          touchPreviewRef.current?.photoId === leadPhotoId &&
+          touchPreviewRef.current.element === touchPreviewElement;
+        if (coarsePointerRef.current && touchPreviewElement && !alreadyPreviewing) {
+          // Preserve the useful first-tap preview without putting it in React
+          // state. One class mutation animates this marker in place; the
+          // Leaflet layer and every other photo marker remain untouched.
+          clearTouchPreview();
+          touchPreviewElement.classList.add('fp-photo-map-marker-stack--touch-preview');
+          touchPreviewElement.closest('.leaflet-marker-icon')?.setAttribute('aria-pressed', 'true');
+          touchPreviewRef.current = { photoId: leadPhotoId, element: touchPreviewElement };
+          setContextMenu(null);
+          return;
+        }
+        clearTouchPreview();
         setSelectedPhotos(group.photos);
         setTaskPickerOpen(false);
         setContextMenu(null);
@@ -1074,6 +1108,7 @@ export function ProjectPhotoMap({
       // the long-press directly on the icon.
       const icon = marker.getElement();
       if (icon) {
+        touchPreviewElement = icon.querySelector<HTMLElement>('.fp-photo-map-marker-stack');
         L.DomEvent.on(icon, 'touchstart', (event: Event) => {
           if (movingPhoto) return;
           armLongPress(event);
@@ -1081,7 +1116,16 @@ export function ProjectPhotoMap({
         L.DomEvent.on(icon, 'touchend touchmove touchcancel', clearLongPress);
       }
     }
-  }, [groups, hoverActive, justPlacedId, leadPhotoId, movingPhoto, pingPhotoId]);
+    return clearTouchPreview;
+  }, [
+    activeLeadPhotoId,
+    clearTouchPreview,
+    groups,
+    hoverActive,
+    justPlacedId,
+    movingPhoto,
+    pingPhotoId,
+  ]);
 
   // Move mode always puts a draggable marker on the map, whether or not the
   // photo already has a location: an unmapped photo starts at its device
@@ -1182,17 +1226,15 @@ export function ProjectPhotoMap({
     const onMapClick = (event: L.LeafletMouseEvent) => {
       const target = event.originalEvent.target as HTMLElement | null;
       if (target && target.closest && target.closest('.leaflet-marker-icon')) return;
-      if (leadPhotoId) {
-        setLeadPhotoId(null);
-        setHoverActive(false);
-      }
+      clearTouchPreview();
+      if (hoverPhotoId) setHoverPhotoId(null);
       if (panelVisible && !movingPhoto) closePhotosPanel();
     };
     mapInstance.on('click', onMapClick);
     return () => {
       mapInstance.off('click', onMapClick);
     };
-  }, [closePhotosPanel, leadPhotoId, mapInstance, movingPhoto, panelVisible]);
+  }, [clearTouchPreview, closePhotosPanel, hoverPhotoId, mapInstance, movingPhoto, panelVisible]);
 
   // In move mode the map still pans with one finger — only a drag that starts
   // on the photo marker moves the photo, which Leaflet already keeps separate.
@@ -1265,6 +1307,13 @@ export function ProjectPhotoMap({
         Math.max(map.getZoom(), 16),
       );
     }
+  }, []);
+
+  const handleSelectStackPhoto = useCallback((photo: MapPhoto) => {
+    const photoId = photo.attachment._id;
+    setLeadPhotoId(photoId);
+    setHoverPhotoId(null);
+    setDrilledId(photoId);
   }, []);
 
   const handleLocatePhoto = useCallback(
@@ -1436,6 +1485,7 @@ export function ProjectPhotoMap({
           setTaskSearch={setTaskSearch}
           drilledId={drilledId}
           setDrilledId={setDrilledId}
+          onSelectStackPhoto={handleSelectStackPhoto}
           onSelect={handleSelectPhoto}
           onLocate={handleLocatePhoto}
           onPlace={(photo) => {
@@ -1472,10 +1522,9 @@ export function ProjectPhotoMap({
             setPhotosPanelOpen(true);
           }}
           onHoverPhoto={(photo) => {
-            setLeadPhotoId(photo.attachment._id);
-            setHoverActive(true);
+            setHoverPhotoId(photo.attachment._id);
           }}
-          onHoverEnd={() => setHoverActive(false)}
+          onHoverEnd={() => setHoverPhotoId(null)}
         />
 
         {/* Move mode needs a visible commit on a phone: dragging alone cannot

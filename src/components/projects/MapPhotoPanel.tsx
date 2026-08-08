@@ -231,6 +231,7 @@ export function MapPhotoPanel({
   setTaskSearch,
   drilledId,
   setDrilledId,
+  onSelectStackPhoto,
   onSelect,
   onLocate,
   onPlace,
@@ -255,6 +256,7 @@ export function MapPhotoPanel({
   setTaskSearch: (search: string) => void;
   drilledId: string | null;
   setDrilledId: (id: string | null) => void;
+  onSelectStackPhoto: (photo: MapPhoto) => void;
   onSelect: (photo: MapPhoto) => void;
   onLocate: (photo: MapPhoto) => void;
   onPlace: (photo: MapPhoto) => void;
@@ -479,7 +481,7 @@ export function MapPhotoPanel({
                 <li key={photo.attachment._id}>
                   <PhotoRow
                     photo={photo}
-                    onSelect={(p) => setDrilledId(p.attachment._id)}
+                    onSelect={onSelectStackPhoto}
                     onHover={onHoverPhoto}
                     onHoverEnd={onHoverEnd}
                   />

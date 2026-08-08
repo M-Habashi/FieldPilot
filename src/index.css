@@ -465,17 +465,20 @@ select {
 
 /* Hovering a photo in the list highlights its marker exactly like a map
    hover: lifted, enlarged, fanning out the stack. */
-.fp-photo-map-marker-stack--highlight {
+.fp-photo-map-marker-stack--highlight,
+.fp-photo-map-marker-stack--touch-preview {
   z-index: 20;
   transform: translate(-18px, -20px) scale(1.45);
   filter: drop-shadow(0 28px 30px rgb(15 23 42 / 0.28));
 }
 
-.fp-photo-map-marker-stack--highlight::before {
+.fp-photo-map-marker-stack--highlight::before,
+.fp-photo-map-marker-stack--touch-preview::before {
   transform: translate(-16px, 12px) rotate(-10deg);
 }
 
-.fp-photo-map-marker-stack--highlight::after {
+.fp-photo-map-marker-stack--highlight::after,
+.fp-photo-map-marker-stack--touch-preview::after {
   transform: translate(16px, 12px) rotate(10deg);
 }
 
