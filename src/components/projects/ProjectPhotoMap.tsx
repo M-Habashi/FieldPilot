@@ -118,6 +118,9 @@ function extractPhotoLocationQuickly(file: File, timeoutMs = 1_500) {
 const fitIconSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
 
+const locateIconSvg =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/></svg>';
+
 const satelliteIconSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7 9 3 5 7l4 4"/><path d="m17 11 4 4-4 4-4-4"/><path d="m8 12 4 4 6-6-4-4Z"/><path d="m16 8 3-3"/><path d="M9 21a6 6 0 0 0-6-6"/></svg>';
 
@@ -283,9 +286,11 @@ export function ProjectPhotoMap({
   const mapHostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
+  const currentLocationLayerRef = useRef<L.LayerGroup | null>(null);
   const standardLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const fitLinkRef = useRef<HTMLAnchorElement | null>(null);
+  const locateLinkRef = useRef<HTMLAnchorElement | null>(null);
   const layerToggleRef = useRef<HTMLButtonElement | null>(null);
   const hasFittedRef = useRef(false);
   const legacyMigrationStartedRef = useRef(false);
@@ -346,6 +351,8 @@ export function ProjectPhotoMap({
   const [justPlacedId, setJustPlacedId] = useState<string | null>(null);
   const [pingPhotoId, setPingPhotoId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const locatingRef = useRef(false);
   const [uploadNotice, setUploadNotice] = useState<UploadNotice | null>(null);
   useEffect(() => {
     if (!uploadNotice || uploadNotice.tone === 'info') return;
@@ -469,6 +476,90 @@ export function ProjectPhotoMap({
 
   const fitPhotosRef = useRef(fitPhotos);
   fitPhotosRef.current = fitPhotos;
+
+  const locateCurrentPosition = useCallback(async () => {
+    if (locatingRef.current) return;
+    locatingRef.current = true;
+    setLocating(true);
+    const sessionId = createPhotoDiagnosticSessionId();
+    const startedAt = Date.now();
+    sendPhotoDiagnostic({
+      event: 'location_started',
+      sessionId,
+      projectId: project._id,
+      client: detectPhotoDiagnosticClient(),
+      fromCamera: false,
+      secureContext: globalThis.isSecureContext,
+      geolocationSupported: typeof navigator !== 'undefined' && Boolean(navigator.geolocation),
+    });
+    try {
+      const result = await readDeviceLocation({
+        enableHighAccuracy: true,
+        timeoutMs: 10_000,
+        maximumAgeMs: 30_000,
+      });
+      sendPhotoDiagnostic({
+        event: 'location_result',
+        sessionId,
+        projectId: project._id,
+        client: detectPhotoDiagnosticClient(),
+        locationStatus: result.status,
+        elapsedMs: Date.now() - startedAt,
+        ...(result.status === 'failed' ? { locationErrorCode: result.code } : {}),
+        ...(result.status === 'ok' ? { accuracyM: result.location.accuracy } : {}),
+      });
+      if (result.status !== 'ok') {
+        const message =
+          result.status === 'unsupported'
+            ? 'Location is not supported.'
+            : result.code === 1
+              ? 'Location access is blocked.'
+              : result.code === 3
+                ? 'Location timed out. Try again.'
+                : 'Current location is unavailable.';
+        setUploadNotice({ tone: 'error', message });
+        return;
+      }
+
+      const map = mapRef.current;
+      const layer = currentLocationLayerRef.current;
+      if (!map || !layer) return;
+      const center: L.LatLngExpression = [result.location.latitude, result.location.longitude];
+      layer.clearLayers();
+      const accuracyCircle = L.circle(center, {
+        radius: Math.max(result.location.accuracy, 1),
+        color: '#2563eb',
+        weight: 1,
+        opacity: 0.55,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.14,
+        interactive: false,
+      }).addTo(layer);
+      L.circleMarker(center, {
+        radius: 7,
+        color: '#ffffff',
+        weight: 3,
+        fillColor: '#2563eb',
+        fillOpacity: 1,
+        className: 'fp-current-location-marker',
+        interactive: false,
+      }).addTo(layer);
+      map.flyToBounds(accuracyCircle.getBounds(), {
+        padding: [56, 56],
+        maxZoom: 18,
+        duration: 0.65,
+      });
+      setUploadNotice({ tone: 'success', message: 'Current location found.' });
+    } catch {
+      setUploadNotice({ tone: 'error', message: 'Unable to find current location.' });
+    } finally {
+      locatingRef.current = false;
+      setLocating(false);
+    }
+  }, [project._id]);
+
+  const locateCurrentPositionRef = useRef(locateCurrentPosition);
+  locateCurrentPositionRef.current = locateCurrentPosition;
 
   const selectedPhotoRef = useRef(selectedPhoto);
   selectedPhotoRef.current = selectedPhoto;
@@ -1074,6 +1165,19 @@ export function ProjectPhotoMap({
     const zoomControl = L.control.zoom({ position: 'bottomright' }).addTo(map);
     const zoomContainer = zoomControl.getContainer();
     if (zoomContainer) {
+      const locateLink = L.DomUtil.create(
+        'a',
+        'fp-leaflet-locate',
+        zoomContainer,
+      ) as HTMLAnchorElement;
+      locateLink.href = '#';
+      locateLink.setAttribute('role', 'button');
+      locateLink.title = 'Go to current location';
+      locateLink.setAttribute('aria-label', 'Go to current location');
+      locateLink.innerHTML = locateIconSvg;
+      L.DomEvent.on(locateLink, 'click', L.DomEvent.stop);
+      L.DomEvent.on(locateLink, 'click', () => void locateCurrentPositionRef.current());
+      locateLinkRef.current = locateLink;
       const link = L.DomUtil.create('a', 'fp-leaflet-fit', zoomContainer) as HTMLAnchorElement;
       link.href = '#';
       link.setAttribute('role', 'button');
@@ -1108,6 +1212,7 @@ export function ProjectPhotoMap({
       setContextMenu({ left, top, photo });
     });
     markerLayerRef.current = L.layerGroup().addTo(map);
+    currentLocationLayerRef.current = L.layerGroup().addTo(map);
     const refresh = () => setViewportRevision((revision) => revision + 1);
     map.on('zoomend moveend', refresh);
     mapRef.current = map;
@@ -1118,9 +1223,19 @@ export function ProjectPhotoMap({
       map.remove();
       mapRef.current = null;
       markerLayerRef.current = null;
+      currentLocationLayerRef.current = null;
       setMapInstance(null);
     };
   }, []);
+
+  useEffect(() => {
+    const link = locateLinkRef.current;
+    if (!link) return;
+    link.classList.toggle('is-locating', locating);
+    link.setAttribute('aria-busy', String(locating));
+    link.setAttribute('aria-disabled', String(locating));
+    link.title = locating ? 'Finding current location…' : 'Go to current location';
+  }, [locating]);
 
   useEffect(() => {
     const map = mapRef.current;

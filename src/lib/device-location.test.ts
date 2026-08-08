@@ -94,6 +94,33 @@ describe('readDeviceLocation', () => {
     });
   });
 
+  it('supports a fresh high-accuracy fix for the current-location map control', async () => {
+    let requestedOptions: PositionOptions | undefined;
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition(
+          success: PositionCallback,
+          _error: PositionErrorCallback,
+          options?: PositionOptions,
+        ) {
+          requestedOptions = options;
+          success({
+            coords: { latitude: 39.7, longitude: -86.1, accuracy: 9 },
+          } as GeolocationPosition);
+        },
+      },
+    });
+
+    await expect(
+      readDeviceLocation({ enableHighAccuracy: true, timeoutMs: 10_000, maximumAgeMs: 30_000 }),
+    ).resolves.toMatchObject({ status: 'ok' });
+    expect(requestedOptions).toEqual({
+      enableHighAccuracy: true,
+      timeout: 10_000,
+      maximumAge: 30_000,
+    });
+  });
+
   it('stops waiting when iPhone Chrome ignores the browser geolocation timeout', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('navigator', {

@@ -25,6 +25,12 @@ export const DEVICE_LOCATION_MAX_ACCURACY_M = 100;
 const GEOLOCATION_TIMEOUT_MS = 5_000;
 const HARD_GEOLOCATION_TIMEOUT_MS = GEOLOCATION_TIMEOUT_MS + 500;
 
+export interface DeviceLocationOptions {
+  enableHighAccuracy?: boolean;
+  timeoutMs?: number;
+  maximumAgeMs?: number;
+}
+
 /**
  * A photo with no capture time is treated as stale — we cannot prove it is not.
  * Callers skip this check entirely for a photo the browser's camera just
@@ -53,10 +59,13 @@ export type DeviceLocationResult =
  * position unavailable — comes back as a result the caller treats exactly like
  * a missing EXIF location, so a denied prompt costs the user nothing.
  */
-export async function readDeviceLocation(): Promise<DeviceLocationResult> {
+export async function readDeviceLocation(
+  options: DeviceLocationOptions = {},
+): Promise<DeviceLocationResult> {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
     return { status: 'unsupported' };
   }
+  const timeoutMs = options.timeoutMs ?? GEOLOCATION_TIMEOUT_MS;
   return await new Promise<DeviceLocationResult>((resolve) => {
     let settled = false;
     const finish = (result: DeviceLocationResult) => {
@@ -70,7 +79,7 @@ export async function readDeviceLocation(): Promise<DeviceLocationResult> {
     // Keep photo saving independent from that WebKit callback.
     const hardTimeout = globalThis.setTimeout(
       () => finish({ status: 'failed', code: 3 }),
-      HARD_GEOLOCATION_TIMEOUT_MS,
+      options.timeoutMs === undefined ? HARD_GEOLOCATION_TIMEOUT_MS : timeoutMs + 500,
     );
     try {
       navigator.geolocation.getCurrentPosition(
@@ -87,11 +96,11 @@ export async function readDeviceLocation(): Promise<DeviceLocationResult> {
         {
           // Start with the quickest available iOS fix. Requiring the GPS radio
           // here can time out in Chrome even when location access is granted.
-          enableHighAccuracy: false,
-          timeout: GEOLOCATION_TIMEOUT_MS,
+          enableHighAccuracy: options.enableHighAccuracy ?? false,
+          timeout: timeoutMs,
           // A recent cached fix is appropriate for a photo captured by this tap
           // and avoids making the upload wait for a fresh GPS lock.
-          maximumAge: 5 * 60_000,
+          maximumAge: options.maximumAgeMs ?? 5 * 60_000,
         },
       );
     } catch {

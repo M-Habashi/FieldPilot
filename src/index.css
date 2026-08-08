@@ -619,15 +619,37 @@ select {
 
 /* Fit-photos segment appended to the Leaflet zoom control bar. Everything
    else (size, borders, hover) comes from the .leaflet-bar rules. */
-.leaflet-bar a.fp-leaflet-fit {
+.leaflet-bar a.fp-leaflet-fit,
+.leaflet-bar a.fp-leaflet-locate {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.leaflet-bar a.fp-leaflet-fit svg {
+.leaflet-bar a.fp-leaflet-fit svg,
+.leaflet-bar a.fp-leaflet-locate svg {
   width: 15px;
   height: 15px;
+}
+
+.leaflet-bar a.fp-leaflet-locate.is-locating {
+  color: var(--fp-accent);
+  cursor: wait;
+}
+
+.leaflet-bar a.fp-leaflet-locate.is-locating svg {
+  animation: fp-locate-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes fp-locate-pulse {
+  to {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+.fp-current-location-marker {
+  filter: drop-shadow(0 2px 4px rgb(15 23 42 / 0.28));
 }
 
 /* Street/satellite layer toggle, rendered as a Leaflet control at the
@@ -714,7 +736,8 @@ select {
     line-height: 34px;
   }
 
-  .leaflet-bar a.fp-leaflet-fit svg {
+  .leaflet-bar a.fp-leaflet-fit svg,
+  .leaflet-bar a.fp-leaflet-locate svg {
     width: 17px;
     height: 17px;
   }
