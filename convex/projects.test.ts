@@ -217,6 +217,164 @@ describe('plan metadata permissions and cleanup', () => {
     });
   });
 
+  it('keeps photo evidence and clears its task assignment when a task is deleted', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Photo Owner', 'photo-owner@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Photo Evidence' });
+    const sheetId = await owner.mutation(api.sheets.create, {
+      projectId,
+      name: 'Photo Plan',
+      number: 'P-101',
+      sourceFileRef: '/demo/photo-plan.pdf',
+      pageIndex: 0,
+      width: 1000,
+      height: 1000,
+    });
+    const taskId = await owner.mutation(api.tasks.create, {
+      projectId,
+      sheetId,
+      x: 0.5,
+      y: 0.5,
+    });
+    const upload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
+    const photoBlob = new Blob(['photo evidence'], { type: 'image/jpeg' });
+    const storageRef = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
+    const attachmentId = await owner.mutation(api.attachments.completeUpload, {
+      taskId,
+      kind: 'photo',
+      uploadClaimId: upload.uploadClaimId,
+      storageRef,
+      fileName: 'evidence.jpg',
+      contentType: photoBlob.type,
+      size: photoBlob.size,
+    });
+
+    await owner.mutation(api.tasks.remove, { taskId });
+
+    await t.run(async (ctx) => {
+      const attachment = await ctx.db.get(attachmentId);
+      expect(attachment).toMatchObject({ kind: 'photo', projectId, storageRef });
+      expect(attachment?.taskId).toBeUndefined();
+      expect(await ctx.db.system.get('_storage', storageRef)).not.toBeNull();
+    });
+  });
+
+  it('stores an unassigned photo at its EXIF location and lists it to project members', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Map Owner', 'map-owner@example.com');
+    const viewerId = await seedUser(t, 'Map Viewer', 'map-viewer@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const viewer = t.withIdentity({ subject: viewerId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Mapped Photos' });
+    await seedMembership(t, projectId, viewerId, ownerId, 'viewer');
+    const upload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
+    const photoBlob = new Blob(['map photo'], { type: 'image/jpeg' });
+    const storageRef = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
+
+    const attachmentId = await owner.mutation(api.attachments.completeUpload, {
+      projectId,
+      kind: 'photo',
+      uploadClaimId: upload.uploadClaimId,
+      storageRef,
+      fileName: 'site.jpg',
+      contentType: photoBlob.type,
+      size: photoBlob.size,
+      latitude: 39.7684,
+      longitude: -86.1581,
+      originalLatitude: 39.7684,
+      originalLongitude: -86.1581,
+      locationSource: 'exif',
+    });
+
+    const photos = await viewer.query(api.attachments.listProjectPhotos, { projectId });
+    expect(photos).toHaveLength(1);
+    expect(photos[0]).toMatchObject({
+      attachment: {
+        _id: attachmentId,
+        latitude: 39.7684,
+        longitude: -86.1581,
+        originalLatitude: 39.7684,
+        originalLongitude: -86.1581,
+        locationSource: 'exif',
+        locationUpdatedAt: expect.any(Number),
+      },
+      task: null,
+    });
+    expect(photos[0].attachment.taskId).toBeUndefined();
+    expect(await viewer.query(api.attachments.getPhotoMapState, { attachmentId })).toEqual({
+      photoUpdatedAt: expect.any(Number),
+    });
+  });
+
+  it('keeps a photo location independent from task assignment and rejects stale photo edits', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Photo Map Owner', 'photo-map-owner@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Photo Map Updates' });
+    const sheetId = await owner.mutation(api.sheets.create, {
+      projectId,
+      name: 'Photo Map Plan',
+      number: 'M-101',
+      sourceFileRef: '/demo/photo-map-plan.pdf',
+      pageIndex: 0,
+      width: 1000,
+      height: 1000,
+    });
+    const taskId = await owner.mutation(api.tasks.create, {
+      projectId,
+      sheetId,
+      x: 0.5,
+      y: 0.5,
+    });
+    const upload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
+    const photoBlob = new Blob(['movable photo'], { type: 'image/jpeg' });
+    const storageRef = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
+    const attachmentId = await owner.mutation(api.attachments.completeUpload, {
+      projectId,
+      kind: 'photo',
+      uploadClaimId: upload.uploadClaimId,
+      storageRef,
+      fileName: 'movable.jpg',
+      contentType: photoBlob.type,
+      size: photoBlob.size,
+      latitude: 39.7684,
+      longitude: -86.1581,
+      originalLatitude: 39.7684,
+      originalLongitude: -86.1581,
+      locationSource: 'exif',
+    });
+    const originalVersion = await t.run(
+      async (ctx) => (await ctx.db.get(attachmentId))?.photoUpdatedAt,
+    );
+    expect(originalVersion).toEqual(expect.any(Number));
+
+    const moved = await owner.mutation(api.attachments.setPhotoLocation, {
+      attachmentId,
+      latitude: 40.0,
+      longitude: -85.0,
+      expectedPhotoUpdatedAt: originalVersion,
+    });
+    await expect(
+      owner.mutation(api.attachments.assignPhoto, {
+        attachmentId,
+        taskId,
+        expectedPhotoUpdatedAt: originalVersion,
+      }),
+    ).rejects.toThrow('This photo changed before it could be undone.');
+
+    await owner.mutation(api.attachments.assignPhoto, {
+      attachmentId,
+      taskId,
+      expectedPhotoUpdatedAt: moved.photoUpdatedAt,
+    });
+    const photos = await owner.query(api.attachments.listProjectPhotos, { projectId });
+    expect(photos[0]).toMatchObject({
+      attachment: { _id: attachmentId, latitude: 40, longitude: -85, locationSource: 'manual' },
+      task: { _id: taskId },
+    });
+  });
+
   it('uploads, updates, and removes a multi-page PDF as one plan', async () => {
     const t = createTest();
     const ownerId = await seedUser(t, 'Upload Owner', 'upload-owner@example.com');

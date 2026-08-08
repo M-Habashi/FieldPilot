@@ -199,6 +199,9 @@ interface ProjectState {
   addPinMode: boolean;
   taskListOpen: boolean;
   sidebarCollapsed: boolean;
+  // Phones: the sidebar is an overlay drawer, hidden until the hamburger
+  // button opens it.
+  sidebarMobileOpen: boolean;
   lightboxPhotoId: string | null;
   focusRequest: FocusRequest | null;
   selectedMarkupId: string | null;
@@ -234,6 +237,9 @@ interface ProjectState {
   showTaskList(): void;
   closeTaskList(): void;
   toggleSidebar(): void;
+  setSidebarCollapsed(collapsed: boolean): void;
+  setSidebarMobileOpen(open: boolean): void;
+  toggleSidebarMobile(): void;
   setLightbox(photoId: string | null): void;
   replaceProject(tasks: Record<string, Task>, nextSeq: number): void;
   replaceMarkups(
@@ -294,6 +300,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   // Default to the narrow icon rail; the single "Plans" item doesn't justify
   // the wide sidebar. Users expand it explicitly via the chevron.
   sidebarCollapsed: true,
+  sidebarMobileOpen: false,
   lightboxPhotoId: null,
   focusRequest: null,
   selectedMarkupId: null,
@@ -791,6 +798,18 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   toggleSidebar() {
     set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed }));
+  },
+
+  setSidebarCollapsed(collapsed) {
+    set({ sidebarCollapsed: collapsed });
+  },
+
+  setSidebarMobileOpen(open) {
+    set({ sidebarMobileOpen: open });
+  },
+
+  toggleSidebarMobile() {
+    set((s) => ({ sidebarMobileOpen: !s.sidebarMobileOpen }));
   },
 
   setLightbox(photoId) {

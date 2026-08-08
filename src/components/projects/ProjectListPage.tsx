@@ -81,7 +81,7 @@ export function ProjectListPage({ onOpenProject }: ProjectListPageProps) {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
-      <div className="fp-page-header flex items-center justify-between gap-4 border-b border-line pb-6">
+      <div className="flex items-center justify-between gap-4 border-b border-line pb-6">
         <h1 className="font-display text-4xl font-semibold leading-none tracking-[-0.02em] text-t1">
           Projects
         </h1>

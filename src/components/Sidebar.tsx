@@ -1,4 +1,5 @@
-import { ChevronRight, Layers } from 'lucide-react';
+import { useRef } from 'react';
+import { ChevronsLeftRight, Layers, Map } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useProject } from '../store/project';
 
@@ -6,46 +7,128 @@ import { useProject } from '../store/project';
  * Left rail. Two genuinely distinct states (no clipped wide sidebar):
  *  - collapsed → a narrow 56px icon-only rail (labels hidden, icons centered)
  *  - expanded  → a 200px rail with icon + label
- * A compact chevron sits just outside the rail's top edge and follows that
- * edge as the sidebar expands.
+ * The right border is the control: drag it (right of the 128px midpoint
+ * expands, left collapses), click it to toggle, or focus it and use the
+ * arrow keys. The handle floats just outside the rail's edge so it never
+ * overlaps the app content beside it.
  */
-export function Sidebar({ onShowPlans }: { onShowPlans?: () => void } = {}) {
+export function Sidebar({
+  onShowPlans,
+  onShowMap,
+  activeItem = 'plans',
+}: {
+  onShowPlans?: () => void;
+  onShowMap?: () => void;
+  activeItem?: 'plans' | 'map';
+} = {}) {
   const collapsed = useProject((s) => s.sidebarCollapsed);
   const toggleSidebar = useProject((s) => s.toggleSidebar);
+  const setSidebarCollapsed = useProject((s) => s.setSidebarCollapsed);
+  const mobileOpen = useProject((s) => s.sidebarMobileOpen);
+  const setMobileOpen = useProject((s) => s.setSidebarMobileOpen);
+  const dragStateRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
+
+  const onHandlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget;
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is a convenience; window listeners below still work.
+    }
+    dragStateRef.current = { startX: event.clientX, startY: event.clientY, moved: false };
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const state = dragStateRef.current;
+      if (!state) return;
+      const dx = moveEvent.clientX - state.startX;
+      const dy = moveEvent.clientY - state.startY;
+      if (Math.hypot(dx, dy) >= 4) state.moved = true;
+      setSidebarCollapsed(moveEvent.clientX <= 128);
+    };
+    const onPointerUp = () => {
+      const state = dragStateRef.current;
+      dragStateRef.current = null;
+      if (state && !state.moved) toggleSidebar();
+      handle.blur();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  const onHandleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      setSidebarCollapsed(true);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      setSidebarCollapsed(false);
+    }
+  };
+
+  // Phones: the rail becomes an off-canvas drawer, hidden until the hamburger
+  // button opens it. Desktop keeps the collapsed/expanded rail behavior.
+  const navTo = (navigate?: () => void) => () => {
+    navigate?.();
+    setMobileOpen(false);
+  };
 
   return (
-    <aside
-      className={cn(
-        'fp-sidebar absolute inset-y-0 left-0 z-50 flex flex-col transition-[width,box-shadow] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
-        collapsed ? 'w-14' : 'w-50',
-        !collapsed && 'shadow-e2',
-      )}
-      aria-label="Primary"
-    >
-      <nav className="flex-1 space-y-1 p-2">
-        <SidebarItem
-          icon={<Layers />}
-          label="Plans"
-          active
-          collapsed={collapsed}
-          onClick={onShowPlans}
-        />
-      </nav>
-
+    <>
       <button
         type="button"
-        onClick={toggleSidebar}
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="absolute top-1 left-full flex size-8 items-center justify-center rounded-md text-t3 transition-[color,background-color,transform] duration-(--fp-motion-duration) ease-(--fp-motion-ease) hover:bg-surface2 hover:text-t1 cursor-pointer"
+        aria-label="Close navigation menu"
+        aria-hidden={!mobileOpen}
+        tabIndex={mobileOpen ? 0 : -1}
+        className={cn(
+          'fp-sidebar-backdrop absolute inset-0 z-40 md:hidden',
+          mobileOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+        )}
+        onClick={() => setMobileOpen(false)}
+      />
+      <aside
+        data-state={mobileOpen ? 'open' : 'closed'}
+        className={cn(
+          'fp-sidebar absolute inset-y-0 left-0 z-50 flex flex-col',
+          collapsed ? 'md:w-14' : 'md:w-50',
+          'max-md:w-64 max-md:shadow-e3',
+          mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
+          !collapsed && 'md:shadow-e2',
+        )}
+        aria-label="Primary"
       >
-        <ChevronRight
-          className={cn(
-            'size-4 shrink-0 transition-transform duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
-            !collapsed && 'rotate-180',
-          )}
-        />
-      </button>
-    </aside>
+        <nav className="flex-1 space-y-1 p-2">
+          <SidebarItem
+            icon={<Layers />}
+            label="Plans"
+            active={activeItem === 'plans'}
+            collapsed={collapsed && !mobileOpen}
+            onClick={navTo(onShowPlans)}
+          />
+          <SidebarItem
+            icon={<Map />}
+            label="Map"
+            active={activeItem === 'map'}
+            collapsed={collapsed && !mobileOpen}
+            onClick={navTo(onShowMap)}
+          />
+        </nav>
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          tabIndex={0}
+          onPointerDown={onHandlePointerDown}
+          onKeyDown={onHandleKeyDown}
+          className="fp-resize-handle group absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize items-center justify-center md:flex"
+        >
+          <span className="pointer-events-none flex h-7 w-1.5 items-center justify-center rounded-full bg-line-strong opacity-0 transition-opacity duration-(--fp-dur-fast) group-hover:opacity-100 group-focus-visible:opacity-100">
+            <ChevronsLeftRight className="size-3 text-t2" />
+          </span>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -63,15 +146,23 @@ function SidebarItem({
   onClick?: () => void;
 }) {
   const className = cn(
-    'flex h-10 w-full items-center rounded-md text-sm font-medium [&_svg]:size-5 [&_svg]:shrink-0',
-    collapsed ? 'justify-center px-0' : 'gap-3 px-3.5',
+    'flex h-10 w-full items-center rounded-md text-sm font-medium transition-[background-color,color,gap,padding] duration-(--fp-dur-fast) ease-(--fp-ease) [&_svg]:size-5 [&_svg]:shrink-0',
+    collapsed ? 'justify-center gap-0 px-0' : 'gap-3 px-3.5',
     active ? 'bg-accent-soft text-accent' : 'text-t2',
     onClick && 'cursor-pointer',
   );
   const content = (
     <>
       {icon}
-      {!collapsed && <span className="truncate whitespace-nowrap">{label}</span>}
+      <span
+        aria-hidden={collapsed}
+        className={cn(
+          'fp-sidebar-item-label min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+          collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-40 translate-x-0 opacity-100',
+        )}
+      >
+        {label}
+      </span>
     </>
   );
 
@@ -79,7 +170,9 @@ function SidebarItem({
     <button
       type="button"
       className={className}
+      aria-label={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
+      title={collapsed ? label : undefined}
       onClick={onClick}
     >
       {content}

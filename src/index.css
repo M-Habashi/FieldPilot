@@ -49,10 +49,12 @@ body {
   color: var(--fp-text-1);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  overscroll-behavior: none;
-  /* The app owns its own internal scrolling; the document itself never scrolls,
-     so there is no browser-level horizontal or vertical overflow scrollbar. */
-  overflow: hidden;
+  /* Keep sideways browser navigation contained, but let vertical overscroll
+     reach the document so mobile pull-to-refresh works from every page. */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 :focus-visible {
@@ -97,40 +99,25 @@ select {
   .fp-sidebar {
     background: var(--fp-bg-surface);
     border-right: 1px solid var(--fp-border-strong);
+    transition:
+      width var(--fp-motion-duration) var(--fp-motion-ease),
+      transform var(--fp-motion-duration) var(--fp-motion-ease),
+      box-shadow var(--fp-motion-duration) var(--fp-motion-ease);
   }
 
-  .fp-page-header {
-    position: relative;
+  .fp-sidebar-backdrop {
+    background: rgb(23 34 54 / 0.18);
+    transition: opacity var(--fp-motion-duration) var(--fp-motion-ease);
   }
 
-  .fp-page-header::after {
-    content: '';
-    position: absolute;
-    inset-inline: 0;
-    bottom: -1px;
-    width: 72px;
-    height: 2px;
-    background: var(--fp-accent);
-  }
-
+  /* Flat fills, not a diagonal wash. The card's own
+     transition-[…background-color…] utility fades the hover. */
   .fp-project-card {
-    background:
-      linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--fp-accent-soft) 36%, transparent),
-        transparent 42%
-      ),
-      var(--fp-bg-surface);
+    background-color: var(--fp-bg-surface);
   }
 
   .fp-project-card:hover {
-    background:
-      linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--fp-accent-soft) 58%, transparent),
-        transparent 46%
-      ),
-      var(--fp-bg-surface);
+    background-color: color-mix(in srgb, var(--fp-accent-soft) 45%, var(--fp-bg-surface));
   }
 
   .fp-auth-panel {
@@ -175,11 +162,18 @@ select {
   .fp-pin {
     position: absolute;
     transform: translate(-50%, -100%);
-    width: var(--fp-pin-size);
-    height: var(--fp-pin-size);
+    /* The pin sits inside the zoomed plan layer, so every fixed length inside
+       it has to be counter-scaled to stay the same size on screen. One local
+       unit — use `calc(N * var(--fp-pin-px))` instead of `Npx` below. */
+    --fp-pin-px: calc(1px / var(--fp-pin-view-scale, 1));
+    width: calc(var(--fp-pin-size) / var(--fp-pin-view-scale, 1));
+    height: calc(var(--fp-pin-size) / var(--fp-pin-view-scale, 1));
     cursor: pointer;
     touch-action: none;
     z-index: 10;
+    transition:
+      width var(--fp-motion-duration) var(--fp-motion-ease),
+      height var(--fp-motion-duration) var(--fp-motion-ease);
   }
 
   .fp-pin-marker {
@@ -192,7 +186,7 @@ select {
     background: var(--pin-color, var(--fp-accent));
     /* Neutral outline is always present so pins retain contrast on pale plans,
        regardless of their task color or selection state. */
-    border: 2px solid var(--fp-text-2);
+    border: calc(2 * var(--fp-pin-px, 1px)) solid var(--fp-text-2);
     border-radius: var(--fp-pin-radius);
     transform: rotate(-45deg);
     box-shadow: var(--fp-shadow-e2);
@@ -208,9 +202,10 @@ select {
   .fp-pin-marker::after {
     content: '';
     position: absolute;
-    inset: -5px;
+    inset: calc(-5 * var(--fp-pin-px, 1px));
     pointer-events: none;
-    border: 3px solid color-mix(in srgb, var(--pin-color, var(--fp-accent)) 30%, transparent);
+    border: calc(3 * var(--fp-pin-px, 1px)) solid
+      color-mix(in srgb, var(--pin-color, var(--fp-accent)) 30%, transparent);
     border-radius: inherit;
     opacity: 0;
     transition: opacity var(--fp-dur-fast) var(--fp-ease);
@@ -221,10 +216,16 @@ select {
     transform: rotate(45deg);
     color: #fff;
     font-family: var(--fp-font-mono);
-    font-size: 11px;
+    font-size: calc(11 * var(--fp-pin-px, 1px));
     font-weight: 700;
     line-height: 1;
     user-select: none;
+  }
+
+  /* Sized off the label so the done check matches the sequence number. */
+  .fp-pin-check {
+    width: 1.2em;
+    height: 1.2em;
   }
 
   .fp-pin:hover .fp-pin-marker {
@@ -276,6 +277,22 @@ select {
     backdrop-filter: blur(6px);
     animation: fp-fade-in var(--fp-dur-fast) var(--fp-ease) both;
   }
+
+  /* The photo itself zooms in gently on top of the backdrop fade. */
+  .fp-lightbox-image {
+    animation: fp-lightbox-zoom-in var(--fp-dur-med) var(--fp-ease) both;
+  }
+
+  @keyframes fp-lightbox-zoom-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 }
 
 /* The button's hit-area is rectangular, but the visible pin is not. This must
@@ -297,6 +314,428 @@ select {
   cursor:
     url('/cursors/macos-grabbing-24.png') 13 8,
     grabbing;
+}
+
+.fp-photo-map-leaflet-icon {
+  background: transparent;
+  border: 0;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS otherwise offers its image callout over the app's own long-press menu. */
+.fp-photo-map-leaflet-icon *,
+.fp-photo-no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Scale the whole photo marker down — 25% smaller generally, even more on
+   phones. Scaling about the icon anchor keeps the marker pointing at its
+   exact map location. */
+.fp-photo-map-marker-shell {
+  position: relative;
+  width: 116px;
+  height: 132px;
+  transform-origin: 58px 116px; /* matches iconAnchor */
+  transform: scale(0.75);
+}
+
+@media (max-width: 767px) {
+  .fp-photo-map-marker-shell {
+    transform: scale(0.6);
+  }
+}
+
+.fp-photo-map-marker-stack {
+  position: relative;
+  width: 96px;
+  height: 108px;
+  cursor: pointer;
+  filter: drop-shadow(0 12px 20px rgb(15 23 42 / 0.24));
+  transition:
+    transform var(--fp-dur-fast) var(--fp-ease),
+    filter var(--fp-dur-fast) var(--fp-ease);
+}
+
+.fp-photo-map-marker-stack::before,
+.fp-photo-map-marker-stack::after {
+  position: absolute;
+  width: 92px;
+  height: 92px;
+  content: '';
+  border: 3px solid var(--fp-photo-task-color, var(--fp-border-strong));
+  border-radius: 18px;
+  background: var(--fp-bg-surface);
+  transition: transform var(--fp-dur-fast) var(--fp-ease);
+}
+
+/* 1 photo = one clean card; 2 photos = one backing card; 3+ keep the fan. */
+.fp-photo-map-marker-stack--single::before,
+.fp-photo-map-marker-stack--single::after {
+  content: none;
+}
+
+.fp-photo-map-marker-stack--pair::after {
+  content: none;
+}
+
+.fp-photo-map-marker-stack::before {
+  top: 11px;
+  left: -10px;
+  transform: rotate(-7deg);
+  opacity: 0.94;
+}
+
+.fp-photo-map-marker-stack::after {
+  top: 9px;
+  left: 14px;
+  transform: rotate(6deg);
+  opacity: 0.9;
+}
+
+.fp-photo-map-marker-preview {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 2px;
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  border: 3px solid var(--fp-photo-task-color, var(--fp-text-3));
+  border-radius: 18px;
+  background-color: var(--fp-bg-surface-2);
+  background-position: center;
+  background-size: cover;
+  transition:
+    width var(--fp-dur-fast) var(--fp-ease),
+    height var(--fp-dur-fast) var(--fp-ease),
+    transform var(--fp-dur-fast) var(--fp-ease);
+}
+
+.fp-photo-map-marker-preview--empty {
+  background-image: linear-gradient(135deg, var(--fp-bg-surface-2), var(--fp-bg-surface));
+}
+
+.fp-photo-map-marker-count {
+  position: absolute;
+  z-index: 4;
+  right: -4px;
+  bottom: 10px;
+  display: grid;
+  min-width: 30px;
+  height: 30px;
+  padding-inline: 8px;
+  place-items: center;
+  border: 3px solid var(--fp-bg-surface);
+  border-radius: 999px;
+  background: var(--fp-text-1);
+  color: var(--fp-bg-surface);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fp-photo-map-marker-task {
+  position: absolute;
+  z-index: 4;
+  top: 72px;
+  left: 38px;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--fp-bg-surface);
+  border-radius: 999px 999px 999px 0;
+  background: var(--fp-photo-task-color, var(--fp-text-3));
+  transform: rotate(-45deg);
+}
+
+/* The reported accuracy radius, drawn to scale — a wide ring is an honest
+   signal that the fix was poor. */
+.fp-photo-map-suggestion-range {
+  fill: var(--fp-accent);
+  fill-opacity: 0.1;
+  stroke: var(--fp-accent);
+  stroke-dasharray: 5 5;
+  stroke-opacity: 0.55;
+  stroke-width: 2;
+}
+
+.fp-photo-map-marker-stack:hover {
+  z-index: 20;
+  transform: translate(-18px, -20px) scale(1.45);
+  filter: drop-shadow(0 28px 30px rgb(15 23 42 / 0.28));
+}
+
+.fp-photo-map-marker-stack:hover::before {
+  transform: translate(-16px, 12px) rotate(-10deg);
+}
+
+.fp-photo-map-marker-stack:hover::after {
+  transform: translate(16px, 12px) rotate(10deg);
+}
+
+/* Hovering a photo in the list highlights its marker exactly like a map
+   hover: lifted, enlarged, fanning out the stack. */
+.fp-photo-map-marker-stack--highlight,
+.fp-photo-map-marker-stack--touch-preview {
+  z-index: 20;
+  transform: translate(-18px, -20px) scale(1.45);
+  filter: drop-shadow(0 28px 30px rgb(15 23 42 / 0.28));
+}
+
+.fp-photo-map-marker-stack--highlight::before,
+.fp-photo-map-marker-stack--touch-preview::before {
+  transform: translate(-16px, 12px) rotate(-10deg);
+}
+
+.fp-photo-map-marker-stack--highlight::after,
+.fp-photo-map-marker-stack--touch-preview::after {
+  transform: translate(16px, 12px) rotate(10deg);
+}
+
+/* A freshly placed photo's marker drops in — the map's echo of the plan
+   pins' fp-pin-drop. Plays once on the render right after placement. */
+.fp-photo-map-marker-stack--drop {
+  animation: fp-photo-map-marker-drop var(--fp-dur-med) var(--fp-ease) both;
+}
+
+@keyframes fp-photo-map-marker-drop {
+  0% {
+    opacity: 0;
+    transform: translate(-9px, -12px) scale(0.85);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(2px, -1px) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* Move mode is a live, exit-able state rather than a static selection, so the
+   frame is a marching-ants outline. The border goes transparent and the
+   animated stroke becomes the edge. Must follow the --single/--pair rules so
+   the ring re-enables ::after. */
+.fp-photo-map-marker-stack--moving .fp-photo-map-marker-preview {
+  border-color: transparent;
+  box-shadow: 0 0 0 5px rgb(23 103 201 / 0.22);
+}
+
+.fp-photo-map-marker-ants {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 2px;
+  width: 98px;
+  height: 98px;
+  pointer-events: none;
+}
+
+.fp-photo-map-marker-ants svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.fp-photo-map-marker-ants rect {
+  fill: none;
+  stroke: var(--fp-accent);
+  stroke-width: 3;
+  /* dash + gap must sum to the keyframe offset below, or the loop jumps. */
+  stroke-dasharray: 10 8;
+  animation: fp-marching-ants 0.7s linear infinite;
+}
+
+@keyframes fp-marching-ants {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-photo-map-marker-ants rect {
+    animation: none;
+  }
+}
+
+.fp-photo-map-marker-stack--ping::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 92px;
+  height: 92px;
+  border: 3px solid var(--fp-accent);
+  border-radius: 18px;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  animation: fp-marker-ping-once 1.2s var(--fp-ease) both;
+}
+
+@keyframes fp-marker-ping-once {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
+.fp-map-context-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--fp-radius-xs);
+  color: var(--fp-text-2);
+  font-size: 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--fp-dur-fast) var(--fp-ease),
+    background var(--fp-dur-fast) var(--fp-ease);
+}
+
+.fp-map-context-item:hover {
+  background: var(--fp-bg-surface-2);
+  color: var(--fp-text-1);
+}
+
+.fp-map-context-item > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Fit-photos segment appended to the Leaflet zoom control bar. Everything
+   else (size, borders, hover) comes from the .leaflet-bar rules. */
+.leaflet-bar a.fp-leaflet-fit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leaflet-bar a.fp-leaflet-fit svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Street/satellite layer toggle, rendered as a Leaflet control at the
+   map's top-right corner. */
+.fp-leaflet-layer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #333;
+  font-family: var(--fp-font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid rgb(0 0 0 / 0.2);
+  border-radius: 4px;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+}
+
+.fp-leaflet-layer-toggle:hover {
+  background: #f4f4f4;
+}
+
+.fp-leaflet-layer-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Tile attribution has to stay, but the full Esri source list wrapped to two
+   lines across the bottom of the map on narrow screens. Hold it to a single
+   ellipsised line; hover or keyboard focus reveals the whole credit. */
+.leaflet-control-attribution {
+  max-width: 46vw;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: max-width var(--fp-motion-duration) var(--fp-motion-ease);
+}
+
+.leaflet-control-attribution:hover,
+.leaflet-control-attribution:focus-within {
+  max-width: 92vw;
+  white-space: normal;
+}
+
+/* When the photos drawer is open, slide the right-side map controls
+   (zoom + layer toggle) left of it so they stay usable. Percentage-based
+   so a full-width drawer on phones also clears them. */
+.leaflet-right {
+  transition: right var(--fp-motion-duration) var(--fp-motion-ease);
+}
+
+.fp-map-panel-open .leaflet-right {
+  right: min(var(--fp-drawer-width), 92%);
+}
+
+/* Phones: the photos drawer overlays the map, so right-side map controls
+   (zoom/fit/layer toggle) would overlap it. Hide them while it's open. */
+@media (max-width: 767px) {
+  .fp-map-panel-open .leaflet-right {
+    display: none;
+  }
+}
+
+/* Phones: keep a strip of map visible next to a drawer so there is always
+   something to tap to dismiss it. Unlayered so it beats the
+   max-w-[var(--fp-drawer-width)] utility. */
+@media (max-width: 767px) {
+  .fp-panel {
+    max-width: 86vw;
+  }
+}
+
+/* Touch: bigger hit targets for the zoom/fit bar and the resize handles. */
+@media (pointer: coarse) {
+  .leaflet-bar a {
+    width: 34px;
+    height: 34px;
+    line-height: 34px;
+  }
+
+  .leaflet-bar a.fp-leaflet-fit svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .fp-resize-handle {
+    width: 24px;
+  }
+}
+
+/* The stack's backing cards show the second and third photos in the
+   cluster instead of blank cards. */
+.fp-photo-map-marker-stack::before {
+  background-image: var(--fp-stack-img-1);
+  background-position: center;
+  background-size: cover;
+}
+
+.fp-photo-map-marker-stack::after {
+  background-image: var(--fp-stack-img-2);
+  background-position: center;
+  background-size: cover;
 }
 
 .fp-cursor-pin {

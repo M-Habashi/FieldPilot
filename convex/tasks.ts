@@ -43,6 +43,18 @@ export const listByPdf = query({
   },
 });
 
+export const listByProject = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId }) => {
+    await requireProjectMember(ctx, projectId);
+    const tasks = await ctx.db
+      .query('tasks')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect();
+    return tasks.sort((a, b) => a.seq - b.seq);
+  },
+});
+
 export const create = mutation({
   args: {
     projectId: v.id('projects'),
@@ -173,7 +185,9 @@ export const remove = mutation({
         .withIndex('by_task', (q) => q.eq('taskId', taskId))
         .collect(),
     ]);
-    for (const attachment of attachments) {
+    const attachmentsToDelete = attachments.filter((attachment) => attachment.kind !== 'photo');
+    const photosToUnassign = attachments.filter((attachment) => attachment.kind === 'photo');
+    for (const attachment of attachmentsToDelete) {
       try {
         await ctx.storage.delete(attachment.storageRef);
       } catch {
@@ -182,7 +196,13 @@ export const remove = mutation({
     }
     await Promise.all([
       ...notes.map((note) => ctx.db.delete(note._id)),
-      ...attachments.map((attachment) => ctx.db.delete(attachment._id)),
+      ...attachmentsToDelete.map((attachment) => ctx.db.delete(attachment._id)),
+      ...photosToUnassign.map((attachment) =>
+        ctx.db.patch(attachment._id, {
+          taskId: undefined,
+          photoUpdatedAt: Math.max(Date.now(), (attachment.photoUpdatedAt ?? 0) + 1),
+        }),
+      ),
     ]);
     await ctx.db.delete(taskId);
   },

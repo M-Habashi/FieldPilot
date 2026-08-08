@@ -10,6 +10,7 @@ import { MarkupLayer } from './MarkupLayer';
 import { CalibrationDialog } from './CalibrationDialog';
 import { Button } from './ui/button';
 import { extractPdfSnapPoints } from '../lib/pdf-snapping';
+import { pinchGeometry, pinchView, zoomAt } from '../lib/view-gestures';
 
 interface View {
   scale: number;
@@ -26,6 +27,12 @@ interface TouchPinDrag {
   originX: number;
   originY: number;
   overCancelZone: boolean;
+}
+
+interface PinchGesture {
+  distance: number;
+  midpoint: { x: number; y: number };
+  view: View;
 }
 
 function markupDraft(type: Markup['type'], page: number, points: MarkupPoint[]): Markup {
@@ -189,18 +196,6 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-function zoomAt(v: View, cx: number, cy: number, factor: number): View {
-  const scale = clamp(v.scale * factor, 0.1, 8);
-  const k = scale / v.scale;
-  return {
-    scale,
-    offset: {
-      x: cx - (cx - v.offset.x) * k,
-      y: cy - (cy - v.offset.y) * k,
-    },
-  };
-}
-
 function nearestSnapPoint(
   point: MarkupPoint,
   candidates: MarkupPoint[],
@@ -243,6 +238,8 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const motionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shiftPressedRef = useRef(false);
+  const touchPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<PinchGesture | null>(null);
   const dragRef = useRef<{
     sx: number;
     sy: number;
@@ -262,6 +259,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const [pageBase, setPageBase] = useState<PageBase | null>(null);
   const [page, setPage] = useState<PDFPageProxy | null>(null);
   const [view, setView] = useState<View>({ scale: 1, offset: { x: 0, y: 0 } });
+  const viewRef = useRef(view);
   const [panning, setPanning] = useState(false);
   const [smoothView, setSmoothView] = useState(false);
   const [touchPinDrag, setTouchPinDrag] = useState<TouchPinDrag | null>(null);
@@ -328,15 +326,24 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     setSmoothView(false);
   }, []);
 
-  const animateView = useCallback((update: (current: View) => View) => {
-    if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
-    setSmoothView(true);
-    setView(update);
-    motionTimerRef.current = setTimeout(() => {
-      setSmoothView(false);
-      motionTimerRef.current = null;
-    }, 240);
+  const updateView = useCallback((update: View | ((current: View) => View)) => {
+    const next = typeof update === 'function' ? update(viewRef.current) : update;
+    viewRef.current = next;
+    setView(next);
   }, []);
+
+  const animateView = useCallback(
+    (update: (current: View) => View) => {
+      if (motionTimerRef.current) clearTimeout(motionTimerRef.current);
+      setSmoothView(true);
+      updateView(update);
+      motionTimerRef.current = setTimeout(() => {
+        setSmoothView(false);
+        motionTimerRef.current = null;
+      }, 240);
+    },
+    [updateView],
+  );
 
   useEffect(
     () => () => {
@@ -453,9 +460,8 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   useEffect(() => {
     if (!pageBase || !page) return;
     let renderTask: { cancel(): void; promise: Promise<void> } | null = null;
+    let cancelled = false;
     void (async () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
       const dpr = window.devicePixelRatio || 1;
       const baseViewport = page.getViewport({ scale: 1 });
       const rasterScale = cappedRasterScale(
@@ -464,16 +470,26 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
         renderScale * dpr,
       );
       const vp = page.getViewport({ scale: rasterScale });
-      canvas.width = Math.floor(vp.width);
-      canvas.height = Math.floor(vp.height);
-      renderTask = page.render({ canvas, viewport: vp });
+      const nextCanvas = document.createElement('canvas');
+      nextCanvas.width = Math.max(1, Math.floor(vp.width));
+      nextCanvas.height = Math.max(1, Math.floor(vp.height));
+      renderTask = page.render({ canvas: nextCanvas, viewport: vp });
       try {
         await renderTask.promise;
+        if (cancelled) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.width = nextCanvas.width;
+        canvas.height = nextCanvas.height;
+        canvas.getContext('2d')?.drawImage(nextCanvas, 0, 0);
       } catch {
         // render cancelled by a newer one — expected during zoom
       }
     })();
-    return () => renderTask?.cancel();
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
   }, [page, renderScale, pageBase]);
 
   // Wheel / pinch zoom around the cursor.
@@ -485,11 +501,11 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
       stopSmoothView();
       const rect = el.getBoundingClientRect();
       const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018));
-      setView((v) => zoomAt(v, e.clientX - rect.left, e.clientY - rect.top, factor));
+      updateView((v) => zoomAt(v, e.clientX - rect.left, e.clientY - rect.top, factor));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [stopSmoothView]);
+  }, [stopSmoothView, updateView]);
 
   // Center the viewport on a pin when the task list asks for it.
   useEffect(() => {
@@ -597,6 +613,28 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     if (e.button !== 0 && e.button !== 1) return;
     stopSmoothView();
     e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.pointerType === 'touch') {
+      touchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const geometry = pinchGeometry(touchPointersRef.current.values());
+      if (geometry && touchPointersRef.current.size >= 2) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        pinchRef.current = {
+          distance: geometry.distance,
+          midpoint: {
+            x: geometry.midpoint.x - rect.left,
+            y: geometry.midpoint.y - rect.top,
+          },
+          view: viewRef.current,
+        };
+        dragRef.current = null;
+        drawRef.current = null;
+        setDraft(null);
+        setSnapIndicator(null);
+        setPanning(true);
+        e.preventDefault();
+        return;
+      }
+    }
     const middle = e.button === 1;
     if (!middle && markupTool && markupTool !== 'select' && !addPinMode) {
       const rawPoint = normalizedPoint(e.clientX, e.clientY);
@@ -660,8 +698,8 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
     dragRef.current = {
       sx: e.clientX,
       sy: e.clientY,
-      ox: view.offset.x,
-      oy: view.offset.y,
+      ox: viewRef.current.offset.x,
+      oy: viewRef.current.offset.y,
       // Middle-drag is always a pan and never a click, so mark it moved up front.
       moved: middle,
       button: e.button,
@@ -670,6 +708,31 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch' && touchPointersRef.current.has(e.pointerId)) {
+      touchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const pinch = pinchRef.current;
+      const geometry = pinchGeometry(touchPointersRef.current.values());
+      if (pinch && geometry && touchPointersRef.current.size >= 2) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const midpoint = {
+          x: geometry.midpoint.x - rect.left,
+          y: geometry.midpoint.y - rect.top,
+        };
+        const nextView = pinchView(
+          pinch.view,
+          { distance: pinch.distance, midpoint: pinch.midpoint },
+          { distance: geometry.distance, midpoint },
+        );
+        updateView(nextView);
+        pinchRef.current = {
+          distance: geometry.distance,
+          midpoint,
+          view: nextView,
+        };
+        e.preventDefault();
+        return;
+      }
+    }
     const drawing = drawRef.current;
     if (drawing) {
       const rawPoint = normalizedPoint(e.clientX, e.clientY);
@@ -738,11 +801,46 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
       setPanning(true);
     }
     if (d.moved) {
-      setView((v) => ({ ...v, offset: { x: d.ox + dx, y: d.oy + dy } }));
+      updateView((v) => ({ ...v, offset: { x: d.ox + dx, y: d.oy + dy } }));
     }
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') {
+      const wasPinching = pinchRef.current !== null;
+      touchPointersRef.current.delete(e.pointerId);
+      if (wasPinching) {
+        const remainingGeometry = pinchGeometry(touchPointersRef.current.values());
+        if (remainingGeometry && touchPointersRef.current.size >= 2) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          pinchRef.current = {
+            distance: remainingGeometry.distance,
+            midpoint: {
+              x: remainingGeometry.midpoint.x - rect.left,
+              y: remainingGeometry.midpoint.y - rect.top,
+            },
+            view: viewRef.current,
+          };
+          dragRef.current = null;
+        } else {
+          pinchRef.current = null;
+          const remainingTouch = touchPointersRef.current.values().next().value;
+          dragRef.current = remainingTouch
+            ? {
+                sx: remainingTouch.x,
+                sy: remainingTouch.y,
+                ox: viewRef.current.offset.x,
+                oy: viewRef.current.offset.y,
+                moved: true,
+                button: 0,
+              }
+            : null;
+          setPanning(Boolean(remainingTouch));
+        }
+        e.preventDefault();
+        return;
+      }
+    }
     const drawing = drawRef.current;
     if (drawing) {
       if (drawing.tool === 'area') {
@@ -835,6 +933,8 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
         if (!drawRef.current && !dragRef.current) setSnapIndicator(null);
       }}
       onPointerCancel={() => {
+        touchPointersRef.current.clear();
+        pinchRef.current = null;
         dragRef.current = null;
         drawRef.current = null;
         setDraft(null);
@@ -859,12 +959,14 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
           className={cn(
             'absolute top-0 left-0',
             smoothView &&
-              'transition-[transform,width,height] duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+              'transition-transform duration-(--fp-motion-duration) ease-(--fp-motion-ease)',
+            'will-change-transform',
           )}
           style={{
-            transform: `translate(${view.offset.x}px, ${view.offset.y}px)`,
-            width: pageBase.w * view.scale,
-            height: pageBase.h * view.scale,
+            transform: `translate3d(${view.offset.x}px, ${view.offset.y}px, 0) scale(${view.scale})`,
+            transformOrigin: 'top left',
+            width: pageBase.w,
+            height: pageBase.h,
           }}
         >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full bg-white shadow-e2" />
@@ -888,6 +990,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
             </div>
           )}
           <PinLayer
+            viewScale={view.scale}
             isOverCancelZone={isOverCancelZone}
             onTouchDragStart={onTouchDragStart}
             onTouchDragMove={onTouchDragMove}

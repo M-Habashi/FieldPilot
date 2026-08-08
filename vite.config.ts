@@ -44,8 +44,14 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
+      // Allow phone testing over the same Wi-Fi network.
+      host: true,
       port: 5173,
       strictPort: true,
+      // Phone testing needs a real HTTPS origin, because geolocation only runs
+      // in a secure context and a LAN IP is not one. These are the tunnel
+      // domains that provide it; Vite otherwise rejects their Host header.
+      allowedHosts: ['.trycloudflare.com', '.ts.net', '.ngrok-free.app'],
     },
   };
 });

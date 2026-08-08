@@ -3,8 +3,10 @@ import { Loader2 } from 'lucide-react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { patchAppView, readAppView } from '../../lib/app-view';
 import { userFacingError } from '../../lib/errors';
 import { openPdf, type PDFDocumentProxy } from '../../lib/pdf';
+import { extractPhotoLocation } from '../../lib/photo-location';
 import { setRemoteProjectSync, useProject, type RemoteProjectSync } from '../../store/project';
 import type { Markup, PageCalibration, Priority, Status, Task } from '../../types';
 import { Lightbox } from '../Lightbox';
@@ -14,16 +16,21 @@ import { StatusBar } from '../StatusBar';
 import { AppHeader, Toolbar } from '../Toolbar';
 import { Viewer } from '../Viewer';
 import { MarkupPropertiesBar } from '../MarkupPropertiesBar';
+import { ProjectPhotoMap } from './ProjectPhotoMap';
 import { Notice } from '../ui/notice';
 
 interface ProjectPlanWorkspaceProps {
   project: Doc<'projects'>;
+  role: 'owner' | 'admin' | 'member' | 'viewer';
+  userId: string;
   sheetId: Id<'sheets'>;
   onBackToProject: () => void;
 }
 
 export function ProjectPlanWorkspace({
   project,
+  role,
+  userId,
   sheetId,
   onBackToProject,
 }: ProjectPlanWorkspaceProps) {
@@ -57,6 +64,13 @@ export function ProjectPlanWorkspace({
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [savingPdf, setSavingPdf] = useState(false);
+  const [activeView, setActiveView] = useState<'plans' | 'map'>(() => readAppView().view);
+
+  useEffect(() => {
+    patchAppView({ view: activeView });
+  }, [activeView]);
+
+  const sidebarCollapsed = useProject((state) => state.sidebarCollapsed);
   const remoteTasksRef = useRef<Record<string, Task> | null>(null);
   const remoteMarkupsRef = useRef<Record<string, Markup> | null>(null);
   const remoteCalibrationsRef = useRef<Record<number, PageCalibration>>({});
@@ -123,6 +137,7 @@ export function ProjectPlanWorkspace({
       async addPhotos(taskId, files) {
         for (const file of files) {
           if (!file.type.startsWith('image/')) continue;
+          const location = await extractPhotoLocation(file);
           const { uploadUrl, uploadClaimId } = await generateAttachmentUploadUrl({
             projectId: project._id,
           });
@@ -134,6 +149,7 @@ export function ProjectPlanWorkspace({
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
           const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
           await completeAttachmentUpload({
+            projectId: project._id,
             taskId: taskId as Id<'tasks'>,
             kind: 'photo',
             uploadClaimId,
@@ -141,6 +157,15 @@ export function ProjectPlanWorkspace({
             fileName: file.name,
             contentType: file.type || 'application/octet-stream',
             size: file.size,
+            ...(location
+              ? {
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  originalLatitude: location.originalLatitude,
+                  originalLongitude: location.originalLongitude,
+                  locationSource: location.source,
+                }
+              : {}),
           });
         }
       },
@@ -333,6 +358,7 @@ export function ProjectPlanWorkspace({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (activeView === 'map') return;
       const target = event.target as HTMLElement;
       const typing =
         target instanceof HTMLInputElement ||
@@ -382,62 +408,79 @@ export function ProjectPlanWorkspace({
     };
     globalThis.document.addEventListener('keydown', onKeyDown);
     return () => globalThis.document.removeEventListener('keydown', onKeyDown);
-  }, [document]);
+  }, [activeView, document]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-app font-sans text-t1">
       <AppHeader onLogoClick={onBackToProject} />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <Sidebar onShowPlans={onBackToProject} />
-        <div className="w-14 shrink-0" aria-hidden />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <Toolbar
-            hasDoc={document !== null}
-            allowLocalFiles={false}
-            savingPdf={savingPdf}
-            onOpenPdf={() => undefined}
-            onImportJson={() => undefined}
-            onSavePdf={() => void saveMarkedUpPdf()}
-          />
-          {document && <MarkupPropertiesBar />}
-          <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-            <main className="relative min-w-0 flex-1 overflow-hidden">
-              {document ? (
-                <Viewer doc={document} />
-              ) : (
-                <div className="fp-canvas-stage flex h-full items-center justify-center p-6">
-                  {documentError ? (
-                    <Notice tone="error">This plan could not be opened: {documentError}</Notice>
+        <Sidebar
+          activeItem={activeView}
+          onShowPlans={() => setActiveView('plans')}
+          onShowMap={() => setActiveView('map')}
+        />
+        <div
+          className={
+            sidebarCollapsed
+              ? 'hidden shrink-0 transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease) md:block md:w-14'
+              : 'hidden shrink-0 transition-[width] duration-(--fp-motion-duration) ease-(--fp-motion-ease) md:block md:w-50'
+          }
+          aria-hidden
+        />
+        <div className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
+          {activeView === 'map' ? (
+            <ProjectPhotoMap project={project} role={role} userId={userId} />
+          ) : (
+            <>
+              <Toolbar
+                hasDoc={document !== null}
+                allowLocalFiles={false}
+                savingPdf={savingPdf}
+                onOpenPdf={() => undefined}
+                onImportJson={() => undefined}
+                onSavePdf={() => void saveMarkedUpPdf()}
+              />
+              {document && <MarkupPropertiesBar />}
+              <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <main className="relative min-w-0 flex-1 overflow-hidden">
+                  {document ? (
+                    <Viewer doc={document} />
                   ) : (
-                    <div className="flex items-center gap-2 text-sm text-t2">
-                      <Loader2 className="size-4 animate-spin text-accent" />
-                      Opening plan…
+                    <div className="fp-canvas-stage flex h-full items-center justify-center p-6">
+                      {documentError ? (
+                        <Notice tone="error">This plan could not be opened: {documentError}</Notice>
+                      ) : (
+                        <div className="flex items-center gap-2 text-sm text-t2">
+                          <Loader2 className="size-4 animate-spin text-accent" />
+                          Opening plan…
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
-              {document && syncError && (
-                <Notice
-                  tone="error"
-                  compact
-                  className="absolute left-1/2 top-4 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
-                >
-                  Changes not saved: {syncError}
-                </Notice>
-              )}
-              {document && downloadError && (
-                <Notice
-                  tone="error"
-                  compact
-                  className="absolute left-1/2 top-16 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
-                >
-                  The marked-up PDF could not be saved: {downloadError}
-                </Notice>
-              )}
-            </main>
-            {document && <RightDrawer />}
-          </div>
-          <StatusBar hasDoc={document !== null} />
+                  {document && syncError && (
+                    <Notice
+                      tone="error"
+                      compact
+                      className="absolute left-1/2 top-4 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
+                    >
+                      Changes not saved: {syncError}
+                    </Notice>
+                  )}
+                  {document && downloadError && (
+                    <Notice
+                      tone="error"
+                      compact
+                      className="absolute left-1/2 top-16 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 shadow-e2"
+                    >
+                      The marked-up PDF could not be saved: {downloadError}
+                    </Notice>
+                  )}
+                </main>
+                {document && <RightDrawer />}
+              </div>
+              <StatusBar hasDoc={document !== null} />
+            </>
+          )}
         </div>
       </div>
       <Lightbox />

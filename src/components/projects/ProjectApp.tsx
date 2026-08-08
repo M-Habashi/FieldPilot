@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { patchAppView, readAppView } from '../../lib/app-view';
+import { useBackGuard } from '../../hooks/useBackGuard';
 import { ProjectListPage } from './ProjectListPage';
 import { ProjectPlanWorkspace } from './ProjectPlanWorkspace';
 import { ProjectPlansPage } from './ProjectPlansPage';
@@ -12,8 +14,27 @@ export function ProjectApp() {
   const projects = useQuery(api.projects.listMine);
   const invitations = useQuery(api.invitations.listMine);
   const acceptInvitation = useMutation(api.invitations.accept);
-  const [activeProjectId, setActiveProjectId] = useState<Id<'projects'> | null>(null);
-  const [activeSheetId, setActiveSheetId] = useState<Id<'sheets'> | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<Id<'projects'> | null>(
+    () => (readAppView().projectId as Id<'projects'> | null) ?? null,
+  );
+  const [activeSheetId, setActiveSheetId] = useState<Id<'sheets'> | null>(
+    () => (readAppView().sheetId as Id<'sheets'> | null) ?? null,
+  );
+
+  useEffect(() => {
+    patchAppView({ projectId: activeProjectId, sheetId: activeSheetId });
+  }, [activeProjectId, activeSheetId]);
+
+  // The phone's back gesture climbs the app's own hierarchy — sheet, then
+  // project, then the list — instead of leaving for the landing page. Panes
+  // inside the workspace register their own guards and unwind first.
+  useBackGuard(activeProjectId !== null || activeSheetId !== null, () => {
+    if (activeSheetId !== null) {
+      setActiveSheetId(null);
+      return;
+    }
+    setActiveProjectId(null);
+  });
 
   const activeRow = useMemo(
     () =>
@@ -23,11 +44,15 @@ export function ProjectApp() {
     [activeProjectId, projects],
   );
 
+  // Drop the open project only once it is genuinely gone. `listMine` can come
+  // back briefly empty while the auth token is refreshing, and treating that
+  // as "the project no longer exists" is what kicked the user out to the
+  // project list at random moments.
   useEffect(() => {
-    if (activeProjectId !== null && projects !== undefined && activeRow === null) {
-      setActiveProjectId(null);
-      setActiveSheetId(null);
-    }
+    if (activeProjectId === null || projects === undefined || projects.length === 0) return;
+    if (activeRow !== null) return;
+    setActiveProjectId(null);
+    setActiveSheetId(null);
   }, [activeProjectId, activeRow, projects]);
 
   if (activeRow?.project && activeSheetId) {
@@ -35,6 +60,8 @@ export function ProjectApp() {
       <ProjectPlanWorkspace
         key={activeSheetId}
         project={activeRow.project}
+        role={activeRow.membership.role}
+        userId={user?._id ?? 'pending-user'}
         sheetId={activeSheetId}
         onBackToProject={() => setActiveSheetId(null)}
       />
