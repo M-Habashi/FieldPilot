@@ -85,6 +85,7 @@ interface ContextMenuState {
 
 interface PendingDeviceLocationRequest {
   promise: Promise<DeviceLocationResult>;
+  sessionId: string;
 }
 
 const initialMapView: L.LatLngExpression = [20, 0];
@@ -290,6 +291,7 @@ export function ProjectPhotoMap({
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobilePhotoInputRef = useRef<HTMLInputElement>(null);
+  const mobileLocationRequestRef = useRef<PendingDeviceLocationRequest | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const moveMarkerRef = useRef<L.Marker | null>(null);
   const coarsePointerRef = useRef(false);
@@ -1410,51 +1412,69 @@ export function ProjectPhotoMap({
     setContextMenu(null);
   };
 
+  const startMobileLocationRequest = useCallback((): PendingDeviceLocationRequest => {
+    const diagnosticSessionId = createPhotoDiagnosticSessionId();
+    const locationStartedAt = Date.now();
+    const permissionState = readGeolocationPermissionState();
+    sendPhotoDiagnostic({
+      event: 'location_started',
+      sessionId: diagnosticSessionId,
+      projectId: project._id,
+      client: detectPhotoDiagnosticClient(),
+      fromCamera: true,
+      secureContext: globalThis.isSecureContext,
+      geolocationSupported: Boolean(navigator.geolocation),
+    });
+    const locationPromise = readDeviceLocation().then((result) => {
+      // If WebKit suspended the first acquisition while presenting the
+      // native picker, retry once after control returns to the page. A
+      // permission denial is final and must not trigger another prompt.
+      if (result.status === 'failed' && result.code !== 1) {
+        return readDeviceLocation();
+      }
+      return result;
+    });
+    void Promise.all([locationPromise, permissionState]).then(([result, permission]) => {
+      sendPhotoDiagnostic({
+        event: 'location_result',
+        sessionId: diagnosticSessionId,
+        projectId: project._id,
+        client: detectPhotoDiagnosticClient(),
+        permissionState: permission,
+        locationStatus: result.status,
+        elapsedMs: Date.now() - locationStartedAt,
+        ...(result.status === 'failed' ? { locationErrorCode: result.code } : {}),
+        ...(result.status === 'ok' ? { accuracyM: result.location.accuracy } : {}),
+      });
+    });
+    return {
+      promise: locationPromise,
+      sessionId: diagnosticSessionId,
+    };
+  }, [project._id]);
+
   const handleMobilePhotoSelection = useCallback(
     (files: File[]) => {
       const [file] = files;
       if (!file) return;
+      const locationRequest = mobileLocationRequestRef.current;
+      mobileLocationRequestRef.current = null;
       if (files.length !== 1 || !isLikelyNativeCameraCapture(file)) {
         void uploadPhotos(files);
         return;
       }
 
-      const diagnosticSessionId = createPhotoDiagnosticSessionId();
-      const locationStartedAt = Date.now();
-      const permissionState = readGeolocationPermissionState();
-      sendPhotoDiagnostic({
-        event: 'location_started',
-        sessionId: diagnosticSessionId,
-        projectId: project._id,
-        client: detectPhotoDiagnosticClient(),
-        fromCamera: true,
-        secureContext: globalThis.isSecureContext,
-        geolocationSupported: Boolean(navigator.geolocation),
-      });
-      const locationPromise = readDeviceLocation();
-      void Promise.all([locationPromise, permissionState]).then(([result, permission]) => {
-        sendPhotoDiagnostic({
-          event: 'location_result',
-          sessionId: diagnosticSessionId,
-          projectId: project._id,
-          client: detectPhotoDiagnosticClient(),
-          permissionState: permission,
-          locationStatus: result.status,
-          elapsedMs: Date.now() - locationStartedAt,
-          ...(result.status === 'failed' ? { locationErrorCode: result.code } : {}),
-          ...(result.status === 'ok' ? { accuracyM: result.location.accuracy } : {}),
-        });
-      });
-      const locationRequest: PendingDeviceLocationRequest = {
-        promise: locationPromise,
-      };
+      // The request normally starts on the user's Add photos tap, while the
+      // document is still visible. Keep this fallback for non-pointer input
+      // and browsers that dispatch the file selection without that click.
+      const activeLocationRequest = locationRequest ?? startMobileLocationRequest();
       void uploadPhotos(files, {
         fromCamera: true,
-        deviceLocationRequest: locationRequest,
-        diagnosticSessionId,
+        deviceLocationRequest: activeLocationRequest,
+        diagnosticSessionId: activeLocationRequest.sessionId,
       });
     },
-    [project._id, uploadPhotos],
+    [startMobileLocationRequest, uploadPhotos],
   );
 
   const handleSelectPhoto = useCallback((photo: MapPhoto) => {
@@ -1526,7 +1546,12 @@ export function ProjectPhotoMap({
               icon={<Camera />}
               label="Add photos"
               disabled={!canEdit || uploading}
-              onClick={() => mobilePhotoInputRef.current?.click()}
+              onClick={() => {
+                // Begin geolocation synchronously while FieldPilot is visible;
+                // iOS may suspend it after the native camera picker opens.
+                mobileLocationRequestRef.current = startMobileLocationRequest();
+                mobilePhotoInputRef.current?.click();
+              }}
             />
           ) : (
             <ActionBarButton

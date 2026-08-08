@@ -9,7 +9,10 @@ import {
 
 const now = 1_700_000_000_000;
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('isPhotoFreshEnough', () => {
   it('accepts a photo taken moments ago', () => {
@@ -89,5 +92,21 @@ describe('readDeviceLocation', () => {
       timeout: 5_000,
       maximumAge: 5 * 60_000,
     });
+  });
+
+  it('stops waiting when iPhone Chrome ignores the browser geolocation timeout', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition() {
+          // Reproduces the observed iOS Chrome failure: neither callback runs.
+        },
+      },
+    });
+
+    const result = readDeviceLocation();
+    await vi.advanceTimersByTimeAsync(5_500);
+
+    await expect(result).resolves.toEqual({ status: 'failed', code: 3 });
   });
 });

@@ -23,6 +23,7 @@ export const PHOTO_FRESHNESS_WINDOW_MS = 10 * 60 * 1000;
 export const DEVICE_LOCATION_MAX_ACCURACY_M = 100;
 
 const GEOLOCATION_TIMEOUT_MS = 5_000;
+const HARD_GEOLOCATION_TIMEOUT_MS = GEOLOCATION_TIMEOUT_MS + 500;
 
 /**
  * A photo with no capture time is treated as stale — we cannot prove it is not.
@@ -57,26 +58,44 @@ export async function readDeviceLocation(): Promise<DeviceLocationResult> {
     return { status: 'unsupported' };
   }
   return await new Promise<DeviceLocationResult>((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          status: 'ok',
-          location: {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          },
-        }),
-      (error) => resolve({ status: 'failed', code: error.code }),
-      {
-        // Start with the quickest available iOS fix. Requiring the GPS radio
-        // here can time out in Chrome even when location access is granted.
-        enableHighAccuracy: false,
-        timeout: GEOLOCATION_TIMEOUT_MS,
-        // A recent cached fix is appropriate for a photo captured by this tap
-        // and avoids making the upload wait for a fresh GPS lock.
-        maximumAge: 5 * 60_000,
-      },
+    let settled = false;
+    const finish = (result: DeviceLocationResult) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(hardTimeout);
+      resolve(result);
+    };
+    // iOS Chrome can leave getCurrentPosition pending forever after returning
+    // from its native camera picker, ignoring the Geolocation API timeout.
+    // Keep photo saving independent from that WebKit callback.
+    const hardTimeout = globalThis.setTimeout(
+      () => finish({ status: 'failed', code: 3 }),
+      HARD_GEOLOCATION_TIMEOUT_MS,
     );
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) =>
+          finish({
+            status: 'ok',
+            location: {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+            },
+          }),
+        (error) => finish({ status: 'failed', code: error.code }),
+        {
+          // Start with the quickest available iOS fix. Requiring the GPS radio
+          // here can time out in Chrome even when location access is granted.
+          enableHighAccuracy: false,
+          timeout: GEOLOCATION_TIMEOUT_MS,
+          // A recent cached fix is appropriate for a photo captured by this tap
+          // and avoids making the upload wait for a fresh GPS lock.
+          maximumAge: 5 * 60_000,
+        },
+      );
+    } catch {
+      finish({ status: 'failed', code: 2 });
+    }
   });
 }
