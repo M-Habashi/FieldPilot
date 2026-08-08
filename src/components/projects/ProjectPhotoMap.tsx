@@ -58,8 +58,7 @@ import { MapPhotoPanel } from './MapPhotoPanel';
 
 type ProjectRole = 'owner' | 'admin' | 'member' | 'viewer';
 type PhotoFilter = 'all' | 'assigned' | 'unassigned' | `task:${string}`;
-type PhotoLocationAccessIssue = 'denied' | 'unavailable';
-type UploadNotice = { tone: Extract<NoticeTone, 'error' | 'warning'>; message: string };
+type UploadNotice = { tone: NoticeTone; message: string };
 
 function taskPhotoFilter(taskId: string): PhotoFilter {
   return `task:${taskId}`;
@@ -91,11 +90,6 @@ interface PendingDeviceLocationRequest {
   promise: Promise<DeviceLocationResult>;
 }
 
-interface PendingLocationlessCapture {
-  files: File[];
-  locationRequest: PendingDeviceLocationRequest;
-}
-
 const initialMapView: L.LatLngExpression = [20, 0];
 const initialMapZoom = 2;
 const markerOverlapPx = 56;
@@ -105,6 +99,11 @@ function isLikelyNativeCameraCapture(file: File, now = Date.now()): boolean {
   if (!Number.isFinite(file.lastModified) || file.lastModified <= 0) return false;
   const age = now - file.lastModified;
   return age >= -30_000 && age <= nativeCaptureFreshnessMs;
+}
+
+function formatPhotoFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const fitIconSvg =
@@ -283,7 +282,6 @@ export function ProjectPhotoMap({
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobilePhotoInputRef = useRef<HTMLInputElement>(null);
-  const pendingLocationlessCaptureRef = useRef<PendingLocationlessCapture | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const moveMarkerRef = useRef<L.Marker | null>(null);
   const coarsePointerRef = useRef(false);
@@ -323,10 +321,6 @@ export function ProjectPhotoMap({
   const [photosPanelOpen, setPhotosPanelOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'standard' | 'satellite'>('satellite');
   const [deleteTarget, setDeleteTarget] = useState<MapPhoto | null>(null);
-  const [checkingCaptureLocation, setCheckingCaptureLocation] = useState(false);
-  const [locationAccessIssue, setLocationAccessIssue] = useState<PhotoLocationAccessIssue | null>(
-    null,
-  );
   // Photos that arrived without a location, held so the upload can offer to
   // place them straight away rather than leaving them in a list to be found.
   const [placePromptIds, setPlacePromptIds] = useState<Id<'attachments'>[]>([]);
@@ -836,16 +830,20 @@ export function ProjectPhotoMap({
       {
         fromCamera = false,
         deviceLocationRequest,
-        continueWithoutLocation = false,
       }: {
         fromCamera?: boolean;
         deviceLocationRequest?: PendingDeviceLocationRequest;
-        continueWithoutLocation?: boolean;
       } = {},
     ) => {
       if (!canEdit || uploading) return;
       setUploading(true);
-      setUploadNotice(null);
+      let uploadStage = 'checking the selected file';
+      let currentFile: File | null = null;
+      let currentContentType: string | null = null;
+      setUploadNotice({
+        tone: 'info',
+        message: `Upload check started for ${files.length} photo${files.length === 1 ? '' : 's'}.`,
+      });
       try {
         let unmapped = 0;
         let suggested = 0;
@@ -857,11 +855,40 @@ export function ProjectPhotoMap({
         // retried per photo.
         let deviceResult: DeviceLocationResult | undefined = undefined;
         for (const file of files) {
+          currentFile = file;
+          uploadStage = 'checking the file type';
           const contentType = photoContentType(file);
+          currentContentType = contentType;
           if (!contentType) {
             skipped += 1;
             continue;
           }
+
+          uploadStage = 'requesting a secure upload';
+          setUploadNotice({
+            tone: 'info',
+            message: `Preparing ${file.name} (${contentType}, ${formatPhotoFileSize(file.size)}).`,
+          });
+          const upload = await generateUploadUrl({ projectId: project._id });
+
+          // Start transferring immediately. Location and EXIF checks run at
+          // the same time so a slow or denied phone location request never
+          // prevents the file from leaving the device.
+          uploadStage = 'sending the file';
+          setUploadNotice({
+            tone: 'info',
+            message: `Uploading ${file.name} and checking its location. Keep FieldPilot open.`,
+          });
+          const uploadResponse = fetch(upload.uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': contentType },
+            body: file,
+          }).then(
+            (response) => ({ ok: true as const, response }),
+            (error: unknown) => ({ ok: false as const, error }),
+          );
+
+          uploadStage = 'reading the photo location';
           const exifLocation = await extractPhotoLocation(file);
           // Fall back to the uploader's own position, but only for a photo
           // taken moments ago — see PHOTO_FRESHNESS_WINDOW_MS. A camera capture
@@ -893,14 +920,21 @@ export function ProjectPhotoMap({
               }
             }
           }
-          const upload = await generateUploadUrl({ projectId: project._id });
-          const response = await fetch(upload.uploadUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': contentType },
-            body: file,
-          });
-          if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
+
+          uploadStage = 'receiving the uploaded file';
+          const uploadResult = await uploadResponse;
+          if (!uploadResult.ok) throw uploadResult.error;
+          const response = uploadResult.response;
+          if (!response.ok) {
+            throw new Error(`The upload server returned HTTP ${response.status}.`);
+          }
           const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
+
+          uploadStage = 'saving the photo to the project';
+          setUploadNotice({
+            tone: 'info',
+            message: `Upload received. Saving ${file.name} in ${project.name}.`,
+          });
           const attachmentId = await completeUpload({
             projectId: project._id,
             kind: 'photo',
@@ -933,6 +967,8 @@ export function ProjectPhotoMap({
               : {}),
           });
           uploaded += 1;
+
+          uploadStage = 'confirming the saved photo';
           const photoState = await convex.query(api.attachments.getPhotoMapState, {
             attachmentId,
           });
@@ -966,14 +1002,19 @@ export function ProjectPhotoMap({
         const plural = unmapped === 1 ? '' : 's';
         const summary = !unmapped
           ? 'Photos added to the map.'
-          : continueWithoutLocation
-            ? `${unmapped} photo${plural} added to Photos without a map location.`
-            : suggested
-              ? `${unmapped} photo${plural} added to Photos. ${suggested} can be placed where you are now.`
-              : `${unmapped} photo${plural} added to Photos. Place ${unmapped === 1 ? 'it' : 'them'} on the map when ready.`;
+          : suggested
+            ? `${unmapped} photo${plural} added to Photos. ${suggested} can be placed where you are now.`
+            : `${unmapped} photo${plural} added to Photos. Place ${unmapped === 1 ? 'it' : 'them'} on the map when ready.`;
         notify({
           tone: 'success',
           message: summary,
+        });
+        setUploadNotice({
+          tone: skipped > 0 ? 'warning' : 'success',
+          message:
+            unmapped > 0
+              ? `Upload check complete: ${uploaded} photo${uploaded === 1 ? ' is' : 's are'} saved in ${project.name}. ${unmapped === 1 ? 'It needs' : `${unmapped} need`} a map location; open Photos to place ${unmapped === 1 ? 'it' : 'them'}.`
+              : `Upload check complete: ${uploaded} photo${uploaded === 1 ? ' is' : 's are'} saved in ${project.name} and visible on the map.`,
         });
         if (unmappedIds.length) {
           // A locationless upload has no marker, so reveal the durable Photos
@@ -982,10 +1023,14 @@ export function ProjectPhotoMap({
           // photo is visible immediately.
           setFilter('all');
           setPhotosPanelOpen(true);
-          if (!continueWithoutLocation) setPlacePromptIds(unmappedIds);
+          setPlacePromptIds(unmappedIds);
         }
       } catch (error) {
-        const message = userFacingError(error, 'The photos could not be uploaded.');
+        const reason = userFacingError(error, 'The photo could not be uploaded.');
+        const fileDetails = currentFile
+          ? ` File: ${currentFile.name} (${currentContentType ?? 'unknown type'}, ${formatPhotoFileSize(currentFile.size)}).`
+          : '';
+        const message = `Upload failed while ${uploadStage}. ${reason}${fileDetails}`;
         notify({
           tone: 'error',
           message,
@@ -995,7 +1040,17 @@ export function ProjectPhotoMap({
         setUploading(false);
       }
     },
-    [canEdit, completeUpload, convex, generateUploadUrl, notify, project._id, pushUndo, uploading],
+    [
+      canEdit,
+      completeUpload,
+      convex,
+      generateUploadUrl,
+      notify,
+      project._id,
+      project.name,
+      pushUndo,
+      uploading,
+    ],
   );
 
   useEffect(() => {
@@ -1380,7 +1435,7 @@ export function ProjectPhotoMap({
   };
 
   const handleMobilePhotoSelection = useCallback(
-    async (files: File[]) => {
+    (files: File[]) => {
       const [file] = files;
       if (!file) return;
       if (files.length !== 1 || !isLikelyNativeCameraCapture(file)) {
@@ -1388,22 +1443,10 @@ export function ProjectPhotoMap({
         return;
       }
 
-      setCheckingCaptureLocation(true);
       const locationRequest: PendingDeviceLocationRequest = {
         promise: readDeviceLocation(),
       };
-      const result = await locationRequest.promise;
-      setCheckingCaptureLocation(false);
-
-      if (result.status === 'ok') {
-        void uploadPhotos(files, { fromCamera: true, deviceLocationRequest: locationRequest });
-        return;
-      }
-
-      pendingLocationlessCaptureRef.current = { files, locationRequest };
-      setLocationAccessIssue(
-        result.status === 'failed' && result.code === 1 ? 'denied' : 'unavailable',
-      );
+      void uploadPhotos(files, { fromCamera: true, deviceLocationRequest: locationRequest });
     },
     [uploadPhotos],
   );
@@ -1476,7 +1519,7 @@ export function ProjectPhotoMap({
             <ActionBarButton
               icon={<Camera />}
               label="Add photos"
-              disabled={!canEdit || uploading || checkingCaptureLocation}
+              disabled={!canEdit || uploading}
               onClick={() => mobilePhotoInputRef.current?.click()}
             />
           ) : (
@@ -1819,33 +1862,6 @@ export function ProjectPhotoMap({
           )}
         </div>
       </footer>
-
-      <ConfirmDialog
-        open={locationAccessIssue !== null}
-        title={locationAccessIssue === 'denied' ? 'Location access denied' : 'Location unavailable'}
-        description={
-          locationAccessIssue === 'denied'
-            ? 'FieldPilot can’t place this photo on the map automatically because location access is off. To enable automatic placement, allow location access for this browser in your phone’s settings.'
-            : 'FieldPilot can’t get your current location, so this photo won’t be placed on the map automatically. Check location access for this browser in your phone’s settings.'
-        }
-        confirmLabel="Continue anyway"
-        showCancel={false}
-        onCancel={() => {
-          setLocationAccessIssue(null);
-          pendingLocationlessCaptureRef.current = null;
-        }}
-        onConfirm={() => {
-          const pendingCapture = pendingLocationlessCaptureRef.current;
-          setLocationAccessIssue(null);
-          pendingLocationlessCaptureRef.current = null;
-          if (!pendingCapture) return;
-          void uploadPhotos(pendingCapture.files, {
-            fromCamera: true,
-            deviceLocationRequest: pendingCapture.locationRequest,
-            continueWithoutLocation: true,
-          });
-        }}
-      />
 
       <ConfirmDialog
         open={placePromptIds.length > 0}
