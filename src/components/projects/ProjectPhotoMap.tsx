@@ -1677,11 +1677,32 @@ export function ProjectPhotoMap({
           <div className="pointer-events-none absolute inset-0 z-[400] grid place-items-center p-6">
             <div className="pointer-events-auto max-w-sm rounded-lg border border-line bg-surface px-5 py-4 text-center shadow-e3">
               <MapPinOff className="mx-auto mb-2 size-5 text-t3" />
-              <p className="text-sm font-semibold text-t1">No mapped photos</p>
-              <p className="mt-1 text-xs leading-5 text-t2">
-                Take a photo on site, add one with GPS, or choose an unmapped photo and use Move
-                location.
-              </p>
+              {unmappedPhotos.length > 0 ? (
+                <>
+                  <p className="text-sm font-semibold text-t1">
+                    {unmappedPhotos.length}{' '}
+                    {unmappedPhotos.length === 1 ? 'photo needs' : 'photos need'}
+                    {' a location'}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-t2">
+                    {unmappedPhotos.length === 1 ? 'The upload is' : 'The uploads are'} saved in
+                    Photos. Place {unmappedPhotos.length === 1 ? 'it' : 'them'} on the map to create
+                    {unmappedPhotos.length === 1 ? ' a marker.' : ' markers.'}
+                  </p>
+                  <Button className="mt-3 min-h-11" onClick={() => setPhotosPanelOpen(true)}>
+                    <Images />
+                    Open Photos
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-t1">No mapped photos</p>
+                  <p className="mt-1 text-xs leading-5 text-t2">
+                    Take a photo on site, add one with GPS, or choose an unmapped photo and use Move
+                    location.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}
