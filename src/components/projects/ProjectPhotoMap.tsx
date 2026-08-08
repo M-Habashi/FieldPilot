@@ -1052,19 +1052,9 @@ export function ProjectPhotoMap({
           return;
         }
         if (movingPhoto) return;
-        const lead = group.photos[0];
-        // Touch has no hover, so the first tap stands in for it: the marker
-        // enlarges and fans out. Tapping a marker that is already enlarged
-        // opens the pane — no timing window, so a slow second tap works just
-        // as well as a quick one. A mouse keeps its single click, since
-        // hovering already previews.
-        const alreadyRaised = leadPhotoId === lead.attachment._id && hoverActive;
-        if (showCameraButton && !alreadyRaised) {
-          setLeadPhotoId(lead.attachment._id);
-          setHoverActive(true);
-          setContextMenu(null);
-          return;
-        }
+        // A marker tap must open immediately on touch. The previous two-step
+        // "raise, then open" interaction rebuilt every marker after the first
+        // tap and made the panel feel unresponsive on mobile.
         setSelectedPhotos(group.photos);
         setTaskPickerOpen(false);
         setContextMenu(null);
@@ -1091,7 +1081,7 @@ export function ProjectPhotoMap({
         L.DomEvent.on(icon, 'touchend touchmove touchcancel', clearLongPress);
       }
     }
-  }, [groups, hoverActive, justPlacedId, leadPhotoId, movingPhoto, pingPhotoId, showCameraButton]);
+  }, [groups, hoverActive, justPlacedId, leadPhotoId, movingPhoto, pingPhotoId]);
 
   // Move mode always puts a draggable marker on the map, whether or not the
   // photo already has a location: an unmapped photo starts at its device
@@ -1183,11 +1173,10 @@ export function ProjectPhotoMap({
     // start and throw away the position the user had dragged it to.
   }, [movingPhotoId]);
 
-  // A click on bare map means "let me see the map". On touch the first tap on
-  // a marker stands in for hover (it enlarges and fans out), so a click on the
-  // map folds that preview back down as well as closing the right pane. Marker
-  // clicks select a photo instead, and in move mode the double-tap below
-  // handles exits, so neither should dismiss anything here.
+  // A click on bare map means "let me see the map". It folds away any marker
+  // highlight as well as closing the right pane. Marker clicks select a photo
+  // instead, and in move mode the double-tap below handles exits, so neither
+  // should dismiss anything here.
   useEffect(() => {
     if (!mapInstance) return;
     const onMapClick = (event: L.LeafletMouseEvent) => {
@@ -1498,8 +1487,8 @@ export function ProjectPhotoMap({
         {movingPhoto &&
           canEdit &&
           createPortal(
-            <div className="fixed bottom-6 left-1/2 z-[1200] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-surface py-1.5 pl-3 pr-1.5 shadow-e3">
-              <span className="text-xs text-t2">
+            <div className="fixed bottom-6 left-1/2 z-[1200] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-surface py-1.5 pl-3 pr-1.5 shadow-e3">
+              <span className="shrink-0 whitespace-nowrap text-xs text-t2">
                 <span className="sm:hidden">Drag the photo</span>
                 <span className="hidden sm:inline">Drag the photo to position it</span>
               </span>
