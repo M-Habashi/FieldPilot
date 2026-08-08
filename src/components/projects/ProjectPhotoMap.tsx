@@ -941,16 +941,22 @@ export function ProjectPhotoMap({
         const summary = !unmapped
           ? 'Photos added to the map.'
           : continueWithoutLocation
-            ? `${unmapped} photo${plural} added without a map location.`
+            ? `${unmapped} photo${plural} added to Photos without a map location.`
             : suggested
-              ? `${unmapped} photo${plural} need a location — ${suggested} can be placed where you are now.`
-              : `${unmapped} photo${plural} could not be assigned to a location.`;
+              ? `${unmapped} photo${plural} added to Photos. ${suggested} can be placed where you are now.`
+              : `${unmapped} photo${plural} added to Photos. Place ${unmapped === 1 ? 'it' : 'them'} on the map when ready.`;
         notify({
-          tone: unmapped && !continueWithoutLocation ? 'warning' : 'success',
+          tone: 'success',
           message: summary,
         });
-        if (unmappedIds.length && !continueWithoutLocation) {
-          setPlacePromptIds(unmappedIds);
+        if (unmappedIds.length) {
+          // A locationless upload has no marker, so reveal the durable Photos
+          // list instead of leaving the user on an unchanged-looking map.
+          // Resetting the filter ensures every newly uploaded, unassigned
+          // photo is visible immediately.
+          setFilter('all');
+          setPhotosPanelOpen(true);
+          if (!continueWithoutLocation) setPlacePromptIds(unmappedIds);
         }
       } catch (error) {
         notify({
