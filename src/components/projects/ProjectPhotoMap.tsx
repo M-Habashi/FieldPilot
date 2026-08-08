@@ -26,6 +26,7 @@ import {
   extractPhotoTakenAt,
   type PhotoLocation,
 } from '../../lib/photo-location';
+import { photoContentType } from '../../lib/photo-file';
 import {
   isPhotoFreshEnough,
   isUsableDeviceLocation,
@@ -51,12 +52,14 @@ import { ActionBar, ActionBarButton, ActionBarGroup, ActionBarSeparator } from '
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/dialog';
 import { Dropdown, DropdownItem, DropdownLabel } from '../ui/dropdown-menu';
+import { Notice, type NoticeTone } from '../ui/notice';
 import { useNotify } from '../ui/use-notify';
 import { MapPhotoPanel } from './MapPhotoPanel';
 
 type ProjectRole = 'owner' | 'admin' | 'member' | 'viewer';
 type PhotoFilter = 'all' | 'assigned' | 'unassigned' | `task:${string}`;
 type PhotoLocationAccessIssue = 'denied' | 'unavailable';
+type UploadNotice = { tone: Extract<NoticeTone, 'error' | 'warning'>; message: string };
 
 function taskPhotoFilter(taskId: string): PhotoFilter {
   return `task:${taskId}`;
@@ -339,6 +342,7 @@ export function ProjectPhotoMap({
   const [justPlacedId, setJustPlacedId] = useState<string | null>(null);
   const [pingPhotoId, setPingPhotoId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<UploadNotice | null>(null);
   // Android's system photo picker has no camera entry, and `multiple` suppresses
   // the camera on the gallery input anyway, so a phone needs its own capture
   // button to reach the camera at all. Keyed off a coarse pointer rather than
@@ -841,16 +845,23 @@ export function ProjectPhotoMap({
     ) => {
       if (!canEdit || uploading) return;
       setUploading(true);
+      setUploadNotice(null);
       try {
         let unmapped = 0;
         let suggested = 0;
+        let uploaded = 0;
+        let skipped = 0;
         const unmappedIds: Id<'attachments'>[] = [];
         // `undefined` means "not asked yet". One read serves the whole batch,
         // and a failure is remembered so a denied prompt or a timeout is not
         // retried per photo.
         let deviceResult: DeviceLocationResult | undefined = undefined;
         for (const file of files) {
-          if (!file.type.startsWith('image/')) continue;
+          const contentType = photoContentType(file);
+          if (!contentType) {
+            skipped += 1;
+            continue;
+          }
           const exifLocation = await extractPhotoLocation(file);
           // Fall back to the uploader's own position, but only for a photo
           // taken moments ago — see PHOTO_FRESHNESS_WINDOW_MS. A camera capture
@@ -885,7 +896,7 @@ export function ProjectPhotoMap({
           const upload = await generateUploadUrl({ projectId: project._id });
           const response = await fetch(upload.uploadUrl, {
             method: 'POST',
-            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            headers: { 'Content-Type': contentType },
             body: file,
           });
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
@@ -896,7 +907,7 @@ export function ProjectPhotoMap({
             uploadClaimId: upload.uploadClaimId,
             storageRef: storageId,
             fileName: file.name,
-            contentType: file.type || 'application/octet-stream',
+            contentType,
             size: file.size,
             ...(exifLocation
               ? {
@@ -921,6 +932,7 @@ export function ProjectPhotoMap({
                 }
               : {}),
           });
+          uploaded += 1;
           const photoState = await convex.query(api.attachments.getPhotoMapState, {
             attachmentId,
           });
@@ -936,6 +948,20 @@ export function ProjectPhotoMap({
             unmappedIds.push(attachmentId);
           }
           if (suggestion) suggested += 1;
+        }
+        if (uploaded === 0) {
+          setUploadNotice({
+            tone: 'error',
+            message:
+              'No photos were added. Choose a JPG, PNG, WEBP, HEIC, HEIF, AVIF, GIF, BMP, or TIFF file.',
+          });
+          return;
+        }
+        if (skipped > 0) {
+          setUploadNotice({
+            tone: 'warning',
+            message: `${skipped} unsupported file${skipped === 1 ? ' was' : 's were'} skipped.`,
+          });
         }
         const plural = unmapped === 1 ? '' : 's';
         const summary = !unmapped
@@ -959,10 +985,12 @@ export function ProjectPhotoMap({
           if (!continueWithoutLocation) setPlacePromptIds(unmappedIds);
         }
       } catch (error) {
+        const message = userFacingError(error, 'The photos could not be uploaded.');
         notify({
           tone: 'error',
-          message: userFacingError(error, 'The photos could not be uploaded.'),
+          message,
         });
+        setUploadNotice({ tone: 'error', message });
       } finally {
         setUploading(false);
       }
@@ -1548,6 +1576,17 @@ export function ProjectPhotoMap({
           />
         </ActionBarGroup>
       </ActionBar>
+
+      {uploadNotice && (
+        <Notice
+          tone={uploadNotice.tone}
+          compact
+          className="mx-3 mt-3 shrink-0"
+          onDismiss={() => setUploadNotice(null)}
+        >
+          {uploadNotice.message}
+        </Notice>
+      )}
 
       <div
         className={cn(
