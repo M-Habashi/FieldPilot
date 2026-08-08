@@ -21,19 +21,10 @@ import { useConvex, useMutation, useQuery } from 'convex/react';
 import { useBackGuard } from '../../hooks/useBackGuard';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
-import {
-  extractPhotoLocation,
-  extractPhotoTakenAt,
-  type PhotoLocation,
-} from '../../lib/photo-location';
+import { extractPhotoLocation, type PhotoLocation } from '../../lib/photo-location';
 import { photoContentType } from '../../lib/photo-file';
-import {
-  isPhotoFreshEnough,
-  isUsableDeviceLocation,
-  readDeviceLocation,
-  type DeviceLocation,
-  type DeviceLocationResult,
-} from '../../lib/device-location';
+import { readDeviceLocation, type DeviceLocationResult } from '../../lib/device-location';
+import { uploadPhotoFile } from '../../lib/photo-upload';
 import {
   clearPhotoRedo,
   popPhotoRedo,
@@ -104,6 +95,22 @@ function isLikelyNativeCameraCapture(file: File, now = Date.now()): boolean {
 function formatPhotoFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function extractPhotoLocationQuickly(file: File, timeoutMs = 1_500) {
+  return new Promise<Awaited<ReturnType<typeof extractPhotoLocation>>>((resolve) => {
+    let settled = false;
+    const timer = globalThis.setTimeout(() => {
+      settled = true;
+      resolve(null);
+    }, timeoutMs);
+    void extractPhotoLocation(file).then((location) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timer);
+      resolve(location);
+    });
+  });
 }
 
 const fitIconSvg =
@@ -846,14 +853,17 @@ export function ProjectPhotoMap({
       });
       try {
         let unmapped = 0;
-        let suggested = 0;
         let uploaded = 0;
         let skipped = 0;
         const unmappedIds: Id<'attachments'>[] = [];
-        // `undefined` means "not asked yet". One read serves the whole batch,
-        // and a failure is remembered so a denied prompt or a timeout is not
-        // retried per photo.
-        let deviceResult: DeviceLocationResult | undefined = undefined;
+        const deviceLocationState: { result?: DeviceLocationResult } = {};
+        // Location is opportunistic. It may improve automatic placement, but
+        // the upload never waits for a slow or denied GPS request.
+        if (deviceLocationRequest) {
+          void deviceLocationRequest.promise.then((result) => {
+            deviceLocationState.result = result;
+          });
+        }
         for (const file of files) {
           currentFile = file;
           uploadStage = 'checking the file type';
@@ -871,64 +881,42 @@ export function ProjectPhotoMap({
           });
           const upload = await generateUploadUrl({ projectId: project._id });
 
-          // Start transferring immediately. Location and EXIF checks run at
-          // the same time so a slow or denied phone location request never
-          // prevents the file from leaving the device.
+          // Transfer first. Photo metadata and phone location are useful for
+          // placement, but neither is allowed to delay the actual upload.
           uploadStage = 'sending the file';
           setUploadNotice({
             tone: 'info',
-            message: `Uploading ${file.name} and checking its location. Keep FieldPilot open.`,
+            message: `Uploading ${file.name}: 0% of ${formatPhotoFileSize(file.size)}. Keep FieldPilot open.`,
           });
-          const uploadResponse = fetch(upload.uploadUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': contentType },
-            body: file,
-          }).then(
-            (response) => ({ ok: true as const, response }),
-            (error: unknown) => ({ ok: false as const, error }),
-          );
+          let reportedPercent = 0;
+          const storedUpload = await uploadPhotoFile({
+            uploadUrl: upload.uploadUrl,
+            file,
+            contentType,
+            onProgress: (percent) => {
+              if (percent === reportedPercent) return;
+              reportedPercent = percent;
+              setUploadNotice({
+                tone: 'info',
+                message:
+                  percent < 100
+                    ? `Uploading ${file.name}: ${percent}% of ${formatPhotoFileSize(file.size)}. Keep FieldPilot open.`
+                    : `${file.name} sent. Waiting for the upload server.`,
+              });
+            },
+          });
 
           uploadStage = 'reading the photo location';
-          const exifLocation = await extractPhotoLocation(file);
-          // Fall back to the uploader's own position, but only for a photo
-          // taken moments ago — see PHOTO_FRESHNESS_WINDOW_MS. A camera capture
-          // or fresh mobile picker upload can use that fix directly. Desktop
-          // gallery files keep the more cautious suggestion behavior.
-          let devicePhotoLocation: DeviceLocation | null = null;
-          let suggestion: DeviceLocation | null = null;
-          let takenAt: number | null = null;
-          let freshEnough = fromCamera;
-          if (!exifLocation) {
-            takenAt = await extractPhotoTakenAt(file);
-            const now = Date.now();
-            const useDeviceAsLocation = fromCamera || deviceLocationRequest !== undefined;
-            freshEnough = fromCamera || isPhotoFreshEnough(takenAt, now);
-            // A camera capture was created by this very tap, so it is fresh
-            // whether or not the camera bothered to write a timestamp.
-            if (freshEnough && (fromCamera || deviceLocationRequest)) {
-              if (deviceResult === undefined) {
-                deviceResult = await (deviceLocationRequest?.promise ?? readDeviceLocation());
-              }
-              if (deviceResult.status === 'ok') {
-                // A fresh mobile photo came from this device's current area.
-                // Even a coarse iOS fix is more useful than forcing the user
-                // to place every field photo manually.
-                if (useDeviceAsLocation) devicePhotoLocation = deviceResult.location;
-                else if (isUsableDeviceLocation(deviceResult.location)) {
-                  suggestion = deviceResult.location;
-                }
-              }
-            }
-          }
-
-          uploadStage = 'receiving the uploaded file';
-          const uploadResult = await uploadResponse;
-          if (!uploadResult.ok) throw uploadResult.error;
-          const response = uploadResult.response;
-          if (!response.ok) {
-            throw new Error(`The upload server returned HTTP ${response.status}.`);
-          }
-          const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
+          setUploadNotice({
+            tone: 'info',
+            message: `${file.name} uploaded. Checking its location before saving.`,
+          });
+          const exifLocation = await extractPhotoLocationQuickly(file);
+          const deviceResult = deviceLocationState.result;
+          const devicePhotoLocation =
+            !exifLocation && fromCamera && deviceResult?.status === 'ok'
+              ? deviceResult.location
+              : null;
 
           uploadStage = 'saving the photo to the project';
           setUploadNotice({
@@ -939,7 +927,7 @@ export function ProjectPhotoMap({
             projectId: project._id,
             kind: 'photo',
             uploadClaimId: upload.uploadClaimId,
-            storageRef: storageId,
+            storageRef: storedUpload.storageId as Id<'_storage'>,
             fileName: file.name,
             contentType,
             size: file.size,
@@ -958,13 +946,6 @@ export function ProjectPhotoMap({
                     locationSource: 'device' as const,
                   }
                 : {}),
-            ...(suggestion
-              ? {
-                  suggestedLatitude: suggestion.latitude,
-                  suggestedLongitude: suggestion.longitude,
-                  suggestedAccuracy: suggestion.accuracy,
-                }
-              : {}),
           });
           uploaded += 1;
 
@@ -983,7 +964,6 @@ export function ProjectPhotoMap({
             unmapped += 1;
             unmappedIds.push(attachmentId);
           }
-          if (suggestion) suggested += 1;
         }
         if (uploaded === 0) {
           setUploadNotice({
@@ -1002,9 +982,7 @@ export function ProjectPhotoMap({
         const plural = unmapped === 1 ? '' : 's';
         const summary = !unmapped
           ? 'Photos added to the map.'
-          : suggested
-            ? `${unmapped} photo${plural} added to Photos. ${suggested} can be placed where you are now.`
-            : `${unmapped} photo${plural} added to Photos. Place ${unmapped === 1 ? 'it' : 'them'} on the map when ready.`;
+          : `${unmapped} photo${plural} added to Photos. Place ${unmapped === 1 ? 'it' : 'them'} on the map when ready.`;
         notify({
           tone: 'success',
           message: summary,
