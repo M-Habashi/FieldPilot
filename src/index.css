@@ -438,31 +438,6 @@ select {
   transform: rotate(-45deg);
 }
 
-/* Device-location suggestion shown while placing an unmapped photo. Dashed and
-   hollow so it never reads as a placed pin. */
-.fp-photo-map-suggestion {
-  display: inline-flex;
-  padding: 6px 12px;
-  align-items: center;
-  border: 2px dashed var(--fp-accent);
-  border-radius: 999px;
-  background: var(--fp-bg-surface);
-  box-shadow: 0 6px 16px rgb(15 23 42 / 0.22);
-  color: var(--fp-accent);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background var(--fp-dur-fast) var(--fp-ease),
-    transform var(--fp-dur-fast) var(--fp-ease);
-}
-
-.fp-photo-map-suggestion:hover {
-  background: var(--fp-accent-soft);
-  transform: scale(1.05);
-}
-
 /* The reported accuracy radius, drawn to scale — a wide ring is an honest
    signal that the fix was poor. */
 .fp-photo-map-suggestion-range {
@@ -525,13 +500,51 @@ select {
   }
 }
 
-/* The draggable moving marker is framed statically — accent border + soft
-   halo — so move mode reads as a selection state without continuous motion.
-   The locate action keeps a one-shot ring. Must follow the --single/--pair
-   rules so the ring re-enables ::after. */
+/* Move mode is a live, exit-able state rather than a static selection, so the
+   frame is a marching-ants outline. The border goes transparent and the
+   animated stroke becomes the edge. Must follow the --single/--pair rules so
+   the ring re-enables ::after. */
 .fp-photo-map-marker-stack--moving .fp-photo-map-marker-preview {
-  border-color: var(--fp-accent);
+  border-color: transparent;
   box-shadow: 0 0 0 5px rgb(23 103 201 / 0.22);
+}
+
+.fp-photo-map-marker-ants {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 2px;
+  width: 98px;
+  height: 98px;
+  pointer-events: none;
+}
+
+.fp-photo-map-marker-ants svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.fp-photo-map-marker-ants rect {
+  fill: none;
+  stroke: var(--fp-accent);
+  stroke-width: 3;
+  /* dash + gap must sum to the keyframe offset below, or the loop jumps. */
+  stroke-dasharray: 10 8;
+  animation: fp-marching-ants 0.7s linear infinite;
+}
+
+@keyframes fp-marching-ants {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-photo-map-marker-ants rect {
+    animation: none;
+  }
 }
 
 .fp-photo-map-marker-stack--ping::after {

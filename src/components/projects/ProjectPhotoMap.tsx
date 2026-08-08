@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -9,6 +10,7 @@ import {
   Link2,
   Link2Off,
   MapPinOff,
+  MapPinPlus,
   Move,
   Redo2,
   RotateCcw,
@@ -17,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useConvex, useMutation, useQuery } from 'convex/react';
+import { useBackGuard } from '../../hooks/useBackGuard';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import {
@@ -47,6 +50,7 @@ import { userFacingError } from '../../lib/errors';
 import { cn } from '../../lib/utils';
 import { useProject } from '../../store/project';
 import { ActionBar, ActionBarButton, ActionBarGroup, ActionBarSeparator } from '../ui/action-bar';
+import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/dialog';
 import { Dropdown, DropdownItem, DropdownLabel } from '../ui/dropdown-menu';
 import { useNotify } from '../ui/use-notify';
@@ -122,6 +126,16 @@ function createPhotoIcon(
     stack.classList.add('fp-photo-map-marker-stack--highlight');
   }
   if (moving) stack.classList.add('fp-photo-map-marker-stack--moving');
+  if (moving) {
+    // An SVG outline rather than a dashed CSS border: only a stroke can follow
+    // the marker's rounded corners and be animated round the loop.
+    const ants = document.createElement('div');
+    ants.className = 'fp-photo-map-marker-ants';
+    ants.setAttribute('aria-hidden', 'true');
+    ants.innerHTML =
+      '<svg viewBox="0 0 98 98" preserveAspectRatio="none"><rect x="1.5" y="1.5" width="95" height="95" rx="18" /></svg>';
+    stack.append(ants);
+  }
   if (justPlacedId !== null && lead.attachment._id === justPlacedId) {
     stack.classList.add('fp-photo-map-marker-stack--drop');
   }
@@ -244,7 +258,7 @@ export function ProjectPhotoMap({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
-  const suggestionPannedRef = useRef<string | null>(null);
+  const moveMarkerRef = useRef<L.Marker | null>(null);
   const { notify } = useNotify();
   const convex = useConvex();
   const photoRows = useQuery(api.attachments.listProjectPhotos, { projectId: project._id });
@@ -268,9 +282,15 @@ export function ProjectPhotoMap({
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState('');
   const [movingPhoto, setMovingPhoto] = useState<MapPhoto | null>(null);
+  // Where the move marker currently sits, mirrored out of Leaflet so the
+  // confirm button never has to reach into the map to find it.
+  const [movePosition, setMovePosition] = useState<PhotoLocation | null>(null);
   const [photosPanelOpen, setPhotosPanelOpen] = useState(false);
   const [mapStyle, setMapStyle] = useState<'standard' | 'satellite'>('satellite');
   const [deleteTarget, setDeleteTarget] = useState<MapPhoto | null>(null);
+  // Photos that arrived without a location, held so the upload can offer to
+  // place them straight away rather than leaving them in a list to be found.
+  const [placePromptIds, setPlacePromptIds] = useState<Id<'attachments'>[]>([]);
   const [drilledId, setDrilledId] = useState<string | null>(null);
   // The photo currently on top of its stack marker: the LAST photo hovered in
   // the list stays on top until another one is hovered. `hoverActive` keeps
@@ -397,6 +417,10 @@ export function ProjectPhotoMap({
   const selectedPhotoRef = useRef(selectedPhoto);
   selectedPhotoRef.current = selectedPhoto;
 
+  const movingPhotoRef = useRef(movingPhoto);
+  movingPhotoRef.current = movingPhoto;
+  const movingPhotoId = movingPhoto?.attachment._id ?? null;
+
   const pushUndo = useCallback(
     (operation: PhotoUndoOperation) => {
       clearPhotoRedo(undoScope);
@@ -428,15 +452,43 @@ export function ProjectPhotoMap({
           setJustPlacedId((current) => (current === photo.attachment._id ? null : current));
         }, 500);
         notify({ tone: 'success', message: 'Photo location updated.' });
+        return true;
       } catch (error) {
         notify({
           tone: 'error',
           message: userFacingError(error, 'The photo location could not be updated.'),
         });
+        return false;
       }
     },
     [notify, pushUndo, setPhotoLocation],
   );
+
+  // Commits the marker where the user left it. Move mode is cleared here rather
+  // than left to the live-data effect: confirming without dragging leaves the
+  // coordinates unchanged, so that effect would see no change and strand the
+  // user in move mode.
+  const handleConfirmMove = useCallback(async () => {
+    const photo = movingPhoto;
+    if (!photo) return;
+    // The marker is authoritative while it exists; `movePosition` covers the
+    // case where its layer has been rebuilt since the last drag.
+    const marker = moveMarkerRef.current;
+    const latlng = marker ? marker.getLatLng() : null;
+    const target = latlng ? { latitude: latlng.lat, longitude: latlng.lng } : movePosition;
+    if (!target) return;
+    const suggestion = suggestedLocation(photo);
+    // Left sitting on the device suggestion, the coordinate is still that GPS
+    // fix rather than a point picked off the basemap by eye.
+    const atSuggestion =
+      suggestion !== null &&
+      Math.abs(target.latitude - suggestion.latitude) < 1e-6 &&
+      Math.abs(target.longitude - suggestion.longitude) < 1e-6;
+    const placed = await handleMove(photo, target, atSuggestion ? 'device' : 'manual');
+    // Only on success: a failed write should leave the marker where it is so
+    // the position is not silently lost.
+    if (placed) setMovingPhoto(null);
+  }, [handleMove, movePosition, movingPhoto]);
 
   const handleRestoreOriginal = useCallback(
     async (photo: MapPhoto) => {
@@ -674,6 +726,30 @@ export function ProjectPhotoMap({
     undoScope,
   ]);
 
+  // One level of "go back", innermost layer first. Shared by Escape and the
+  // phone's back gesture so both unwind the UI in the same order.
+  const dismissTopLayer = useCallback(() => {
+    if (contextMenu) setContextMenu(null);
+    else if (movingPhoto) setMovingPhoto(null);
+    else if (taskPickerOpen) setTaskPickerOpen(false);
+    else if (drilledId) setDrilledId(null);
+    else if (selectedPhotos.length > 0) {
+      setSelectedPhotos([]);
+      setTaskPickerOpen(false);
+      setPhotosPanelOpen(true);
+    } else if (photosPanelOpen) setPhotosPanelOpen(false);
+  }, [contextMenu, drilledId, movingPhoto, photosPanelOpen, selectedPhotos.length, taskPickerOpen]);
+
+  useBackGuard(
+    contextMenu !== null ||
+      movingPhoto !== null ||
+      taskPickerOpen ||
+      drilledId !== null ||
+      selectedPhotos.length > 0 ||
+      photosPanelOpen,
+    dismissTopLayer,
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -684,15 +760,7 @@ export function ProjectPhotoMap({
         target instanceof HTMLSelectElement ||
         target.isContentEditable;
       if (key === 'escape' && !typing) {
-        if (contextMenu) setContextMenu(null);
-        else if (movingPhoto) setMovingPhoto(null);
-        else if (taskPickerOpen) setTaskPickerOpen(false);
-        else if (drilledId) setDrilledId(null);
-        else if (selectedPhotos.length > 0) {
-          setSelectedPhotos([]);
-          setTaskPickerOpen(false);
-          setPhotosPanelOpen(true);
-        } else if (photosPanelOpen) setPhotosPanelOpen(false);
+        dismissTopLayer();
         return;
       }
       if (!canEdit || !(event.ctrlKey || event.metaKey) || (key !== 'z' && key !== 'y') || typing) {
@@ -704,17 +772,7 @@ export function ProjectPhotoMap({
     };
     globalThis.document.addEventListener('keydown', onKeyDown);
     return () => globalThis.document.removeEventListener('keydown', onKeyDown);
-  }, [
-    canEdit,
-    contextMenu,
-    drilledId,
-    handleRedo,
-    handleUndo,
-    movingPhoto,
-    photosPanelOpen,
-    selectedPhotos.length,
-    taskPickerOpen,
-  ]);
+  }, [canEdit, dismissTopLayer, handleRedo, handleUndo]);
 
   // Dismiss the photo context menu on any press outside it. The listener is
   // attached after the press that opened the menu has been dispatched, so it
@@ -736,6 +794,7 @@ export function ProjectPhotoMap({
       try {
         let unmapped = 0;
         let suggested = 0;
+        const unmappedIds: Id<'attachments'>[] = [];
         const diagnostics: string[] = [];
         // `undefined` means "not asked yet". One read serves the whole batch,
         // and a failure is remembered so a denied prompt or a timeout is not
@@ -811,7 +870,10 @@ export function ProjectPhotoMap({
               expectedPhotoUpdatedAt: photoState.photoUpdatedAt,
             });
           }
-          if (!location) unmapped += 1;
+          if (!location) {
+            unmapped += 1;
+            unmappedIds.push(attachmentId);
+          }
           if (suggestion) suggested += 1;
         }
         const plural = unmapped === 1 ? '' : 's';
@@ -829,6 +891,7 @@ export function ProjectPhotoMap({
               ? `${summary} [${diagnostics.join('; ')}]`
               : summary,
         });
+        if (unmappedIds.length) setPlacePromptIds(unmappedIds);
       } catch (error) {
         notify({
           tone: 'error',
@@ -989,6 +1052,19 @@ export function ProjectPhotoMap({
           return;
         }
         if (movingPhoto) return;
+        const lead = group.photos[0];
+        // Touch has no hover, so the first tap stands in for it: the marker
+        // enlarges and fans out. Tapping a marker that is already enlarged
+        // opens the pane — no timing window, so a slow second tap works just
+        // as well as a quick one. A mouse keeps its single click, since
+        // hovering already previews.
+        const alreadyRaised = leadPhotoId === lead.attachment._id && hoverActive;
+        if (showCameraButton && !alreadyRaised) {
+          setLeadPhotoId(lead.attachment._id);
+          setHoverActive(true);
+          setContextMenu(null);
+          return;
+        }
         setSelectedPhotos(group.photos);
         setTaskPickerOpen(false);
         setContextMenu(null);
@@ -1015,41 +1091,72 @@ export function ProjectPhotoMap({
         L.DomEvent.on(icon, 'touchend touchmove touchcancel', clearLongPress);
       }
     }
-  }, [groups, hoverActive, justPlacedId, leadPhotoId, movingPhoto, pingPhotoId]);
+  }, [groups, hoverActive, justPlacedId, leadPhotoId, movingPhoto, pingPhotoId, showCameraButton]);
 
+  // Move mode always puts a draggable marker on the map, whether or not the
+  // photo already has a location: an unmapped photo starts at its device
+  // suggestion, or at the centre of the view. Dragging only repositions the
+  // marker — nothing is written until the user confirms — so the position can
+  // be fine-tuned, which matters most on a phone.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !movingPhoto || !hasLocation(movingPhoto)) return;
-    const latitude = movingPhoto.attachment.latitude ?? map.getCenter().lat;
-    const longitude = movingPhoto.attachment.longitude ?? map.getCenter().lng;
-    const marker = L.marker([latitude, longitude], {
-      icon: createPhotoIcon({ latitude, longitude, photos: [movingPhoto] }, { moving: true }),
+    const movingPhoto = movingPhotoRef.current;
+    if (!map || !movingPhoto) {
+      moveMarkerRef.current = null;
+      setMovePosition(null);
+      return;
+    }
+    const suggestion = suggestedLocation(movingPhoto);
+    const preferred = hasLocation(movingPhoto)
+      ? { latitude: movingPhoto.attachment.latitude, longitude: movingPhoto.attachment.longitude }
+      : suggestion;
+    // Entering move mode never pans or zooms — the user keeps the view they
+    // framed. A start point outside that view would put the marker somewhere
+    // invisible, so it falls back to the middle of the screen instead.
+    const start =
+      preferred && map.getBounds().contains([preferred.latitude, preferred.longitude])
+        ? preferred
+        : { latitude: map.getCenter().lat, longitude: map.getCenter().lng };
+    const center: L.LatLngExpression = [start.latitude, start.longitude];
+    const layers: L.Layer[] = [];
+    setMovePosition(start);
+
+    // Only meaningful before placement: once placed, the photo's own accuracy
+    // is whatever the user chose, not the device's.
+    const accuracy = movingPhoto.attachment.suggestedAccuracy;
+    if (!hasLocation(movingPhoto) && suggestion && accuracy !== undefined) {
+      layers.push(
+        L.circle([suggestion.latitude, suggestion.longitude], {
+          radius: accuracy,
+          interactive: false,
+          className: 'fp-photo-map-suggestion-range',
+        }),
+      );
+    }
+
+    const marker = L.marker(center, {
+      icon: createPhotoIcon(
+        { latitude: start.latitude, longitude: start.longitude, photos: [movingPhoto] },
+        { moving: true },
+      ),
       draggable: true,
       autoPan: true,
       zIndexOffset: 1000,
-    });
-    marker.on('dragend', () => {
-      const latlng = marker.getLatLng();
-      const previousLat = movingPhoto.attachment.latitude;
-      const previousLng = movingPhoto.attachment.longitude;
-      const actuallyMoved =
-        previousLat === undefined ||
-        previousLng === undefined ||
-        Math.abs(latlng.lat - previousLat) > 1e-6 ||
-        Math.abs(latlng.lng - previousLng) > 1e-6;
-      if (actuallyMoved) {
-        // Exit happens via the live-data effect once the new position lands,
-        // so the photo never flashes back to its pre-move spot.
-        void handleMove(movingPhoto, { latitude: latlng.lat, longitude: latlng.lng });
-      } else {
-        setMovingPhoto(null);
-      }
     });
     marker.on('contextmenu', (event) => {
       const { left, top } = eventClientPosition(event.originalEvent as Event);
       setContextMenu({ left, top, photo: movingPhoto });
     });
-    marker.addTo(map);
+    // Mirrored into state so the confirm button has the position even if the
+    // marker layer is torn down between the drag and the tap.
+    marker.on('dragend', () => {
+      const latlng = marker.getLatLng();
+      setMovePosition({ latitude: latlng.lat, longitude: latlng.lng });
+    });
+    layers.push(marker);
+    for (const layer of layers) layer.addTo(map);
+    moveMarkerRef.current = marker;
+
     const icon = marker.getElement();
     if (icon) {
       let longPressTimer: number | null = null;
@@ -1066,113 +1173,69 @@ export function ProjectPhotoMap({
       });
       L.DomEvent.on(icon, 'touchend touchmove touchcancel', clearLongPress);
     }
-    return () => {
-      marker.remove();
-    };
-  }, [handleMove, movingPhoto]);
 
-  // The device-location suggestion appears as a ghost marker while an unmapped
-  // photo is being placed, ringed by its own accuracy radius so the user can
-  // see how vague the fix was. Tapping it accepts; tapping bare map still
-  // places by hand via the click-to-place effect below.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !movingPhoto || hasLocation(movingPhoto)) {
-      suggestionPannedRef.current = null;
-      return;
-    }
-    const suggestion = suggestedLocation(movingPhoto);
-    if (!suggestion) {
-      suggestionPannedRef.current = null;
-      return;
-    }
-    const center: L.LatLngExpression = [suggestion.latitude, suggestion.longitude];
-    const accuracy = movingPhoto.attachment.suggestedAccuracy;
-    const layers: L.Layer[] = [];
-    if (accuracy !== undefined) {
-      layers.push(
-        L.circle(center, {
-          radius: accuracy,
-          interactive: false,
-          className: 'fp-photo-map-suggestion-range',
-        }),
-      );
-    }
-    const marker = L.marker(center, {
-      icon: L.divIcon({
-        className: 'fp-photo-map-suggestion-icon',
-        html: '<span class="fp-photo-map-suggestion">Place here</span>',
-        iconSize: [112, 30],
-        iconAnchor: [56, 34],
-      }),
-      zIndexOffset: 900,
-    });
-    marker.on('click', (event) => {
-      L.DomEvent.stop(event);
-      void handleMove(movingPhoto, suggestion, 'device');
-      setMovingPhoto(null);
-    });
-    layers.push(marker);
-    for (const layer of layers) layer.addTo(map);
-    // Live query updates re-create `movingPhoto`, so pan only when the photo
-    // being placed actually changes — otherwise the map snaps back mid-drag.
-    if (suggestionPannedRef.current !== movingPhoto.attachment._id) {
-      suggestionPannedRef.current = movingPhoto.attachment._id;
-      map.setView(center, Math.max(map.getZoom(), 17));
-    }
     return () => {
       for (const layer of layers) layer.remove();
+      if (moveMarkerRef.current === marker) moveMarkerRef.current = null;
     };
-  }, [handleMove, movingPhoto]);
+    // Keyed on the id, not the object: live query updates replace `movingPhoto`
+    // constantly, and rebuilding the marker each time would snap it back to its
+    // start and throw away the position the user had dragged it to.
+  }, [movingPhotoId]);
 
-  // Click-to-place: an unmapped photo has no marker, so in move mode the map
-  // waits for a click and that spot becomes the location.
+  // A click on bare map means "let me see the map". On touch the first tap on
+  // a marker stands in for hover (it enlarges and fans out), so a click on the
+  // map folds that preview back down as well as closing the right pane. Marker
+  // clicks select a photo instead, and in move mode the double-tap below
+  // handles exits, so neither should dismiss anything here.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !movingPhoto || hasLocation(movingPhoto)) return;
+    if (!mapInstance) return;
     const onMapClick = (event: L.LeafletMouseEvent) => {
       const target = event.originalEvent.target as HTMLElement | null;
       if (target && target.closest && target.closest('.leaflet-marker-icon')) return;
-      void handleMove(movingPhoto, { latitude: event.latlng.lat, longitude: event.latlng.lng });
-      setMovingPhoto(null);
-    };
-    map.on('click', onMapClick);
-    return () => {
-      map.off('click', onMapClick);
-    };
-  }, [handleMove, movingPhoto]);
-
-  // A click on bare map means "let me see the map", so it closes the right
-  // pane. Marker clicks select a photo instead, and in move mode the click
-  // above places one, so neither should dismiss anything.
-  useEffect(() => {
-    if (!mapInstance || !panelVisible || movingPhoto) return;
-    const onMapClick = (event: L.LeafletMouseEvent) => {
-      const target = event.originalEvent.target as HTMLElement | null;
-      if (target && target.closest && target.closest('.leaflet-marker-icon')) return;
-      closePhotosPanel();
+      if (leadPhotoId) {
+        setLeadPhotoId(null);
+        setHoverActive(false);
+      }
+      if (panelVisible && !movingPhoto) closePhotosPanel();
     };
     mapInstance.on('click', onMapClick);
     return () => {
       mapInstance.off('click', onMapClick);
     };
-  }, [closePhotosPanel, mapInstance, movingPhoto, panelVisible]);
+  }, [closePhotosPanel, leadPhotoId, mapInstance, movingPhoto, panelVisible]);
 
+  // In move mode the map still pans with one finger — only a drag that starts
+  // on the photo marker moves the photo, which Leaflet already keeps separate.
+  // Box zoom stays off because its drag gesture would fight the marker's, and
+  // double-click zoom stays off so a double tap can mean "leave move mode".
+  // Touch browsers never fire `dblclick`, so the double tap is detected from
+  // two bare-map clicks landing close together in time and space instead.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
-    const setMoveLocked = (locked: boolean) => {
-      if (locked) {
-        map.dragging.disable();
-        map.boxZoom.disable();
-      } else {
-        map.dragging.enable();
-        map.boxZoom.enable();
-      }
+    if (!map || !movingPhoto) return;
+    map.boxZoom.disable();
+    map.doubleClickZoom.disable();
+    let lastTapAt = 0;
+    let lastTapPoint: L.Point | null = null;
+    const onMapClick = (event: L.LeafletMouseEvent) => {
+      const target = event.originalEvent.target as HTMLElement | null;
+      if (target && target.closest && target.closest('.leaflet-marker-icon')) return;
+      const now = Date.now();
+      const point = map.mouseEventToContainerPoint(event.originalEvent as MouseEvent);
+      const isDoubleTap =
+        now - lastTapAt <= 400 && lastTapPoint !== null && point.distanceTo(lastTapPoint) <= 32;
+      lastTapAt = now;
+      lastTapPoint = point;
+      if (isDoubleTap) setMovingPhoto(null);
     };
-    setMoveLocked(movingPhoto !== null);
+    map.on('click', onMapClick);
     return () => {
-      if (mapRef.current === map) setMoveLocked(false);
+      map.off('click', onMapClick);
+      if (mapRef.current === map) {
+        map.boxZoom.enable();
+        map.doubleClickZoom.enable();
+      }
     };
   }, [movingPhoto]);
 
@@ -1260,20 +1323,49 @@ export function ProjectPhotoMap({
 
           <ActionBarSeparator />
 
-          {showCameraButton && (
+          {showCameraButton ? (
+            // Android's picker has no camera entry, so the two sources have to
+            // be offered explicitly rather than left to the OS chooser.
+            <Dropdown
+              align="left"
+              trigger={
+                <ActionBarButton
+                  icon={<Camera />}
+                  label="Add photos"
+                  disabled={!canEdit || uploading}
+                  menu
+                />
+              }
+            >
+              {(close) => (
+                <>
+                  <DropdownItem
+                    onClick={() => {
+                      cameraInputRef.current?.click();
+                      close();
+                    }}
+                  >
+                    <Camera /> Take a photo
+                  </DropdownItem>
+                  <DropdownItem
+                    onClick={() => {
+                      fileInputRef.current?.click();
+                      close();
+                    }}
+                  >
+                    <ImagePlus /> Choose existing photos
+                  </DropdownItem>
+                </>
+              )}
+            </Dropdown>
+          ) : (
             <ActionBarButton
-              icon={<Camera />}
-              label="Take photo"
+              icon={<ImagePlus />}
+              label="Add photos"
               disabled={!canEdit || uploading}
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => fileInputRef.current?.click()}
             />
           )}
-          <ActionBarButton
-            icon={<ImagePlus />}
-            label="Add photos"
-            disabled={!canEdit || uploading}
-            onClick={() => fileInputRef.current?.click()}
-          />
           <Dropdown
             align="left"
             trigger={
@@ -1397,7 +1489,31 @@ export function ProjectPhotoMap({
           onHoverEnd={() => setHoverActive(false)}
         />
 
-        {mappedPhotos.length === 0 && (
+        {/* Move mode needs a visible commit on a phone: dragging alone cannot
+            place a photo that is already where the user wants it, and there is
+            no keyboard to press Escape with. Rendered through a portal to the
+            body so no Leaflet pane, control, or ancestor stacking context can
+            sit on top of it and swallow the tap — inside the map container it
+            lay beneath the map's own controls and the touch never landed. */}
+        {movingPhoto &&
+          canEdit &&
+          createPortal(
+            <div className="fixed bottom-6 left-1/2 z-[1200] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-surface py-1.5 pl-3 pr-1.5 shadow-e3">
+              <span className="text-xs text-t2">
+                <span className="sm:hidden">Drag the photo</span>
+                <span className="hidden sm:inline">Drag the photo to position it</span>
+              </span>
+              <Button size="sm" onClick={() => void handleConfirmMove()}>
+                <MapPinPlus /> Place here
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setMovingPhoto(null)}>
+                Cancel
+              </Button>
+            </div>,
+            document.body,
+          )}
+
+        {mappedPhotos.length === 0 && !movingPhoto && (
           <div className="pointer-events-none absolute inset-0 z-[400] grid place-items-center p-6">
             <div className="pointer-events-auto max-w-sm rounded-lg border border-line bg-surface px-5 py-4 text-center shadow-e3">
               <MapPinOff className="mx-auto mb-2 size-5 text-t3" />
@@ -1532,6 +1648,32 @@ export function ProjectPhotoMap({
           )}
         </div>
       </footer>
+
+      <ConfirmDialog
+        open={placePromptIds.length > 0}
+        title={
+          placePromptIds.length === 1
+            ? 'This photo has no location'
+            : `${placePromptIds.length} photos have no location`
+        }
+        description={
+          placePromptIds.length === 1
+            ? 'Place it on the map now, or leave it in the Photos list for later.'
+            : 'Place the first one now — the rest stay in the Photos list until you place them.'
+        }
+        confirmLabel="Place now"
+        onCancel={() => setPlacePromptIds([])}
+        onConfirm={() => {
+          const [first] = placePromptIds;
+          setPlacePromptIds([]);
+          // Resolved against live data: the upload's own row may not have
+          // reached the query yet when the prompt is answered quickly.
+          const photo = photos.find((candidate) => candidate.attachment._id === first);
+          if (!photo) return;
+          closePhotosPanel();
+          setMovingPhoto(photo);
+        }}
+      />
 
       <ConfirmDialog
         open={deleteTarget !== null}

@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { patchAppView, readAppView } from '../../lib/app-view';
 import { userFacingError } from '../../lib/errors';
 import { openPdf, type PDFDocumentProxy } from '../../lib/pdf';
 import { extractPhotoLocation } from '../../lib/photo-location';
@@ -63,7 +64,12 @@ export function ProjectPlanWorkspace({
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [savingPdf, setSavingPdf] = useState(false);
-  const [activeView, setActiveView] = useState<'plans' | 'map'>('plans');
+  const [activeView, setActiveView] = useState<'plans' | 'map'>(() => readAppView().view);
+
+  useEffect(() => {
+    patchAppView({ view: activeView });
+  }, [activeView]);
+
   const sidebarCollapsed = useProject((state) => state.sidebarCollapsed);
   const remoteTasksRef = useRef<Record<string, Task> | null>(null);
   const remoteMarkupsRef = useRef<Record<string, Markup> | null>(null);

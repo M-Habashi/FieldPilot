@@ -44,6 +44,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
+      // Allow phone testing over the same Wi-Fi network.
+      host: true,
       port: 5173,
       strictPort: true,
       // Phone testing needs a real HTTPS origin, because geolocation only runs
