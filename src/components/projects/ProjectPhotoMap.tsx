@@ -92,11 +92,6 @@ function isLikelyNativeCameraCapture(file: File, now = Date.now()): boolean {
   return age >= -30_000 && age <= nativeCaptureFreshnessMs;
 }
 
-function formatPhotoFileSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function extractPhotoLocationQuickly(file: File, timeoutMs = 1_500) {
   return new Promise<Awaited<ReturnType<typeof extractPhotoLocation>>>((resolve) => {
     let settled = false;
@@ -344,6 +339,13 @@ export function ProjectPhotoMap({
   const [pingPhotoId, setPingPhotoId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadNotice, setUploadNotice] = useState<UploadNotice | null>(null);
+  useEffect(() => {
+    if (!uploadNotice || uploadNotice.tone === 'info') return;
+    const timeout = window.setTimeout(() => {
+      setUploadNotice((current) => (current === uploadNotice ? null : current));
+    }, 3_000);
+    return () => window.clearTimeout(timeout);
+  }, [uploadNotice]);
   // Android's system photo picker has no camera entry, and `multiple` suppresses
   // the camera on the gallery input anyway, so a phone needs its own capture
   // button to reach the camera at all. Keyed off a coarse pointer rather than
@@ -849,12 +851,10 @@ export function ProjectPhotoMap({
       let currentContentType: string | null = null;
       setUploadNotice({
         tone: 'info',
-        message: `Upload check started for ${files.length} photo${files.length === 1 ? '' : 's'}.`,
+        message: files.length === 1 ? 'Preparing image…' : 'Preparing images…',
       });
       try {
-        let unmapped = 0;
         let uploaded = 0;
-        let skipped = 0;
         const unmappedIds: Id<'attachments'>[] = [];
         const deviceLocationState: { result?: DeviceLocationResult } = {};
         // Location is opportunistic. It may improve automatic placement, but
@@ -869,15 +869,12 @@ export function ProjectPhotoMap({
           uploadStage = 'checking the file type';
           const contentType = photoContentType(file);
           currentContentType = contentType;
-          if (!contentType) {
-            skipped += 1;
-            continue;
-          }
+          if (!contentType) continue;
 
           uploadStage = 'requesting a secure upload';
           setUploadNotice({
             tone: 'info',
-            message: `Preparing ${file.name} (${contentType}, ${formatPhotoFileSize(file.size)}).`,
+            message: files.length === 1 ? 'Preparing image…' : 'Preparing images…',
           });
           const upload = await generateUploadUrl({ projectId: project._id });
 
@@ -886,7 +883,7 @@ export function ProjectPhotoMap({
           uploadStage = 'sending the file';
           setUploadNotice({
             tone: 'info',
-            message: `Uploading ${file.name}: 0% of ${formatPhotoFileSize(file.size)}. Keep FieldPilot open.`,
+            message: 'Uploading image… 0%',
           });
           let reportedPercent = 0;
           const storedUpload = await uploadPhotoFile({
@@ -898,10 +895,7 @@ export function ProjectPhotoMap({
               reportedPercent = percent;
               setUploadNotice({
                 tone: 'info',
-                message:
-                  percent < 100
-                    ? `Uploading ${file.name}: ${percent}% of ${formatPhotoFileSize(file.size)}. Keep FieldPilot open.`
-                    : `${file.name} sent. Waiting for the upload server.`,
+                message: percent < 100 ? `Uploading image… ${percent}%` : 'Finishing image upload…',
               });
             },
           });
@@ -909,7 +903,7 @@ export function ProjectPhotoMap({
           uploadStage = 'reading the photo location';
           setUploadNotice({
             tone: 'info',
-            message: `${file.name} uploaded. Checking its location before saving.`,
+            message: 'Processing image…',
           });
           const exifLocation = await extractPhotoLocationQuickly(file);
           const deviceResult = deviceLocationState.result;
@@ -921,7 +915,7 @@ export function ProjectPhotoMap({
           uploadStage = 'saving the photo to the project';
           setUploadNotice({
             tone: 'info',
-            message: `Upload received. Saving ${file.name} in ${project.name}.`,
+            message: 'Processing image…',
           });
           const attachmentId = await completeUpload({
             projectId: project._id,
@@ -961,38 +955,20 @@ export function ProjectPhotoMap({
             });
           }
           if (!exifLocation && !devicePhotoLocation) {
-            unmapped += 1;
             unmappedIds.push(attachmentId);
           }
         }
         if (uploaded === 0) {
           setUploadNotice({
             tone: 'error',
-            message:
-              'No photos were added. Choose a JPG, PNG, WEBP, HEIC, HEIF, AVIF, GIF, BMP, or TIFF file.',
+            message: 'Error uploading image.',
           });
           return;
         }
-        if (skipped > 0) {
-          setUploadNotice({
-            tone: 'warning',
-            message: `${skipped} unsupported file${skipped === 1 ? ' was' : 's were'} skipped.`,
-          });
-        }
-        const plural = unmapped === 1 ? '' : 's';
-        const summary = !unmapped
-          ? 'Photos added to the map.'
-          : `${unmapped} photo${plural} added to Photos. Place ${unmapped === 1 ? 'it' : 'them'} on the map when ready.`;
-        notify({
-          tone: 'success',
-          message: summary,
-        });
         setUploadNotice({
-          tone: skipped > 0 ? 'warning' : 'success',
+          tone: 'success',
           message:
-            unmapped > 0
-              ? `Upload check complete: ${uploaded} photo${uploaded === 1 ? ' is' : 's are'} saved in ${project.name}. ${unmapped === 1 ? 'It needs' : `${unmapped} need`} a map location; open Photos to place ${unmapped === 1 ? 'it' : 'them'}.`
-              : `Upload check complete: ${uploaded} photo${uploaded === 1 ? ' is' : 's are'} saved in ${project.name} and visible on the map.`,
+            uploaded === 1 ? 'Image uploaded successfully.' : 'Images uploaded successfully.',
         });
         if (unmappedIds.length) {
           // A locationless upload has no marker, so reveal the durable Photos
@@ -1004,31 +980,23 @@ export function ProjectPhotoMap({
           setPlacePromptIds(unmappedIds);
         }
       } catch (error) {
-        const reason = userFacingError(error, 'The photo could not be uploaded.');
-        const fileDetails = currentFile
-          ? ` File: ${currentFile.name} (${currentContentType ?? 'unknown type'}, ${formatPhotoFileSize(currentFile.size)}).`
-          : '';
-        const message = `Upload failed while ${uploadStage}. ${reason}${fileDetails}`;
-        notify({
-          tone: 'error',
-          message,
+        console.error('Photo upload failed', {
+          stage: uploadStage,
+          error,
+          file: currentFile
+            ? {
+                name: currentFile.name,
+                type: currentContentType ?? 'unknown',
+                size: currentFile.size,
+              }
+            : null,
         });
-        setUploadNotice({ tone: 'error', message });
+        setUploadNotice({ tone: 'error', message: 'Error uploading image.' });
       } finally {
         setUploading(false);
       }
     },
-    [
-      canEdit,
-      completeUpload,
-      convex,
-      generateUploadUrl,
-      notify,
-      project._id,
-      project.name,
-      pushUndo,
-      uploading,
-    ],
+    [canEdit, completeUpload, convex, generateUploadUrl, project._id, pushUndo, uploading],
   );
 
   useEffect(() => {
@@ -1598,17 +1566,6 @@ export function ProjectPhotoMap({
         </ActionBarGroup>
       </ActionBar>
 
-      {uploadNotice && (
-        <Notice
-          tone={uploadNotice.tone}
-          compact
-          className="mx-3 mt-3 shrink-0"
-          onDismiss={() => setUploadNotice(null)}
-        >
-          {uploadNotice.message}
-        </Notice>
-      )}
-
       <div
         className={cn(
           'relative min-h-0 flex-1 isolate',
@@ -1617,6 +1574,19 @@ export function ProjectPhotoMap({
         )}
       >
         <div ref={mapHostRef} className="h-full w-full" />
+
+        {uploadNotice && (
+          <div className="pointer-events-none absolute inset-x-3 top-3 z-[700] flex justify-center">
+            <Notice
+              tone={uploadNotice.tone}
+              compact
+              className="pointer-events-auto w-full max-w-md"
+              onDismiss={() => setUploadNotice(null)}
+            >
+              {uploadNotice.message}
+            </Notice>
+          </div>
+        )}
 
         <MapPhotoPanel
           photos={filteredPhotos}
