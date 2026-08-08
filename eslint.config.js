@@ -9,6 +9,7 @@ export default tseslint.config(
     ignores: [
       '.agents/**',
       '.codex/**',
+      '.vercel/**',
       '.impeccable/**',
       'convex/_generated/**',
       'dist/**',

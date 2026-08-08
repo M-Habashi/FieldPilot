@@ -134,6 +134,152 @@ describe('readDeviceLocation', () => {
     const result = readDeviceLocation();
     await vi.advanceTimersByTimeAsync(5_500);
 
-    await expect(result).resolves.toEqual({ status: 'failed', code: 3 });
+    await expect(result).resolves.toEqual({
+      status: 'failed',
+      code: 3,
+      reason: 'never-responded',
+    });
+  });
+
+  it('reports a hidden document when the hang happens behind the native camera picker', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition() {
+          // WebKit suspends geolocation for hidden pages: no callback runs.
+        },
+      },
+    });
+
+    const result = readDeviceLocation();
+    await vi.advanceTimersByTimeAsync(5_500);
+
+    await expect(result).resolves.toEqual({
+      status: 'failed',
+      code: 3,
+      reason: 'hidden-document',
+    });
+  });
+
+  it('fails fast as site-denied without re-prompting when the browser remembers a block', async () => {
+    const getCurrentPosition = vi.fn();
+    vi.stubGlobal('navigator', {
+      geolocation: { getCurrentPosition },
+      permissions: {
+        query: vi.fn().mockResolvedValue({ state: 'denied' }),
+      },
+    });
+
+    await expect(readDeviceLocation()).resolves.toEqual({
+      status: 'failed',
+      code: 1,
+      reason: 'site-denied',
+    });
+    // The whole point: a remembered block never re-hits the geolocation API,
+    // so it cannot hang iOS Chrome or trigger another permission prompt.
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('classifies a denial above a granted site permission as a system denial', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition(_success: PositionCallback, error: PositionErrorCallback) {
+          error({ code: 1 } as GeolocationPositionError);
+        },
+      },
+      permissions: {
+        query: vi.fn().mockResolvedValue({ state: 'granted' }),
+      },
+    });
+
+    await expect(readDeviceLocation()).resolves.toEqual({
+      status: 'failed',
+      code: 1,
+      reason: 'system-denied',
+    });
+  });
+
+  it('reports a plain denial when the permission scope cannot be determined', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition(_success: PositionCallback, error: PositionErrorCallback) {
+          error({ code: 1 } as GeolocationPositionError);
+        },
+      },
+    });
+
+    await expect(readDeviceLocation()).resolves.toEqual({
+      status: 'failed',
+      code: 1,
+      reason: 'denied',
+    });
+  });
+
+  it('reports an unavailable position', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition(_success: PositionCallback, error: PositionErrorCallback) {
+          error({ code: 2 } as GeolocationPositionError);
+        },
+      },
+    });
+
+    await expect(readDeviceLocation()).resolves.toEqual({
+      status: 'failed',
+      code: 2,
+      reason: 'unavailable',
+    });
+  });
+
+  it('reports a browser-side timeout distinctly from the silent hang', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition(_success: PositionCallback, error: PositionErrorCallback) {
+          error({ code: 3 } as GeolocationPositionError);
+        },
+      },
+    });
+
+    await expect(readDeviceLocation()).resolves.toEqual({
+      status: 'failed',
+      code: 3,
+      reason: 'timeout',
+    });
+  });
+
+  it('reports an insecure context as blocked without calling the API', async () => {
+    const getCurrentPosition = vi.fn();
+    vi.stubGlobal('isSecureContext', false);
+    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } });
+
+    await expect(readDeviceLocation()).resolves.toEqual({
+      status: 'failed',
+      code: 1,
+      reason: 'insecure-context',
+    });
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing geolocation API as unsupported', async () => {
+    vi.stubGlobal('navigator', {});
+    await expect(readDeviceLocation()).resolves.toEqual({ status: 'unsupported' });
+  });
+
+  it('still succeeds when the permission query itself breaks', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition(success: PositionCallback) {
+          success({
+            coords: { latitude: 39.7, longitude: -86.1, accuracy: 15 },
+          } as GeolocationPosition);
+        },
+      },
+      permissions: {
+        query: vi.fn().mockRejectedValue(new TypeError('geolocation not queryable')),
+      },
+    });
+
+    await expect(readDeviceLocation()).resolves.toMatchObject({ status: 'ok' });
   });
 });

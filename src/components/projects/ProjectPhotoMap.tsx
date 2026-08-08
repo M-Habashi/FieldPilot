@@ -25,6 +25,11 @@ import { extractPhotoLocation, type PhotoLocation } from '../../lib/photo-locati
 import { photoContentType } from '../../lib/photo-file';
 import { readDeviceLocation, type DeviceLocationResult } from '../../lib/device-location';
 import {
+  locationFailureMessage,
+  locationRecoveryGuidance,
+  type LocationRecoveryGuidance,
+} from '../../lib/location-guidance';
+import {
   createPhotoDiagnosticSessionId,
   detectPhotoDiagnosticClient,
   readGeolocationPermissionState,
@@ -354,6 +359,10 @@ export function ProjectPhotoMap({
   const [locating, setLocating] = useState(false);
   const locatingRef = useRef(false);
   const [uploadNotice, setUploadNotice] = useState<UploadNotice | null>(null);
+  // Recovery steps for a blocked location permission. Deliberately not on the
+  // 3-second timer: the user needs to follow them inside two settings screens,
+  // so the card stays until dismissed or until a location attempt succeeds.
+  const [locationHelp, setLocationHelp] = useState<LocationRecoveryGuidance | null>(null);
   useEffect(() => {
     if (!uploadNotice || uploadNotice.tone === 'info') return;
     const timeout = window.setTimeout(() => {
@@ -483,14 +492,17 @@ export function ProjectPhotoMap({
     setLocating(true);
     const sessionId = createPhotoDiagnosticSessionId();
     const startedAt = Date.now();
+    const client = detectPhotoDiagnosticClient();
+    const permissionPromise = readGeolocationPermissionState();
     sendPhotoDiagnostic({
       event: 'location_started',
       sessionId,
       projectId: project._id,
-      client: detectPhotoDiagnosticClient(),
+      client,
       fromCamera: false,
       secureContext: globalThis.isSecureContext,
       geolocationSupported: typeof navigator !== 'undefined' && Boolean(navigator.geolocation),
+      documentVisible: globalThis.document?.visibilityState !== 'hidden',
     });
     try {
       const result = await readDeviceLocation({
@@ -498,28 +510,27 @@ export function ProjectPhotoMap({
         timeoutMs: 10_000,
         maximumAgeMs: 30_000,
       });
+      const permission = await permissionPromise;
       sendPhotoDiagnostic({
         event: 'location_result',
         sessionId,
         projectId: project._id,
-        client: detectPhotoDiagnosticClient(),
+        client,
+        permissionState: permission,
         locationStatus: result.status,
         elapsedMs: Date.now() - startedAt,
-        ...(result.status === 'failed' ? { locationErrorCode: result.code } : {}),
+        documentVisible: globalThis.document?.visibilityState !== 'hidden',
+        ...(result.status === 'failed'
+          ? { locationErrorCode: result.code, failureReason: result.reason }
+          : {}),
         ...(result.status === 'ok' ? { accuracyM: result.location.accuracy } : {}),
       });
       if (result.status !== 'ok') {
-        const message =
-          result.status === 'unsupported'
-            ? 'Location is not supported.'
-            : result.code === 1
-              ? 'Location access is blocked.'
-              : result.code === 3
-                ? 'Location timed out. Try again.'
-                : 'Current location is unavailable.';
-        setUploadNotice({ tone: 'error', message });
+        setUploadNotice({ tone: 'error', message: locationFailureMessage(result) });
+        setLocationHelp(locationRecoveryGuidance(client, result));
         return;
       }
+      setLocationHelp(null);
 
       const map = mapRef.current;
       const layer = currentLocationLayerRef.current;
@@ -1530,15 +1541,17 @@ export function ProjectPhotoMap({
   const startMobileLocationRequest = useCallback((): PendingDeviceLocationRequest => {
     const diagnosticSessionId = createPhotoDiagnosticSessionId();
     const locationStartedAt = Date.now();
+    const client = detectPhotoDiagnosticClient();
     const permissionState = readGeolocationPermissionState();
     sendPhotoDiagnostic({
       event: 'location_started',
       sessionId: diagnosticSessionId,
       projectId: project._id,
-      client: detectPhotoDiagnosticClient(),
+      client,
       fromCamera: true,
       secureContext: globalThis.isSecureContext,
       geolocationSupported: Boolean(navigator.geolocation),
+      documentVisible: globalThis.document?.visibilityState !== 'hidden',
     });
     const locationPromise = readDeviceLocation().then((result) => {
       // If WebKit suspended the first acquisition while presenting the
@@ -1554,13 +1567,20 @@ export function ProjectPhotoMap({
         event: 'location_result',
         sessionId: diagnosticSessionId,
         projectId: project._id,
-        client: detectPhotoDiagnosticClient(),
+        client,
         permissionState: permission,
         locationStatus: result.status,
         elapsedMs: Date.now() - locationStartedAt,
-        ...(result.status === 'failed' ? { locationErrorCode: result.code } : {}),
+        documentVisible: globalThis.document?.visibilityState !== 'hidden',
+        ...(result.status === 'failed'
+          ? { locationErrorCode: result.code, failureReason: result.reason }
+          : {}),
         ...(result.status === 'ok' ? { accuracyM: result.location.accuracy } : {}),
       });
+      // The photo upload continues regardless; the card only tells the user
+      // why their next photos will need manual placement, and how to fix it.
+      const guidance = locationRecoveryGuidance(client, result);
+      if (guidance) setLocationHelp(guidance);
     });
     return {
       promise: locationPromise,
@@ -1775,16 +1795,33 @@ export function ProjectPhotoMap({
       >
         <div ref={mapHostRef} className="h-full w-full" />
 
-        {uploadNotice && (
-          <div className="pointer-events-none absolute inset-x-3 top-3 z-[700] flex justify-center">
-            <Notice
-              tone={uploadNotice.tone}
-              compact
-              className="pointer-events-auto w-full max-w-md"
-              onDismiss={() => setUploadNotice(null)}
-            >
-              {uploadNotice.message}
-            </Notice>
+        {(uploadNotice || locationHelp) && (
+          <div className="pointer-events-none absolute inset-x-3 top-3 z-[700] flex flex-col items-center gap-2">
+            {uploadNotice && (
+              <Notice
+                tone={uploadNotice.tone}
+                compact
+                className="pointer-events-auto w-full max-w-md"
+                onDismiss={() => setUploadNotice(null)}
+              >
+                {uploadNotice.message}
+              </Notice>
+            )}
+            {locationHelp && (
+              <Notice
+                tone="warning"
+                compact
+                className="pointer-events-auto w-full max-w-md"
+                onDismiss={() => setLocationHelp(null)}
+              >
+                <p className="font-semibold text-t1">{locationHelp.title}</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4">
+                  {locationHelp.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </Notice>
+            )}
           </div>
         )}
 

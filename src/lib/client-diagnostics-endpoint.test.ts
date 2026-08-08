@@ -34,7 +34,10 @@ describe('client diagnostics endpoint', () => {
           event: 'location_result',
           sessionId: 'attempt-1',
           projectId: 'project-1',
-          locationStatus: 'ok',
+          locationStatus: 'failed',
+          locationErrorCode: 1,
+          failureReason: 'site-denied',
+          documentVisible: true,
           accuracyM: 12,
           latitude: 39.7,
           longitude: -86.1,
@@ -48,6 +51,8 @@ describe('client diagnostics endpoint', () => {
     expect(log).toHaveBeenCalledOnce();
     const logged = log.mock.calls.flat().join(' ');
     expect(logged).toContain('PHOTO_UPLOAD_DIAGNOSTIC');
+    expect(logged).toContain('"failureReason":"site-denied"');
+    expect(logged).toContain('"documentVisible":true');
     expect(logged).not.toContain('latitude');
     expect(logged).not.toContain('longitude');
   });

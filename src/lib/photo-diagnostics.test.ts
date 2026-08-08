@@ -26,6 +26,48 @@ describe('sanitizePhotoDiagnostic', () => {
     });
   });
 
+  it('keeps the failure classification fields for a blocked iPhone location', () => {
+    expect(
+      sanitizePhotoDiagnostic({
+        event: 'location_result',
+        sessionId: 'attempt-4',
+        projectId: 'project-1',
+        client: 'chrome-ios',
+        permissionState: 'denied',
+        locationStatus: 'failed',
+        locationErrorCode: 1,
+        failureReason: 'site-denied',
+        documentVisible: true,
+      }),
+    ).toEqual({
+      event: 'location_result',
+      sessionId: 'attempt-4',
+      projectId: 'project-1',
+      client: 'chrome-ios',
+      permissionState: 'denied',
+      locationStatus: 'failed',
+      locationErrorCode: 1,
+      failureReason: 'site-denied',
+      documentVisible: true,
+    });
+  });
+
+  it('drops unknown failure reasons instead of logging free-form strings', () => {
+    expect(
+      sanitizePhotoDiagnostic({
+        event: 'location_result',
+        sessionId: 'attempt-5',
+        projectId: 'project-1',
+        failureReason: 'lat=39.7,lon=-86.1',
+        documentVisible: 'yes',
+      }),
+    ).toEqual({
+      event: 'location_result',
+      sessionId: 'attempt-5',
+      projectId: 'project-1',
+    });
+  });
+
   it('never copies coordinates, filenames, or raw user-agent strings', () => {
     const result = sanitizePhotoDiagnostic({
       event: 'photo_saved',

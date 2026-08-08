@@ -1,3 +1,5 @@
+import { deviceLocationFailureReasons, type DeviceLocationFailureReason } from './device-location';
+
 const diagnosticEvents = [
   'attempt_started',
   'location_started',
@@ -24,6 +26,10 @@ export interface PhotoDiagnostic {
   permissionState?: GeolocationPermissionState;
   locationStatus?: 'ok' | 'failed' | 'unsupported';
   locationErrorCode?: number;
+  /** Why the location attempt failed, at recovery-UX granularity. */
+  failureReason?: DeviceLocationFailureReason;
+  /** Whether the document was visible when the event fired — WebKit suspends geolocation for hidden pages. */
+  documentVisible?: boolean;
   accuracyM?: number;
   elapsedMs?: number;
   fileType?: string;
@@ -41,6 +47,7 @@ const permissionSet = new Set<string>([
   'unavailable',
 ]);
 const locationStatusSet = new Set<string>(['ok', 'failed', 'unsupported']);
+const failureReasonSet = new Set<string>(deviceLocationFailureReasons);
 
 function shortString(value: unknown, maximumLength = 80): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value.slice(0, maximumLength) : undefined;
@@ -63,6 +70,7 @@ export function sanitizePhotoDiagnostic(value: unknown): PhotoDiagnostic | null 
   const client = shortString(input.client);
   const permissionState = shortString(input.permissionState);
   const locationStatus = shortString(input.locationStatus);
+  const failureReason = shortString(input.failureReason);
   return {
     event: event as PhotoDiagnosticEvent,
     sessionId,
@@ -81,6 +89,12 @@ export function sanitizePhotoDiagnostic(value: unknown): PhotoDiagnostic | null 
       : {}),
     ...(finiteNumber(input.locationErrorCode, 0, 10) !== undefined
       ? { locationErrorCode: finiteNumber(input.locationErrorCode, 0, 10) }
+      : {}),
+    ...(failureReason && failureReasonSet.has(failureReason)
+      ? { failureReason: failureReason as DeviceLocationFailureReason }
+      : {}),
+    ...(typeof input.documentVisible === 'boolean'
+      ? { documentVisible: input.documentVisible }
       : {}),
     ...(finiteNumber(input.accuracyM, 0, 100_000) !== undefined
       ? { accuracyM: Math.round(finiteNumber(input.accuracyM, 0, 100_000)!) }
