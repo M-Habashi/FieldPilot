@@ -266,7 +266,6 @@ export function ProjectPhotoMap({
   const hasFittedRef = useRef(false);
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mobilePhotoInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const moveMarkerRef = useRef<L.Marker | null>(null);
   const coarsePointerRef = useRef(false);
@@ -1427,21 +1426,12 @@ export function ProjectPhotoMap({
 
           <ActionBarSeparator />
 
-          {showCameraButton ? (
-            <ActionBarButton
-              icon={<Camera />}
-              label="Add photos"
-              disabled={!canEdit || uploading}
-              onClick={() => mobilePhotoInputRef.current?.click()}
-            />
-          ) : (
-            <ActionBarButton
-              icon={<ImagePlus />}
-              label="Add photos"
-              disabled={!canEdit || uploading}
-              onClick={() => fileInputRef.current?.click()}
-            />
-          )}
+          <ActionBarButton
+            icon={showCameraButton ? <Camera /> : <ImagePlus />}
+            label="Add photos"
+            disabled={!canEdit || uploading}
+            onClick={() => fileInputRef.current?.click()}
+          />
           <Dropdown
             align="left"
             className="max-h-[min(70vh,24rem)] overflow-y-auto"
@@ -1833,30 +1823,18 @@ export function ProjectPhotoMap({
         }}
       />
 
+      {/* Match Pic2Map's picker contract: one unfiltered, multi-file input on
+          every device so mobile browsers open the document/file workflow. */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept=""
         multiple
         className="hidden"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
           if (files.length) void uploadPhotos(files);
           event.target.value = '';
-        }}
-      />
-
-      {/* Keep the mobile input unfiltered so Android and iPhone open their
-          document/file picker instead of an image-library picker that may hand
-          the browser a privacy-redacted copy without GPS EXIF metadata. */}
-      <input
-        ref={mobilePhotoInputRef}
-        type="file"
-        className="hidden"
-        onChange={(event) => {
-          const files = Array.from(event.target.files ?? []);
-          event.target.value = '';
-          if (files.length) void uploadPhotos(files);
         }}
       />
     </section>
