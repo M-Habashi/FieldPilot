@@ -193,15 +193,10 @@ describe('plan metadata permissions and cleanup', () => {
       x: 0.5,
       y: 0.5,
     });
-    const attachmentUpload = await member.mutation(api.attachments.generateUploadUrl, {
-      projectId,
-    });
-
     await expect(
       member.mutation(api.attachments.completeUpload, {
         taskId,
         kind: 'file',
-        uploadClaimId: attachmentUpload.uploadClaimId,
         storageRef: planStorageId,
         fileName: 'stolen-plan.pdf',
         contentType: 'application/pdf',
@@ -237,13 +232,11 @@ describe('plan metadata permissions and cleanup', () => {
       x: 0.5,
       y: 0.5,
     });
-    const upload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
     const photoBlob = new Blob(['photo evidence'], { type: 'image/jpeg' });
     const storageRef = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
     const attachmentId = await owner.mutation(api.attachments.completeUpload, {
       taskId,
       kind: 'photo',
-      uploadClaimId: upload.uploadClaimId,
       storageRef,
       fileName: 'evidence.jpg',
       contentType: photoBlob.type,
@@ -268,14 +261,12 @@ describe('plan metadata permissions and cleanup', () => {
     const viewer = t.withIdentity({ subject: viewerId });
     const projectId = await owner.mutation(api.projects.create, { name: 'Mapped Photos' });
     await seedMembership(t, projectId, viewerId, ownerId, 'viewer');
-    const upload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
     const photoBlob = new Blob(['map photo'], { type: 'image/jpeg' });
     const storageRef = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
 
     const attachmentId = await owner.mutation(api.attachments.completeUpload, {
       projectId,
       kind: 'photo',
-      uploadClaimId: upload.uploadClaimId,
       storageRef,
       fileName: 'site.jpg',
       contentType: photoBlob.type,
@@ -327,13 +318,11 @@ describe('plan metadata permissions and cleanup', () => {
       x: 0.5,
       y: 0.5,
     });
-    const upload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
     const photoBlob = new Blob(['movable photo'], { type: 'image/jpeg' });
     const storageRef = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
     const attachmentId = await owner.mutation(api.attachments.completeUpload, {
       projectId,
       kind: 'photo',
-      uploadClaimId: upload.uploadClaimId,
       storageRef,
       fileName: 'movable.jpg',
       contentType: photoBlob.type,
@@ -557,15 +546,11 @@ describe('plan metadata permissions and cleanup', () => {
       dueDate: '2026-08-15',
     });
     await member.mutation(api.notes.create, { taskId, text: 'Plan-linked note' });
-    const attachmentUpload = await member.mutation(api.attachments.generateUploadUrl, {
-      projectId,
-    });
     const attachmentBlob = new Blob(['detail'], { type: 'application/pdf' });
     const attachmentStorageId = await t.run(async (ctx) => await ctx.storage.store(attachmentBlob));
     await member.mutation(api.attachments.completeUpload, {
       taskId,
       kind: 'file',
-      uploadClaimId: attachmentUpload.uploadClaimId,
       storageRef: attachmentStorageId,
       fileName: 'detail.pdf',
       contentType: 'application/pdf',
@@ -636,13 +621,11 @@ describe('plan metadata permissions and cleanup', () => {
       y: 0.5,
     });
     await owner.mutation(api.notes.create, { taskId, text: 'Delete with project' });
-    const photoUpload = await owner.mutation(api.attachments.generateUploadUrl, { projectId });
     const photoBlob = new Blob(['photo'], { type: 'image/jpeg' });
     const photoStorageId = await t.run(async (ctx) => await ctx.storage.store(photoBlob));
     await owner.mutation(api.attachments.completeUpload, {
       taskId,
       kind: 'photo',
-      uploadClaimId: photoUpload.uploadClaimId,
       storageRef: photoStorageId,
       fileName: 'photo.jpg',
       contentType: 'image/jpeg',

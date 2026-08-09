@@ -6,6 +6,7 @@ import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { patchAppView, readAppView } from '../../lib/app-view';
 import { userFacingError } from '../../lib/errors';
 import { openPdf, type PDFDocumentProxy } from '../../lib/pdf';
+import { photoContentType } from '../../lib/photo-file';
 import { extractPhotoLocation } from '../../lib/photo-location';
 import { setRemoteProjectSync, useProject, type RemoteProjectSync } from '../../store/project';
 import type { Markup, PageCalibration, Priority, Status, Task } from '../../types';
@@ -136,14 +137,13 @@ export function ProjectPlanWorkspace({
       },
       async addPhotos(taskId, files) {
         for (const file of files) {
-          if (!file.type.startsWith('image/')) continue;
+          const contentType = photoContentType(file);
+          if (!contentType) continue;
           const location = await extractPhotoLocation(file);
-          const { uploadUrl, uploadClaimId } = await generateAttachmentUploadUrl({
-            projectId: project._id,
-          });
+          const uploadUrl = await generateAttachmentUploadUrl({ projectId: project._id });
           const response = await fetch(uploadUrl, {
             method: 'POST',
-            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            headers: { 'Content-Type': contentType },
             body: file,
           });
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
@@ -152,10 +152,9 @@ export function ProjectPlanWorkspace({
             projectId: project._id,
             taskId: taskId as Id<'tasks'>,
             kind: 'photo',
-            uploadClaimId,
             storageRef: storageId,
             fileName: file.name,
-            contentType: file.type || 'application/octet-stream',
+            contentType,
             size: file.size,
             ...(location
               ? {

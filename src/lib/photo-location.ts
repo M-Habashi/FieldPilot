@@ -24,27 +24,10 @@ function isValidLocation(latitude: unknown, longitude: unknown): latitude is num
   );
 }
 
-/**
- * When the camera says the photo was taken, in epoch ms. Read separately from
- * the GPS pass so the (working) location path stays a single `exifr.gps` call
- * and this only runs for the photos that actually need it.
- */
-export async function extractPhotoTakenAt(file: Blob): Promise<number | null> {
-  try {
-    const parsed = (await exifr.parse(file, { pick: ['DateTimeOriginal', 'CreateDate'] })) as
-      { DateTimeOriginal?: unknown; CreateDate?: unknown } | undefined;
-    const taken = parsed?.DateTimeOriginal ?? parsed?.CreateDate;
-    if (taken instanceof Date && Number.isFinite(taken.getTime())) return taken.getTime();
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/** Reads GPS from an original JPEG or HEIC without uploading the image first. */
+/** Reads GPS from the selected file's bytes before uploading the image. */
 export async function extractPhotoLocation(file: Blob): Promise<ExtractedPhotoLocation | null> {
   try {
-    const gps = await exifr.gps(file);
+    const gps = await exifr.gps(await file.arrayBuffer());
     if (!gps || !isValidLocation(gps.latitude, gps.longitude)) return null;
     return {
       latitude: gps.latitude,

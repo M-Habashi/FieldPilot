@@ -6,7 +6,6 @@ import {
   requireProjectRole,
   requireUser,
 } from './lib/authz';
-import { consumeUploadClaim, issueUploadClaim } from './lib/uploads';
 
 function nextPhotoUpdatedAt(photo: { photoUpdatedAt?: number }): number {
   return Math.max(Date.now(), (photo.photoUpdatedAt ?? 0) + 1);
@@ -89,9 +88,8 @@ export const getPhotoMapState = query({
 export const generateUploadUrl = mutation({
   args: { projectId: v.id('projects') },
   handler: async (ctx, { projectId }) => {
-    const userId = await requireUser(ctx);
-    await requireProjectRole(ctx, projectId, CONTENT_EDITOR_ROLES, userId);
-    return await issueUploadClaim(ctx, projectId, userId, 'attachment');
+    await requireProjectRole(ctx, projectId, CONTENT_EDITOR_ROLES);
+    return await ctx.storage.generateUploadUrl();
   },
 });
 
@@ -100,7 +98,6 @@ export const completeUpload = mutation({
     projectId: v.optional(v.id('projects')),
     taskId: v.optional(v.id('tasks')),
     kind: v.union(v.literal('photo'), v.literal('file')),
-    uploadClaimId: v.id('pendingUploads'),
     storageRef: v.id('_storage'),
     fileName: v.string(),
     contentType: v.string(),
@@ -163,13 +160,21 @@ export const completeUpload = mutation({
     ) {
       throw new Error('The suggested location is outside the valid latitude or longitude range.');
     }
-    const storedFile = await consumeUploadClaim(ctx, {
-      uploadClaimId: args.uploadClaimId,
-      storageId: args.storageRef,
-      projectId,
-      userId: uploadedBy,
-      purpose: 'attachment',
-    });
+    const storedFile = await ctx.db.system.get('_storage', args.storageRef);
+    if (storedFile === null) throw new Error('The uploaded file could not be found.');
+    const [existingSheet, existingAttachment] = await Promise.all([
+      ctx.db
+        .query('sheets')
+        .withIndex('by_sourceStorageId', (q) => q.eq('sourceStorageId', args.storageRef))
+        .first(),
+      ctx.db
+        .query('attachments')
+        .withIndex('by_storageRef', (q) => q.eq('storageRef', args.storageRef))
+        .first(),
+    ]);
+    if (existingSheet !== null || existingAttachment !== null) {
+      throw new Error('This uploaded file is already in use.');
+    }
     const storedContentType = storedFile.contentType ?? args.contentType;
     if (args.kind === 'photo' && !storedContentType.startsWith('image/')) {
       throw new Error('Only image files can be added as photos.');

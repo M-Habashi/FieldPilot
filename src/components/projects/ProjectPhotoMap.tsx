@@ -23,19 +23,13 @@ import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { extractPhotoLocation, type PhotoLocation } from '../../lib/photo-location';
 import { photoContentType } from '../../lib/photo-file';
-import { readDeviceLocation, type DeviceLocationResult } from '../../lib/device-location';
+import { readDeviceLocation } from '../../lib/device-location';
 import {
+  detectLocationClient,
   locationFailureMessage,
   locationRecoveryGuidance,
   type LocationRecoveryGuidance,
 } from '../../lib/location-guidance';
-import {
-  createPhotoDiagnosticSessionId,
-  detectPhotoDiagnosticClient,
-  readGeolocationPermissionState,
-  sendPhotoDiagnostic,
-} from '../../lib/photo-diagnostics';
-import { uploadPhotoFile } from '../../lib/photo-upload';
 import {
   clearPhotoRedo,
   popPhotoRedo,
@@ -88,37 +82,9 @@ interface ContextMenuState {
   photo: MapPhoto;
 }
 
-interface PendingDeviceLocationRequest {
-  promise: Promise<DeviceLocationResult>;
-  sessionId: string;
-}
-
 const initialMapView: L.LatLngExpression = [20, 0];
 const initialMapZoom = 2;
 const markerOverlapPx = 56;
-const nativeCaptureFreshnessMs = 2 * 60 * 1000;
-
-function isLikelyNativeCameraCapture(file: File, now = Date.now()): boolean {
-  if (!Number.isFinite(file.lastModified) || file.lastModified <= 0) return false;
-  const age = now - file.lastModified;
-  return age >= -30_000 && age <= nativeCaptureFreshnessMs;
-}
-
-function extractPhotoLocationQuickly(file: File, timeoutMs = 1_500) {
-  return new Promise<Awaited<ReturnType<typeof extractPhotoLocation>>>((resolve) => {
-    let settled = false;
-    const timer = globalThis.setTimeout(() => {
-      settled = true;
-      resolve(null);
-    }, timeoutMs);
-    void extractPhotoLocation(file).then((location) => {
-      if (settled) return;
-      settled = true;
-      globalThis.clearTimeout(timer);
-      resolve(location);
-    });
-  });
-}
 
 const fitIconSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
@@ -301,7 +267,6 @@ export function ProjectPhotoMap({
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobilePhotoInputRef = useRef<HTMLInputElement>(null);
-  const mobileLocationRequestRef = useRef<PendingDeviceLocationRequest | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const moveMarkerRef = useRef<L.Marker | null>(null);
   const coarsePointerRef = useRef(false);
@@ -490,40 +455,12 @@ export function ProjectPhotoMap({
     if (locatingRef.current) return;
     locatingRef.current = true;
     setLocating(true);
-    const sessionId = createPhotoDiagnosticSessionId();
-    const startedAt = Date.now();
-    const client = detectPhotoDiagnosticClient();
-    const permissionPromise = readGeolocationPermissionState();
-    sendPhotoDiagnostic({
-      event: 'location_started',
-      sessionId,
-      projectId: project._id,
-      client,
-      fromCamera: false,
-      secureContext: globalThis.isSecureContext,
-      geolocationSupported: typeof navigator !== 'undefined' && Boolean(navigator.geolocation),
-      documentVisible: globalThis.document?.visibilityState !== 'hidden',
-    });
+    const client = detectLocationClient();
     try {
       const result = await readDeviceLocation({
         enableHighAccuracy: true,
         timeoutMs: 10_000,
         maximumAgeMs: 30_000,
-      });
-      const permission = await permissionPromise;
-      sendPhotoDiagnostic({
-        event: 'location_result',
-        sessionId,
-        projectId: project._id,
-        client,
-        permissionState: permission,
-        locationStatus: result.status,
-        elapsedMs: Date.now() - startedAt,
-        documentVisible: globalThis.document?.visibilityState !== 'hidden',
-        ...(result.status === 'failed'
-          ? { locationErrorCode: result.code, failureReason: result.reason }
-          : {}),
-        ...(result.status === 'ok' ? { accuracyM: result.location.accuracy } : {}),
       });
       if (result.status !== 'ok') {
         setUploadNotice({ tone: 'error', message: locationFailureMessage(result) });
@@ -567,7 +504,7 @@ export function ProjectPhotoMap({
       locatingRef.current = false;
       setLocating(false);
     }
-  }, [project._id]);
+  }, []);
 
   const locateCurrentPositionRef = useRef(locateCurrentPosition);
   locateCurrentPositionRef.current = locateCurrentPosition;
@@ -944,97 +881,37 @@ export function ProjectPhotoMap({
   }, [contextMenu]);
 
   const uploadPhotos = useCallback(
-    async (
-      files: File[],
-      {
-        fromCamera = false,
-        deviceLocationRequest,
-        diagnosticSessionId,
-      }: {
-        fromCamera?: boolean;
-        deviceLocationRequest?: PendingDeviceLocationRequest;
-        diagnosticSessionId?: string;
-      } = {},
-    ) => {
+    async (files: File[]) => {
       if (!canEdit || uploading) return;
       setUploading(true);
-      const sessionId = diagnosticSessionId ?? createPhotoDiagnosticSessionId();
-      const attemptStartedAt = Date.now();
-      let uploadStage = 'checking the selected file';
-      let currentFile: File | null = null;
-      let currentContentType: string | null = null;
       setUploadNotice({
         tone: 'info',
         message: 'Uploading image…',
-      });
-      const firstFile = files[0];
-      sendPhotoDiagnostic({
-        event: 'attempt_started',
-        sessionId,
-        projectId: project._id,
-        client: detectPhotoDiagnosticClient(),
-        fromCamera,
-        secureContext: globalThis.isSecureContext,
-        geolocationSupported: typeof navigator !== 'undefined' && Boolean(navigator.geolocation),
-        ...(firstFile
-          ? { fileType: photoContentType(firstFile) ?? 'unknown', fileSize: firstFile.size }
-          : {}),
       });
       try {
         let uploaded = 0;
         const unmappedIds: Id<'attachments'>[] = [];
         for (const file of files) {
-          currentFile = file;
-          uploadStage = 'checking the file type';
           const contentType = photoContentType(file);
-          currentContentType = contentType;
           if (!contentType) continue;
 
-          uploadStage = 'requesting a secure upload';
-          const upload = await generateUploadUrl({ projectId: project._id });
-
-          // Transfer first. Photo metadata and phone location are useful for
-          // placement, but neither is allowed to delay the actual upload.
-          uploadStage = 'sending the file';
-          const uploadStartedAt = Date.now();
-          sendPhotoDiagnostic({
-            event: 'upload_started',
-            sessionId,
-            projectId: project._id,
-            fileType: contentType,
-            fileSize: file.size,
+          // Read the selected original file completely. There is no deadline
+          // and no device-location fallback: embedded EXIF GPS is the only
+          // automatic source of a photo's map position.
+          const exifLocation = await extractPhotoLocation(file);
+          const uploadUrl = await generateUploadUrl({ projectId: project._id });
+          const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': contentType },
+            body: file,
           });
-          const storedUpload = await uploadPhotoFile({
-            uploadUrl: upload.uploadUrl,
-            file,
-            contentType,
-          });
-          sendPhotoDiagnostic({
-            event: 'upload_finished',
-            sessionId,
-            projectId: project._id,
-            elapsedMs: Date.now() - uploadStartedAt,
-          });
+          if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
+          const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
 
-          uploadStage = 'reading the photo location';
-          const exifLocation = await extractPhotoLocationQuickly(file);
-          // The request started before the upload. Awaiting it here consumes
-          // only the remaining part of its short deadline, if any.
-          const deviceResult =
-            !exifLocation && fromCamera && deviceLocationRequest
-              ? await deviceLocationRequest.promise
-              : undefined;
-          const devicePhotoLocation =
-            !exifLocation && fromCamera && deviceResult?.status === 'ok'
-              ? deviceResult.location
-              : null;
-
-          uploadStage = 'saving the photo to the project';
           const attachmentId = await completeUpload({
             projectId: project._id,
             kind: 'photo',
-            uploadClaimId: upload.uploadClaimId,
-            storageRef: storedUpload.storageId as Id<'_storage'>,
+            storageRef: storageId,
             fileName: file.name,
             contentType,
             size: file.size,
@@ -1046,28 +923,10 @@ export function ProjectPhotoMap({
                   originalLongitude: exifLocation.originalLongitude,
                   locationSource: exifLocation.source,
                 }
-              : devicePhotoLocation
-                ? {
-                    latitude: devicePhotoLocation.latitude,
-                    longitude: devicePhotoLocation.longitude,
-                    locationSource: 'device' as const,
-                  }
-                : {}),
+              : {}),
           });
           uploaded += 1;
-          sendPhotoDiagnostic({
-            event: 'photo_saved',
-            sessionId,
-            projectId: project._id,
-            elapsedMs: Date.now() - attemptStartedAt,
-            stage: exifLocation
-              ? 'saved_with_exif'
-              : devicePhotoLocation
-                ? 'saved_with_device_location'
-                : 'saved_without_location',
-          });
 
-          uploadStage = 'confirming the saved photo';
           const photoState = await convex.query(api.attachments.getPhotoMapState, {
             attachmentId,
           });
@@ -1078,7 +937,7 @@ export function ProjectPhotoMap({
               expectedPhotoUpdatedAt: photoState.photoUpdatedAt,
             });
           }
-          if (!exifLocation && !devicePhotoLocation) {
+          if (!exifLocation) {
             unmappedIds.push(attachmentId);
           }
         }
@@ -1104,27 +963,7 @@ export function ProjectPhotoMap({
           setPlacePromptIds(unmappedIds);
         }
       } catch (error) {
-        sendPhotoDiagnostic({
-          event: 'upload_failed',
-          sessionId,
-          projectId: project._id,
-          elapsedMs: Date.now() - attemptStartedAt,
-          stage: uploadStage,
-          ...(currentFile
-            ? { fileType: currentContentType ?? 'unknown', fileSize: currentFile.size }
-            : {}),
-        });
-        console.error('Photo upload failed', {
-          stage: uploadStage,
-          error,
-          file: currentFile
-            ? {
-                name: currentFile.name,
-                type: currentContentType ?? 'unknown',
-                size: currentFile.size,
-              }
-            : null,
-        });
+        console.error('Photo upload failed', error);
         setUploadNotice({ tone: 'error', message: 'Error uploading image.' });
       } finally {
         setUploading(false);
@@ -1538,80 +1377,6 @@ export function ProjectPhotoMap({
     setContextMenu(null);
   };
 
-  const startMobileLocationRequest = useCallback((): PendingDeviceLocationRequest => {
-    const diagnosticSessionId = createPhotoDiagnosticSessionId();
-    const locationStartedAt = Date.now();
-    const client = detectPhotoDiagnosticClient();
-    const permissionState = readGeolocationPermissionState();
-    sendPhotoDiagnostic({
-      event: 'location_started',
-      sessionId: diagnosticSessionId,
-      projectId: project._id,
-      client,
-      fromCamera: true,
-      secureContext: globalThis.isSecureContext,
-      geolocationSupported: Boolean(navigator.geolocation),
-      documentVisible: globalThis.document?.visibilityState !== 'hidden',
-    });
-    const locationPromise = readDeviceLocation().then((result) => {
-      // If WebKit suspended the first acquisition while presenting the
-      // native picker, retry once after control returns to the page. A
-      // permission denial is final and must not trigger another prompt.
-      if (result.status === 'failed' && result.code !== 1) {
-        return readDeviceLocation();
-      }
-      return result;
-    });
-    void Promise.all([locationPromise, permissionState]).then(([result, permission]) => {
-      sendPhotoDiagnostic({
-        event: 'location_result',
-        sessionId: diagnosticSessionId,
-        projectId: project._id,
-        client,
-        permissionState: permission,
-        locationStatus: result.status,
-        elapsedMs: Date.now() - locationStartedAt,
-        documentVisible: globalThis.document?.visibilityState !== 'hidden',
-        ...(result.status === 'failed'
-          ? { locationErrorCode: result.code, failureReason: result.reason }
-          : {}),
-        ...(result.status === 'ok' ? { accuracyM: result.location.accuracy } : {}),
-      });
-      // The photo upload continues regardless; the card only tells the user
-      // why their next photos will need manual placement, and how to fix it.
-      const guidance = locationRecoveryGuidance(client, result);
-      if (guidance) setLocationHelp(guidance);
-    });
-    return {
-      promise: locationPromise,
-      sessionId: diagnosticSessionId,
-    };
-  }, [project._id]);
-
-  const handleMobilePhotoSelection = useCallback(
-    (files: File[]) => {
-      const [file] = files;
-      if (!file) return;
-      const locationRequest = mobileLocationRequestRef.current;
-      mobileLocationRequestRef.current = null;
-      if (files.length !== 1 || !isLikelyNativeCameraCapture(file)) {
-        void uploadPhotos(files);
-        return;
-      }
-
-      // The request normally starts on the user's Add photos tap, while the
-      // document is still visible. Keep this fallback for non-pointer input
-      // and browsers that dispatch the file selection without that click.
-      const activeLocationRequest = locationRequest ?? startMobileLocationRequest();
-      void uploadPhotos(files, {
-        fromCamera: true,
-        deviceLocationRequest: activeLocationRequest,
-        diagnosticSessionId: activeLocationRequest.sessionId,
-      });
-    },
-    [startMobileLocationRequest, uploadPhotos],
-  );
-
   const handleSelectPhoto = useCallback((photo: MapPhoto) => {
     setSelectedPhotos([photo]);
     setTaskFocusRequested(false);
@@ -1681,12 +1446,7 @@ export function ProjectPhotoMap({
               icon={<Camera />}
               label="Add photos"
               disabled={!canEdit || uploading}
-              onClick={() => {
-                // Begin geolocation synchronously while FieldPilot is visible;
-                // iOS may suspend it after the native camera picker opens.
-                mobileLocationRequestRef.current = startMobileLocationRequest();
-                mobilePhotoInputRef.current?.click();
-              }}
+              onClick={() => mobilePhotoInputRef.current?.click()}
             />
           ) : (
             <ActionBarButton
@@ -2110,7 +1870,7 @@ export function ProjectPhotoMap({
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
           event.target.value = '';
-          if (files.length) void handleMobilePhotoSelection(files);
+          if (files.length) void uploadPhotos(files);
         }}
       />
     </section>

@@ -1,6 +1,17 @@
 import type { DeviceLocationResult } from './device-location';
 import { isLocationPermissionFailure } from './device-location';
-import type { PhotoDiagnosticClient } from './photo-diagnostics';
+
+export type LocationClient = 'chrome-ios' | 'safari-ios' | 'android' | 'other';
+
+export function detectLocationClient(): LocationClient {
+  if (typeof navigator === 'undefined') return 'other';
+  const userAgent = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(userAgent);
+  if (ios && /CriOS/.test(userAgent)) return 'chrome-ios';
+  if (ios) return 'safari-ios';
+  if (/Android/.test(userAgent)) return 'android';
+  return 'other';
+}
 
 /**
  * Short, device-specific steps shown when a location request is blocked.
@@ -35,7 +46,7 @@ export function locationFailureMessage(result: DeviceLocationResult): string {
 }
 
 export function locationRecoveryGuidance(
-  client: PhotoDiagnosticClient,
+  client: LocationClient,
   result: DeviceLocationResult,
 ): LocationRecoveryGuidance | null {
   if (!isLocationPermissionFailure(result)) return null;
