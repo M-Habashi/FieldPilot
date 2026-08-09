@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useMutation, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { patchAppView, readAppView } from '../../lib/app-view';
 import { userFacingError } from '../../lib/errors';
 import { openPdf, type PDFDocumentProxy } from '../../lib/pdf';
 import { photoContentType } from '../../lib/photo-file';
-import { extractPhotoLocation } from '../../lib/photo-location';
 import { setRemoteProjectSync, useProject, type RemoteProjectSync } from '../../store/project';
 import type { Markup, PageCalibration, Priority, Status, Task } from '../../types';
 import { Lightbox } from '../Lightbox';
@@ -54,7 +53,7 @@ export function ProjectPlanWorkspace({
   const removeTask = useMutation(api.tasks.remove);
   const createNote = useMutation(api.notes.create);
   const generateAttachmentUploadUrl = useMutation(api.attachments.generateUploadUrl);
-  const completeAttachmentUpload = useMutation(api.attachments.completeUpload);
+  const completePhotoUpload = useAction(api.photoUploads.complete);
   const removeAttachment = useMutation(api.attachments.remove);
   const saveMarkupMutation = useMutation(api.markups.save);
   const removeMarkupMutation = useMutation(api.markups.remove);
@@ -139,7 +138,6 @@ export function ProjectPlanWorkspace({
         for (const file of files) {
           const contentType = photoContentType(file);
           if (!contentType) continue;
-          const location = await extractPhotoLocation(file);
           const uploadUrl = await generateAttachmentUploadUrl({ projectId: project._id });
           const response = await fetch(uploadUrl, {
             method: 'POST',
@@ -148,23 +146,13 @@ export function ProjectPlanWorkspace({
           });
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
           const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
-          await completeAttachmentUpload({
+          await completePhotoUpload({
             projectId: project._id,
             taskId: taskId as Id<'tasks'>,
-            kind: 'photo',
             storageRef: storageId,
             fileName: file.name,
             contentType,
             size: file.size,
-            ...(location
-              ? {
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                  originalLatitude: location.originalLatitude,
-                  originalLongitude: location.originalLongitude,
-                  locationSource: location.source,
-                }
-              : {}),
           });
         }
       },
@@ -190,7 +178,7 @@ export function ProjectPlanWorkspace({
       },
     };
   }, [
-    completeAttachmentUpload,
+    completePhotoUpload,
     createNote,
     createTask,
     generateAttachmentUploadUrl,

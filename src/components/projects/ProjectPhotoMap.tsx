@@ -17,11 +17,11 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useConvex, useMutation, useQuery } from 'convex/react';
+import { useAction, useConvex, useMutation, useQuery } from 'convex/react';
 import { useBackGuard } from '../../hooks/useBackGuard';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
-import { extractPhotoLocation, type PhotoLocation } from '../../lib/photo-location';
+import type { PhotoLocation } from '../../lib/photo-location';
 import { photoContentType } from '../../lib/photo-file';
 import { readDeviceLocation } from '../../lib/device-location';
 import {
@@ -283,7 +283,7 @@ export function ProjectPhotoMap({
   const photoRows = useQuery(api.attachments.listProjectPhotos, { projectId: project._id });
   const tasks = useQuery(api.tasks.listByProject, { projectId: project._id });
   const generateUploadUrl = useMutation(api.attachments.generateUploadUrl);
-  const completeUpload = useMutation(api.attachments.completeUpload);
+  const completePhotoUpload = useAction(api.photoUploads.complete);
   const setPhotoLocation = useMutation(api.attachments.setPhotoLocation);
   const clearPhotoLocation = useMutation(api.attachments.clearPhotoLocation);
   const restoreOriginalLocation = useMutation(api.attachments.restoreOriginalLocation);
@@ -895,10 +895,6 @@ export function ProjectPhotoMap({
           const contentType = photoContentType(file);
           if (!contentType) continue;
 
-          // Read the selected original file completely. There is no deadline
-          // and no device-location fallback: embedded EXIF GPS is the only
-          // automatic source of a photo's map position.
-          const exifLocation = await extractPhotoLocation(file);
           const uploadUrl = await generateUploadUrl({ projectId: project._id });
           const response = await fetch(uploadUrl, {
             method: 'POST',
@@ -908,22 +904,12 @@ export function ProjectPhotoMap({
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
           const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
 
-          const attachmentId = await completeUpload({
+          const { attachmentId, hasExifLocation } = await completePhotoUpload({
             projectId: project._id,
-            kind: 'photo',
             storageRef: storageId,
             fileName: file.name,
             contentType,
             size: file.size,
-            ...(exifLocation
-              ? {
-                  latitude: exifLocation.latitude,
-                  longitude: exifLocation.longitude,
-                  originalLatitude: exifLocation.originalLatitude,
-                  originalLongitude: exifLocation.originalLongitude,
-                  locationSource: exifLocation.source,
-                }
-              : {}),
           });
           uploaded += 1;
 
@@ -937,7 +923,7 @@ export function ProjectPhotoMap({
               expectedPhotoUpdatedAt: photoState.photoUpdatedAt,
             });
           }
-          if (!exifLocation) {
+          if (!hasExifLocation) {
             unmappedIds.push(attachmentId);
           }
         }
@@ -969,7 +955,7 @@ export function ProjectPhotoMap({
         setUploading(false);
       }
     },
-    [canEdit, completeUpload, convex, generateUploadUrl, project._id, pushUndo, uploading],
+    [canEdit, completePhotoUpload, convex, generateUploadUrl, project._id, pushUndo, uploading],
   );
 
   useEffect(() => {

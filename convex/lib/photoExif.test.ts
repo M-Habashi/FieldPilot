@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractPhotoLocation } from './photo-location';
+import { extractExifPhotoLocation } from './photoExif';
 
 function jpegWithGpsExif(): Blob {
   const tiff = new Uint8Array(128);
@@ -58,20 +58,17 @@ function jpegWithGpsExif(): Blob {
   );
 }
 
-describe('extractPhotoLocation', () => {
-  it('reads GPS coordinates embedded in the selected original file', async () => {
-    await expect(extractPhotoLocation(jpegWithGpsExif())).resolves.toEqual({
+describe('extractExifPhotoLocation', () => {
+  it('reads GPS coordinates from an uploaded original photo', async () => {
+    await expect(extractExifPhotoLocation(jpegWithGpsExif())).resolves.toEqual({
       latitude: 39.76840277777778,
       longitude: -86.1581,
-      source: 'exif',
-      originalLatitude: 39.76840277777778,
-      originalLongitude: -86.1581,
     });
   });
 
-  it('returns no location when the file has no EXIF GPS block', async () => {
+  it('returns no location when the upload has no EXIF GPS block', async () => {
     await expect(
-      extractPhotoLocation(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])])),
+      extractExifPhotoLocation(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])])),
     ).resolves.toBeNull();
   });
 });
