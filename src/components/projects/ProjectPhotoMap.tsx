@@ -1860,12 +1860,12 @@ export function ProjectPhotoMap({
         }}
       />
 
-      {/* With neither `capture` nor `multiple`, iPhone presents its own native
-          source chooser instead of FieldPilot duplicating that decision. */}
+      {/* Keep the mobile input unfiltered so Android and iPhone open their
+          document/file picker instead of an image-library picker that may hand
+          the browser a privacy-redacted copy without GPS EXIF metadata. */}
       <input
         ref={mobilePhotoInputRef}
         type="file"
-        accept="image/*"
         className="hidden"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
