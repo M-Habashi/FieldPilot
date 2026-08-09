@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractExifPhotoLocation } from './photoExif';
+import { extractExifPhotoLocation, inspectExifPhotoLocation } from './photoExif';
 
 function jpegWithGpsExif(): Blob {
   const tiff = new Uint8Array(128);
@@ -70,5 +70,17 @@ describe('extractExifPhotoLocation', () => {
     await expect(
       extractExifPhotoLocation(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])])),
     ).resolves.toBeNull();
+  });
+
+  it('distinguishes a missing GPS block from an unreadable image', async () => {
+    await expect(
+      inspectExifPhotoLocation(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])])),
+    ).resolves.toEqual({ status: 'missing' });
+    const unreadable = {
+      arrayBuffer: async () => {
+        throw new Error('read failed');
+      },
+    } as unknown as Blob;
+    await expect(inspectExifPhotoLocation(unreadable)).resolves.toEqual({ status: 'unreadable' });
   });
 });

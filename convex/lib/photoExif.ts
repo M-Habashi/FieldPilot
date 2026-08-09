@@ -5,6 +5,11 @@ export interface ExifPhotoLocation {
   longitude: number;
 }
 
+export type ExifPhotoInspection =
+  | { status: 'found'; location: ExifPhotoLocation }
+  | { status: 'missing' }
+  | { status: 'unreadable' };
+
 function isValidLocation(latitude: unknown, longitude: unknown): latitude is number {
   return (
     typeof latitude === 'number' &&
@@ -18,15 +23,25 @@ function isValidLocation(latitude: unknown, longitude: unknown): latitude is num
   );
 }
 
-export async function extractExifPhotoLocation(
+export async function inspectExifPhotoLocation(
   file: Blob | ArrayBuffer,
-): Promise<ExifPhotoLocation | null> {
+): Promise<ExifPhotoInspection> {
   try {
     const bytes = file instanceof ArrayBuffer ? file : await file.arrayBuffer();
     const gps = await exifr.gps(bytes);
-    if (!gps || !isValidLocation(gps.latitude, gps.longitude)) return null;
-    return { latitude: gps.latitude, longitude: gps.longitude };
+    if (!gps || !isValidLocation(gps.latitude, gps.longitude)) return { status: 'missing' };
+    return {
+      status: 'found',
+      location: { latitude: gps.latitude, longitude: gps.longitude },
+    };
   } catch {
-    return null;
+    return { status: 'unreadable' };
   }
+}
+
+export async function extractExifPhotoLocation(
+  file: Blob | ArrayBuffer,
+): Promise<ExifPhotoLocation | null> {
+  const inspection = await inspectExifPhotoLocation(file);
+  return inspection.status === 'found' ? inspection.location : null;
 }

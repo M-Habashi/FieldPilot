@@ -82,37 +82,49 @@ export const rename = mutation({
 });
 
 async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
-  const [members, invitations, sheets, tasks, notes, attachments, pendingUploads] =
-    await Promise.all([
-      ctx.db
-        .query('projectMembers')
-        .withIndex('by_project', (q) => q.eq('projectId', projectId))
-        .collect(),
-      ctx.db
-        .query('projectInvitations')
-        .withIndex('by_project', (q) => q.eq('projectId', projectId))
-        .collect(),
-      ctx.db
-        .query('sheets')
-        .withIndex('by_project', (q) => q.eq('projectId', projectId))
-        .collect(),
-      ctx.db
-        .query('tasks')
-        .withIndex('by_project', (q) => q.eq('projectId', projectId))
-        .collect(),
-      ctx.db
-        .query('notes')
-        .withIndex('by_project_createdAt', (q) => q.eq('projectId', projectId))
-        .collect(),
-      ctx.db
-        .query('attachments')
-        .withIndex('by_project_createdAt', (q) => q.eq('projectId', projectId))
-        .collect(),
-      ctx.db
-        .query('pendingUploads')
-        .withIndex('by_project', (q) => q.eq('projectId', projectId))
-        .collect(),
-    ]);
+  const [
+    members,
+    invitations,
+    sheets,
+    tasks,
+    notes,
+    attachments,
+    uploadDiagnostics,
+    pendingUploads,
+  ] = await Promise.all([
+    ctx.db
+      .query('projectMembers')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('projectInvitations')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('sheets')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('tasks')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('notes')
+      .withIndex('by_project_createdAt', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('attachments')
+      .withIndex('by_project_createdAt', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('photoUploadDiagnostics')
+      .withIndex('by_project_createdAt', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('pendingUploads')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+  ]);
 
   const planStorageIds = [
     ...new Set(
@@ -126,6 +138,7 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
   await Promise.all([
     ...notes.map((doc) => ctx.db.delete(doc._id)),
     ...attachments.map((doc) => ctx.db.delete(doc._id)),
+    ...uploadDiagnostics.map((doc) => ctx.db.delete(doc._id)),
     ...tasks.map((doc) => ctx.db.delete(doc._id)),
     ...sheets.map((doc) => ctx.db.delete(doc._id)),
     ...invitations.map((doc) => ctx.db.delete(doc._id)),

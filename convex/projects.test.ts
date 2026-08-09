@@ -631,6 +631,17 @@ describe('plan metadata permissions and cleanup', () => {
       contentType: 'image/jpeg',
       size: photoBlob.size,
     });
+    const diagnostic = {
+      projectId,
+      attemptId: 'delete-project-diagnostic',
+      phase: 'failed' as const,
+      stage: 'backend-complete' as const,
+      errorName: 'TestError',
+    };
+    await expect(t.mutation(api.photoUploadDiagnostics.record, diagnostic)).rejects.toThrow(
+      'Unauthenticated',
+    );
+    await owner.mutation(api.photoUploadDiagnostics.record, diagnostic);
 
     await expect(
       owner.mutation(api.projects.remove, {
@@ -658,6 +669,7 @@ describe('plan metadata permissions and cleanup', () => {
       expect(await ctx.db.query('projectInvitations').collect()).toEqual([]);
       expect(await ctx.db.query('notes').collect()).toEqual([]);
       expect(await ctx.db.query('attachments').collect()).toEqual([]);
+      expect(await ctx.db.query('photoUploadDiagnostics').collect()).toEqual([]);
     });
   });
 });

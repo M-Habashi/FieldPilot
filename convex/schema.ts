@@ -166,6 +166,47 @@ export default defineSchema({
     .index('by_project_createdAt', ['projectId', 'createdAt'])
     .index('by_storageRef', ['storageRef']),
 
+  photoUploadDiagnostics: defineTable({
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    attemptId: v.string(),
+    phase: v.union(
+      v.literal('selected'),
+      v.literal('storage-uploaded'),
+      v.literal('completed'),
+      v.literal('failed'),
+    ),
+    stage: v.optional(
+      v.union(
+        v.literal('selection'),
+        v.literal('upload-url'),
+        v.literal('storage-upload'),
+        v.literal('backend-complete'),
+        v.literal('post-complete'),
+      ),
+    ),
+    contentType: v.optional(v.string()),
+    extension: v.optional(v.string()),
+    size: v.optional(v.number()),
+    fileNamePattern: v.optional(
+      v.union(v.literal('numeric'), v.literal('img-prefixed'), v.literal('other')),
+    ),
+    lastModifiedAgeMs: v.optional(v.number()),
+    userAgent: v.optional(v.string()),
+    platform: v.optional(v.string()),
+    effectiveConnectionType: v.optional(v.string()),
+    online: v.optional(v.boolean()),
+    httpStatus: v.optional(v.number()),
+    exifStatus: v.optional(
+      v.union(v.literal('found'), v.literal('missing'), v.literal('unreadable')),
+    ),
+    errorName: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index('by_project_createdAt', ['projectId', 'createdAt'])
+    .index('by_user_createdAt', ['userId', 'createdAt']),
+
   pendingUploads: defineTable({
     projectId: v.id('projects'),
     userId: v.id('users'),

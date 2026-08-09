@@ -23,6 +23,13 @@ import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import type { PhotoLocation } from '../../lib/photo-location';
 import { photoContentType } from '../../lib/photo-file';
+import {
+  createPhotoUploadAttemptId,
+  photoUploadClientDiagnostics,
+  photoUploadErrorDiagnostics,
+  photoUploadFileDiagnostics,
+  type PhotoUploadDiagnosticEvent,
+} from '../../lib/photo-upload-diagnostics';
 import { readDeviceLocation } from '../../lib/device-location';
 import {
   detectLocationClient,
@@ -283,6 +290,7 @@ export function ProjectPhotoMap({
   const tasks = useQuery(api.tasks.listByProject, { projectId: project._id });
   const generateUploadUrl = useMutation(api.attachments.generateUploadUrl);
   const completePhotoUpload = useAction(api.photoUploads.complete);
+  const recordUploadDiagnostic = useMutation(api.photoUploadDiagnostics.record);
   const setPhotoLocation = useMutation(api.attachments.setPhotoLocation);
   const clearPhotoLocation = useMutation(api.attachments.clearPhotoLocation);
   const restoreOriginalLocation = useMutation(api.attachments.restoreOriginalLocation);
@@ -347,6 +355,15 @@ export function ProjectPhotoMap({
   const undoScope = `${project._id}:${userId}`;
   const [undoCount, setUndoCount] = useState(() => readPhotoUndo(undoScope).length);
   const [redoCount, setRedoCount] = useState(() => readPhotoRedo(undoScope).length);
+
+  const reportUploadDiagnostic = useCallback(
+    (event: PhotoUploadDiagnosticEvent) => {
+      void recordUploadDiagnostic({ projectId: project._id, ...event }).catch((error: unknown) => {
+        console.warn('Photo upload diagnostic could not be recorded', error);
+      });
+    },
+    [project._id, recordUploadDiagnostic],
+  );
 
   const photos = useMemo(() => photoRows ?? [], [photoRows]);
   const filteredPhotos = useMemo(
@@ -887,31 +904,69 @@ export function ProjectPhotoMap({
         tone: 'info',
         message: 'Uploading image…',
       });
+      let activeDiagnostic: Omit<PhotoUploadDiagnosticEvent, 'phase'> | null = null;
       try {
         let uploaded = 0;
         const unmappedIds: Id<'attachments'>[] = [];
+        const clientDiagnostics = photoUploadClientDiagnostics();
         for (const file of files) {
-          const contentType = photoContentType(file);
-          if (!contentType) continue;
+          const attemptId = createPhotoUploadAttemptId();
+          const diagnosticBase = {
+            attemptId,
+            ...photoUploadFileDiagnostics(file),
+            ...clientDiagnostics,
+          };
+          reportUploadDiagnostic({
+            ...diagnosticBase,
+            phase: 'selected',
+            stage: 'selection',
+          });
 
+          const contentType = photoContentType(file);
+          if (!contentType) {
+            reportUploadDiagnostic({
+              ...diagnosticBase,
+              phase: 'failed',
+              stage: 'selection',
+              errorName: 'UnsupportedFileType',
+              errorMessage: 'The selected file is not a supported photo type.',
+            });
+            continue;
+          }
+
+          activeDiagnostic = { ...diagnosticBase, contentType, stage: 'upload-url' };
           const uploadUrl = await generateUploadUrl({ projectId: project._id });
+          activeDiagnostic = { ...activeDiagnostic, stage: 'storage-upload' };
           const response = await fetch(uploadUrl, {
             method: 'POST',
             headers: { 'Content-Type': contentType },
             body: file,
           });
+          activeDiagnostic = { ...activeDiagnostic, httpStatus: response.status };
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
           const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
+          reportUploadDiagnostic({
+            ...activeDiagnostic,
+            phase: 'storage-uploaded',
+          });
 
-          const { attachmentId, hasExifLocation } = await completePhotoUpload({
+          activeDiagnostic = { ...activeDiagnostic, stage: 'backend-complete' };
+          const { attachmentId, hasExifLocation, exifStatus } = await completePhotoUpload({
             projectId: project._id,
             storageRef: storageId,
             fileName: file.name,
             contentType,
             size: file.size,
+            attemptId,
           });
           uploaded += 1;
+          reportUploadDiagnostic({
+            ...activeDiagnostic,
+            phase: 'completed',
+            exifStatus,
+          });
 
+          activeDiagnostic = { ...activeDiagnostic, stage: 'post-complete', exifStatus };
           const photoState = await convex.query(api.attachments.getPhotoMapState, {
             attachmentId,
           });
@@ -925,6 +980,7 @@ export function ProjectPhotoMap({
           if (!hasExifLocation) {
             unmappedIds.push(attachmentId);
           }
+          activeDiagnostic = null;
         }
         if (uploaded === 0) {
           setUploadNotice({
@@ -949,12 +1005,28 @@ export function ProjectPhotoMap({
         }
       } catch (error) {
         console.error('Photo upload failed', error);
+        if (activeDiagnostic) {
+          reportUploadDiagnostic({
+            ...activeDiagnostic,
+            phase: 'failed',
+            ...photoUploadErrorDiagnostics(error),
+          });
+        }
         setUploadNotice({ tone: 'error', message: 'Error uploading image.' });
       } finally {
         setUploading(false);
       }
     },
-    [canEdit, completePhotoUpload, convex, generateUploadUrl, project._id, pushUndo, uploading],
+    [
+      canEdit,
+      completePhotoUpload,
+      convex,
+      generateUploadUrl,
+      project._id,
+      pushUndo,
+      reportUploadDiagnostic,
+      uploading,
+    ],
   );
 
   useEffect(() => {

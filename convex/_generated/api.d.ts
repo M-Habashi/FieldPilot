@@ -22,6 +22,7 @@ import type * as lib_tmpAccountDevFeature from "../lib/tmpAccountDevFeature.js";
 import type * as lib_uploads from "../lib/uploads.js";
 import type * as markups from "../markups.js";
 import type * as notes from "../notes.js";
+import type * as photoUploadDiagnostics from "../photoUploadDiagnostics.js";
 import type * as photoUploads from "../photoUploads.js";
 import type * as projects from "../projects.js";
 import type * as sheets from "../sheets.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   "lib/uploads": typeof lib_uploads;
   markups: typeof markups;
   notes: typeof notes;
+  photoUploadDiagnostics: typeof photoUploadDiagnostics;
   photoUploads: typeof photoUploads;
   projects: typeof projects;
   sheets: typeof sheets;
