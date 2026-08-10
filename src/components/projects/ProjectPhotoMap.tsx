@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useAuthToken } from '@convex-dev/auth/react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -17,7 +18,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useAction, useConvex, useMutation, useQuery } from 'convex/react';
+import { useConvex, useMutation, useQuery } from 'convex/react';
 import { useBackGuard } from '../../hooks/useBackGuard';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
@@ -286,10 +287,9 @@ export function ProjectPhotoMap({
   }, []);
   const { notify } = useNotify();
   const convex = useConvex();
+  const authToken = useAuthToken();
   const photoRows = useQuery(api.attachments.listProjectPhotos, { projectId: project._id });
   const tasks = useQuery(api.tasks.listByProject, { projectId: project._id });
-  const generateUploadUrl = useMutation(api.attachments.generateUploadUrl);
-  const completePhotoUpload = useAction(api.photoUploads.complete);
   const recordUploadDiagnostic = useMutation(api.photoUploadDiagnostics.record);
   const setPhotoLocation = useMutation(api.attachments.setPhotoLocation);
   const clearPhotoLocation = useMutation(api.attachments.clearPhotoLocation);
@@ -934,31 +934,35 @@ export function ProjectPhotoMap({
             continue;
           }
 
-          activeDiagnostic = { ...diagnosticBase, contentType, stage: 'upload-url' };
-          const uploadUrl = await generateUploadUrl({ projectId: project._id });
-          activeDiagnostic = { ...activeDiagnostic, stage: 'storage-upload' };
-          const response = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': contentType },
-            body: file,
-          });
+          if (!authToken) throw new Error('Your session expired. Please sign in again.');
+          const form = new FormData();
+          form.append('projectId', project._id);
+          form.append('attemptId', attemptId);
+          form.append('contentType', contentType);
+          form.append('photo', file, file.name);
+
+          activeDiagnostic = { ...diagnosticBase, contentType, stage: 'storage-upload' };
+          const response = await fetch(
+            `${import.meta.env.VITE_CONVEX_SITE_URL as string}/api/photo-upload`,
+            {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${authToken}` },
+              body: form,
+            },
+          );
           activeDiagnostic = { ...activeDiagnostic, httpStatus: response.status };
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
-          const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
           reportUploadDiagnostic({
             ...activeDiagnostic,
             phase: 'storage-uploaded',
           });
 
           activeDiagnostic = { ...activeDiagnostic, stage: 'backend-complete' };
-          const { attachmentId, hasExifLocation, exifStatus } = await completePhotoUpload({
-            projectId: project._id,
-            storageRef: storageId,
-            fileName: file.name,
-            contentType,
-            size: file.size,
-            attemptId,
-          });
+          const { attachmentId, hasExifLocation, exifStatus } = (await response.json()) as {
+            attachmentId: Id<'attachments'>;
+            hasExifLocation: boolean;
+            exifStatus: 'found' | 'missing' | 'unreadable';
+          };
           uploaded += 1;
           reportUploadDiagnostic({
             ...activeDiagnostic,
@@ -1017,16 +1021,7 @@ export function ProjectPhotoMap({
         setUploading(false);
       }
     },
-    [
-      canEdit,
-      completePhotoUpload,
-      convex,
-      generateUploadUrl,
-      project._id,
-      pushUndo,
-      reportUploadDiagnostic,
-      uploading,
-    ],
+    [authToken, canEdit, convex, project._id, pushUndo, reportUploadDiagnostic, uploading],
   );
 
   useEffect(() => {
