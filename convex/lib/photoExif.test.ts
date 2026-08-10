@@ -62,6 +62,20 @@ function jpegWithGpsExif(): Blob {
   );
 }
 
+function motionPhotoWithLocation(location: string): Blob {
+  const locationBytes = new TextEncoder().encode(location);
+  const atomSize = 8 + 4 + locationBytes.length;
+  const atom = new Uint8Array(atomSize);
+  const view = new DataView(atom.buffer);
+  view.setUint32(0, atomSize, false);
+  atom.set([0xa9, 0x78, 0x79, 0x7a], 4);
+  atom.set([0, 0, 0, 0], 8);
+  atom.set(locationBytes, 12);
+  return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), atom], {
+    type: 'image/jpeg',
+  });
+}
+
 describe('extractExifPhotoLocation', () => {
   it('reads GPS coordinates from an uploaded original photo', async () => {
     await expect(extractExifPhotoLocation(jpegWithGpsExif())).resolves.toEqual({
@@ -86,6 +100,23 @@ describe('extractExifPhotoLocation', () => {
       },
     } as unknown as Blob;
     await expect(inspectExifPhotoLocation(unreadable)).resolves.toEqual({ status: 'unreadable' });
+  });
+
+  it('reads the QuickTime location retained in a Samsung Motion Photo', async () => {
+    await expect(
+      inspectExifPhotoLocation(motionPhotoWithLocation('+40.4247-086.9120/')),
+    ).resolves.toEqual({
+      status: 'found',
+      location: { latitude: 40.4247, longitude: -86.912 },
+    });
+  });
+
+  it('rejects an invalid Motion Photo location', async () => {
+    await expect(
+      inspectExifPhotoLocation(motionPhotoWithLocation('+91.0000-086.9120/')),
+    ).resolves.toEqual({
+      status: 'missing',
+    });
   });
 
   it('fingerprints identical bytes consistently without exposing the bytes', async () => {

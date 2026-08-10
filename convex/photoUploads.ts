@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import { api } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { action } from './_generated/server';
-import { inspectExifPhotoLocation } from './lib/photoExif';
+import { inspectExifPhotoLocation, photoByteFingerprint } from './lib/photoExif';
 
 interface CompletePhotoUploadResult {
   attachmentId: Id<'attachments'>;
@@ -28,6 +28,22 @@ export const complete = action({
     if (file === null) throw new Error('The uploaded file could not be found.');
     const inspection = await inspectExifPhotoLocation(file);
     const location = inspection.status === 'found' ? inspection.location : null;
+    if (attemptId) {
+      try {
+        await ctx.runMutation(api.photoUploadDiagnostics.record, {
+          projectId: uploadArgs.projectId,
+          attemptId,
+          phase: 'storage-uploaded',
+          stage: 'storage-persisted',
+          contentType: file.type || uploadArgs.contentType,
+          size: file.size,
+          exifStatus: inspection.status,
+          byteFingerprint: await photoByteFingerprint(file),
+        });
+      } catch {
+        console.warn('photo_stored_diagnostic_failed', JSON.stringify({ attemptId }));
+      }
+    }
 
     console.info(
       'photo_exif_inspection',
