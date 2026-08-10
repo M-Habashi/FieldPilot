@@ -26,6 +26,7 @@ import type { PhotoLocation } from '../../lib/photo-location';
 import { photoContentType } from '../../lib/photo-file';
 import {
   createPhotoUploadAttemptId,
+  inspectSelectedPhotoBytes,
   photoUploadClientDiagnostics,
   photoUploadErrorDiagnostics,
   photoUploadFileDiagnostics,
@@ -911,10 +912,12 @@ export function ProjectPhotoMap({
         const clientDiagnostics = photoUploadClientDiagnostics();
         for (const file of files) {
           const attemptId = createPhotoUploadAttemptId();
+          const selectedBytes = await inspectSelectedPhotoBytes(file);
           const diagnosticBase = {
             attemptId,
             ...photoUploadFileDiagnostics(file),
             ...clientDiagnostics,
+            ...selectedBytes,
           };
           reportUploadDiagnostic({
             ...diagnosticBase,

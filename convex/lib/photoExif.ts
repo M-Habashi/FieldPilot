@@ -45,3 +45,11 @@ export async function extractExifPhotoLocation(
   const inspection = await inspectExifPhotoLocation(file);
   return inspection.status === 'found' ? inspection.location : null;
 }
+
+export async function photoByteFingerprint(file: Blob | ArrayBuffer): Promise<string> {
+  const bytes = file instanceof ArrayBuffer ? file : await file.arrayBuffer();
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest).slice(0, 12), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}

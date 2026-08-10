@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { extractExifPhotoLocation, inspectExifPhotoLocation } from './photoExif';
+import {
+  extractExifPhotoLocation,
+  inspectExifPhotoLocation,
+  photoByteFingerprint,
+} from './photoExif';
 
 function jpegWithGpsExif(): Blob {
   const tiff = new Uint8Array(128);
@@ -82,5 +86,12 @@ describe('extractExifPhotoLocation', () => {
       },
     } as unknown as Blob;
     await expect(inspectExifPhotoLocation(unreadable)).resolves.toEqual({ status: 'unreadable' });
+  });
+
+  it('fingerprints identical bytes consistently without exposing the bytes', async () => {
+    const first = await photoByteFingerprint(new Blob(['same bytes']));
+    const second = await photoByteFingerprint(new TextEncoder().encode('same bytes').buffer);
+    expect(first).toHaveLength(24);
+    expect(first).toBe(second);
   });
 });

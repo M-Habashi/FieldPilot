@@ -1,6 +1,7 @@
 import { api } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { httpAction } from './_generated/server';
+import { inspectExifPhotoLocation, photoByteFingerprint } from './lib/photoExif';
 
 const allowedOrigins = new Set([
   'http://localhost:5173',
@@ -80,7 +81,36 @@ export const upload = httpAction(async (ctx, request) => {
       'name' in photo && typeof photo.name === 'string' && photo.name.length > 0
         ? photo.name
         : 'photo';
+    const receivedInspection = await inspectExifPhotoLocation(photo);
+    const receivedFingerprint = await photoByteFingerprint(photo);
+    if (attemptId) {
+      await ctx.runMutation(api.photoUploadDiagnostics.record, {
+        projectId: projectId as Id<'projects'>,
+        attemptId,
+        phase: 'storage-uploaded',
+        stage: 'backend-received',
+        contentType,
+        size: photo.size,
+        exifStatus: receivedInspection.status,
+        byteFingerprint: receivedFingerprint,
+      });
+    }
     storageRef = await ctx.storage.store(photo);
+    const storedPhoto = await ctx.storage.get(storageRef);
+    if (storedPhoto === null) throw new Error('The uploaded photo could not be read from storage.');
+    if (attemptId) {
+      const storedInspection = await inspectExifPhotoLocation(storedPhoto);
+      await ctx.runMutation(api.photoUploadDiagnostics.record, {
+        projectId: projectId as Id<'projects'>,
+        attemptId,
+        phase: 'storage-uploaded',
+        stage: 'storage-persisted',
+        contentType: storedPhoto.type || contentType,
+        size: storedPhoto.size,
+        exifStatus: storedInspection.status,
+        byteFingerprint: await photoByteFingerprint(storedPhoto),
+      });
+    }
     const result = await ctx.runAction(api.photoUploads.complete, {
       projectId: projectId as Id<'projects'>,
       storageRef,

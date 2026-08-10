@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   photoUploadErrorDiagnostics,
   photoUploadFileDiagnostics,
+  inspectSelectedPhotoBytes,
 } from './photo-upload-diagnostics';
 
 describe('photo upload diagnostics', () => {
@@ -24,5 +25,20 @@ describe('photo upload diagnostics', () => {
     const result = photoUploadErrorDiagnostics(new Error('x'.repeat(500)));
     expect(result.errorName).toBe('Error');
     expect(result.errorMessage).toHaveLength(240);
+  });
+
+  it('creates a stable privacy-safe fingerprint for selected bytes', async () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    const first = new File([jpeg], 'first.jpg', { type: 'image/jpeg' });
+    const second = new File([jpeg], 'second.jpg', { type: 'image/jpeg' });
+
+    const [firstInspection, secondInspection] = await Promise.all([
+      inspectSelectedPhotoBytes(first),
+      inspectSelectedPhotoBytes(second),
+    ]);
+
+    expect(firstInspection.byteFingerprint).toHaveLength(24);
+    expect(firstInspection.byteFingerprint).toBe(secondInspection.byteFingerprint);
+    expect(firstInspection.exifStatus).toBe('missing');
   });
 });

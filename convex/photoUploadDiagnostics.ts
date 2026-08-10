@@ -12,6 +12,8 @@ const phase = v.union(
 const stage = v.union(
   v.literal('selection'),
   v.literal('upload-url'),
+  v.literal('backend-received'),
+  v.literal('storage-persisted'),
   v.literal('storage-upload'),
   v.literal('backend-complete'),
   v.literal('post-complete'),
@@ -43,6 +45,7 @@ export const record = mutation({
     exifStatus: v.optional(
       v.union(v.literal('found'), v.literal('missing'), v.literal('unreadable')),
     ),
+    byteFingerprint: v.optional(v.string()),
     errorName: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
   },
@@ -57,6 +60,7 @@ export const record = mutation({
       userAgent: bounded(args.userAgent, 320),
       platform: bounded(args.platform, 80),
       effectiveConnectionType: bounded(args.effectiveConnectionType, 24),
+      byteFingerprint: bounded(args.byteFingerprint, 24),
       errorName: bounded(args.errorName, 80),
       errorMessage: bounded(args.errorMessage, 240),
       userId: membership.userId,
@@ -88,6 +92,7 @@ export const record = mutation({
         fileNamePattern: event.fileNamePattern,
         httpStatus: event.httpStatus,
         exifStatus: event.exifStatus,
+        byteFingerprint: event.byteFingerprint,
         errorName: event.errorName,
       }),
     );

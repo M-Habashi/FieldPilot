@@ -180,6 +180,8 @@ export default defineSchema({
       v.union(
         v.literal('selection'),
         v.literal('upload-url'),
+        v.literal('backend-received'),
+        v.literal('storage-persisted'),
         v.literal('storage-upload'),
         v.literal('backend-complete'),
         v.literal('post-complete'),
@@ -200,6 +202,7 @@ export default defineSchema({
     exifStatus: v.optional(
       v.union(v.literal('found'), v.literal('missing'), v.literal('unreadable')),
     ),
+    byteFingerprint: v.optional(v.string()),
     errorName: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
     createdAt: v.number(),

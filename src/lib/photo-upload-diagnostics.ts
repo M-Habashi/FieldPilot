@@ -1,5 +1,13 @@
+import * as exifr from 'exifr';
+
 export type PhotoUploadStage =
-  'selection' | 'upload-url' | 'storage-upload' | 'backend-complete' | 'post-complete';
+  | 'selection'
+  | 'upload-url'
+  | 'backend-received'
+  | 'storage-persisted'
+  | 'storage-upload'
+  | 'backend-complete'
+  | 'post-complete';
 
 export interface PhotoUploadDiagnosticEvent {
   attemptId: string;
@@ -16,8 +24,51 @@ export interface PhotoUploadDiagnosticEvent {
   online?: boolean;
   httpStatus?: number;
   exifStatus?: 'found' | 'missing' | 'unreadable';
+  byteFingerprint?: string;
   errorName?: string;
   errorMessage?: string;
+}
+
+function validGps(latitude: unknown, longitude: unknown): boolean {
+  return (
+    typeof latitude === 'number' &&
+    typeof longitude === 'number' &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180
+  );
+}
+
+/**
+ * Identifies whether the bytes exposed to browser JavaScript still contain
+ * GPS. The short digest correlates this boundary with the backend without
+ * retaining photo data, a complete filename, or coordinates.
+ */
+export async function inspectSelectedPhotoBytes(file: File): Promise<{
+  byteFingerprint?: string;
+  exifStatus: 'found' | 'missing' | 'unreadable';
+}> {
+  try {
+    const bytes = await file.arrayBuffer();
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    const byteFingerprint = Array.from(new Uint8Array(digest).slice(0, 12), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+    try {
+      const gps = await exifr.gps(bytes);
+      return {
+        byteFingerprint,
+        exifStatus: gps && validGps(gps.latitude, gps.longitude) ? 'found' : 'missing',
+      };
+    } catch {
+      return { byteFingerprint, exifStatus: 'unreadable' };
+    }
+  } catch {
+    return { exifStatus: 'unreadable' };
+  }
 }
 
 function bounded(value: string, maximum: number): string | undefined {
