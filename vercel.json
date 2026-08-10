@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/photo-upload",
+      "destination": "https://fearless-gopher-60.convex.site/api/photo-upload"
+    },
+    {
       "source": "/api/auth/:path*",
       "destination": "https://fearless-gopher-60.convex.site/api/auth/:path*"
     }

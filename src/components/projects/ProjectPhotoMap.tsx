@@ -942,14 +942,11 @@ export function ProjectPhotoMap({
           form.append('photo', file, file.name);
 
           activeDiagnostic = { ...diagnosticBase, contentType, stage: 'storage-upload' };
-          const response = await fetch(
-            `${import.meta.env.VITE_CONVEX_SITE_URL as string}/api/photo-upload`,
-            {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${authToken}` },
-              body: form,
-            },
-          );
+          const response = await fetch('/api/photo-upload', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${authToken}` },
+            body: form,
+          });
           activeDiagnostic = { ...activeDiagnostic, httpStatus: response.status };
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
           reportUploadDiagnostic({

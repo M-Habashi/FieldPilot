@@ -52,6 +52,12 @@ export default defineConfig(({ mode }) => {
       // in a secure context and a LAN IP is not one. These are the tunnel
       // domains that provide it; Vite otherwise rejects their Host header.
       allowedHosts: ['.trycloudflare.com', '.ts.net', '.ngrok-free.app'],
+      proxy: {
+        '/api/photo-upload': {
+          target: env.VITE_CONVEX_SITE_URL,
+          changeOrigin: true,
+        },
+      },
     },
   };
 });
