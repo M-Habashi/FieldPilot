@@ -32,6 +32,7 @@ import {
   photoUploadFileDiagnostics,
   type PhotoUploadDiagnosticEvent,
 } from '../../lib/photo-upload-diagnostics';
+import { materializePhotoUploadFile, uploadPhotoForm } from '../../lib/photo-upload-transport';
 import { readDeviceLocation } from '../../lib/device-location';
 import {
   detectLocationClient,
@@ -912,11 +913,34 @@ export function ProjectPhotoMap({
         const clientDiagnostics = photoUploadClientDiagnostics();
         for (const file of files) {
           const attemptId = createPhotoUploadAttemptId();
-          const selectedBytes = await inspectSelectedPhotoBytes(file);
-          const diagnosticBase = {
+          const pickerDiagnosticBase = {
             attemptId,
             ...photoUploadFileDiagnostics(file),
             ...clientDiagnostics,
+          };
+          activeDiagnostic = { ...pickerDiagnosticBase, stage: 'selection' };
+
+          const contentType = photoContentType(file);
+          if (!contentType) {
+            reportUploadDiagnostic({
+              ...pickerDiagnosticBase,
+              phase: 'failed',
+              stage: 'selection',
+              errorName: 'UnsupportedFileType',
+              errorMessage: 'The selected file is not a supported photo type.',
+            });
+            activeDiagnostic = null;
+            continue;
+          }
+
+          if (!authToken) throw new Error('Your session expired. Please sign in again.');
+          // Pic2Map first materializes picker bytes with FileReader and then
+          // uploads a new in-memory Blob. Do this before EXIF inspection so
+          // diagnostics and the backend see the exact same owned bytes.
+          const uploadFile = await materializePhotoUploadFile(file, contentType);
+          const selectedBytes = await inspectSelectedPhotoBytes(uploadFile);
+          const diagnosticBase = {
+            ...pickerDiagnosticBase,
             ...selectedBytes,
           };
           reportUploadDiagnostic({
@@ -925,31 +949,14 @@ export function ProjectPhotoMap({
             stage: 'selection',
           });
 
-          const contentType = photoContentType(file);
-          if (!contentType) {
-            reportUploadDiagnostic({
-              ...diagnosticBase,
-              phase: 'failed',
-              stage: 'selection',
-              errorName: 'UnsupportedFileType',
-              errorMessage: 'The selected file is not a supported photo type.',
-            });
-            continue;
-          }
-
-          if (!authToken) throw new Error('Your session expired. Please sign in again.');
           const form = new FormData();
           form.append('projectId', project._id);
           form.append('attemptId', attemptId);
           form.append('contentType', contentType);
-          form.append('photo', file, file.name);
+          form.append('photo', uploadFile, uploadFile.name);
 
           activeDiagnostic = { ...diagnosticBase, contentType, stage: 'storage-upload' };
-          const response = await fetch('/api/photo-upload', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${authToken}` },
-            body: form,
-          });
+          const response = await uploadPhotoForm('/api/photo-upload', authToken, form);
           activeDiagnostic = { ...activeDiagnostic, httpStatus: response.status };
           if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
           reportUploadDiagnostic({
@@ -958,7 +965,7 @@ export function ProjectPhotoMap({
           });
 
           activeDiagnostic = { ...activeDiagnostic, stage: 'backend-complete' };
-          const { attachmentId, hasExifLocation, exifStatus } = (await response.json()) as {
+          const { attachmentId, hasExifLocation, exifStatus } = JSON.parse(response.body) as {
             attachmentId: Id<'attachments'>;
             hasExifLocation: boolean;
             exifStatus: 'found' | 'missing' | 'unreadable';
