@@ -144,21 +144,33 @@ export const listByPdf = query({
       const page = pageBySheet.get(task.sheetId);
       return page === undefined ? [] : [{ task, page }];
     });
-    const rowsWithEvidence = await Promise.all(
-      rows.map(async (row) => {
-        const attachments = await ctx.db
-          .query('attachments')
-          .withIndex('by_task', (q) => q.eq('taskId', row.task._id))
-          .collect();
-        return {
-          ...row,
-          evidencePhotoCount: attachments.filter(
-            (attachment) => attachment.kind === 'photo' && attachment.deletedAt === undefined,
-          ).length,
-        };
-      }),
+    const projectAttachments = await ctx.db
+      .query('attachments')
+      .withIndex('by_project_createdAt', (q) => q.eq('projectId', anchor.projectId))
+      .collect();
+    const evidencePhotoCountByTask = new Map<Doc<'tasks'>['_id'], number>(
+      rows.map(({ task }) => [task._id, 0] as const),
     );
-    return rowsWithEvidence.sort((a, b) => a.task.seq - b.task.seq);
+    for (const attachment of projectAttachments) {
+      if (
+        attachment.kind !== 'photo' ||
+        attachment.deletedAt !== undefined ||
+        attachment.taskId === undefined ||
+        !evidencePhotoCountByTask.has(attachment.taskId)
+      ) {
+        continue;
+      }
+      evidencePhotoCountByTask.set(
+        attachment.taskId,
+        (evidencePhotoCountByTask.get(attachment.taskId) ?? 0) + 1,
+      );
+    }
+    return rows
+      .map((row) => ({
+        ...row,
+        evidencePhotoCount: evidencePhotoCountByTask.get(row.task._id) ?? 0,
+      }))
+      .sort((a, b) => a.task.seq - b.task.seq);
   },
 });
 
@@ -391,7 +403,7 @@ export const update = mutation({
     if (args.assigneeUserId !== undefined) {
       patch.assigneeUserId = args.assigneeUserId ?? undefined;
     }
-    if (args.dueDate !== undefined) patch.dueDate = args.dueDate ?? undefined;
+    if (args.dueDate !== undefined) patch.dueDate = dueDate;
 
     await ctx.db.patch(task._id, patch);
 

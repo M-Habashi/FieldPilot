@@ -103,6 +103,7 @@ describe('task core attributes', () => {
       manpowerCount: null,
       costMinor: null,
       startDate: null,
+      dueDate: ' 2026-08-25 ',
     });
     task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(task?.completedQuantity).toBe(128);
@@ -110,6 +111,7 @@ describe('task core attributes', () => {
     expect(task?.manpowerCount).toBeUndefined();
     expect(task?.costMinor).toBeUndefined();
     expect(task?.startDate).toBeUndefined();
+    expect(task?.dueDate).toBe('2026-08-25');
   });
 
   it('rejects invalid quantities, schedules, costs, and non-member assignees', async () => {
@@ -188,7 +190,21 @@ describe('task core attributes', () => {
     });
 
     expect(await viewer.query(api.projects.listMembers, { projectId })).toHaveLength(2);
-    expect(await viewer.query(api.tasks.listByPdf, { sheetId })).toHaveLength(1);
+    const photoStorageId = await t.run(async (ctx) =>
+      ctx.storage.store(new Blob(['task evidence'], { type: 'image/jpeg' })),
+    );
+    await owner.mutation(api.attachments.completeUpload, {
+      taskId,
+      kind: 'photo',
+      storageRef: photoStorageId,
+      fileName: 'evidence.jpg',
+      contentType: 'image/jpeg',
+      size: 13,
+    });
+
+    const taskRows = await viewer.query(api.tasks.listByPdf, { sheetId });
+    expect(taskRows).toHaveLength(1);
+    expect(taskRows[0].evidencePhotoCount).toBe(1);
     await expect(
       viewer.mutation(api.tasks.update, { taskId, completedQuantity: 3 }),
     ).rejects.toThrow('Insufficient project permissions');
