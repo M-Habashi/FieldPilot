@@ -1,194 +1,143 @@
 # Offline Photo Queue Implementation Plan
 
-## Overview
+## Goal and first-release scope
 
-Enable offline photo upload and editing by extending the existing outbox pattern with a persistent IndexedDB queue. Photos and edits sync via the existing `uploadPhotoForm` transport when connectivity returns.
+Make map photo uploads durable when the browser is offline, the connection drops, the page reloads,
+or the upload response is lost. The first release queues uploads only. Offline location, assignment,
+trash, restore, and undo operations are deferred until upload reliability has been proven on physical
+phones.
 
----
+The queue is foreground-driven: it resumes while FieldPilot is open. It does not add a service worker
+or replace the protected `XMLHttpRequest` multipart transport.
 
-## Directory Structure
+## Non-negotiable upload path
 
-```
+Every selected photo follows this order, whether the browser appears online or offline:
+
+1. Validate the picker-backed file's name, media type, and size.
+2. Materialize it with `materializePhotoUploadFile` and its `FileReader.readAsDataURL` path.
+3. Run selection diagnostics against that browser-owned `File`.
+4. Persist those exact bytes, plus the filename, MIME type, and `lastModified`, in IndexedDB.
+5. Reconstruct one browser-owned `File` from the persisted bytes for an upload attempt.
+6. Run attempt diagnostics on that reconstructed `File`.
+7. Append that same reconstructed `File` to `FormData`.
+8. Send it through the unchanged `uploadPhotoForm` XHR transport.
+9. Parse GPS server-side from the unchanged original bytes.
+
+The online signal starts a sync attempt; it never decides whether the photo is persisted first.
+
+## Architecture
+
+```text
 src/
-├── lib/
-│   ├── offline-queue/           # NEW: Offline sync engine
-│   │   ├── db.ts                # IndexedDB schema & connection
-│   │   ├── queue.ts             # Queue operations (enqueue, peek, dequeue)
-│   │   ├── sync.ts              # Online detection & upload orchestration
-│   │   ├── types.ts             # Queue item types
-│   │   └── __tests__/
-│   │       ├── db.test.ts
-│   │       ├── queue.test.ts
-│   │       └── sync.test.ts
-│   │
-│   ├── photo-upload-transport.ts    # EXISTING: Unchanged
-│   ├── photo-upload-diagnostics.ts  # EXISTING: Unchanged
-│   └── ...
-│
-├── components/
-│   └── projects/
-│       ├── ProjectPhotoMap.tsx      # MODIFY: Hook into queue
-│       └── OfflinePhotoBadge.tsx    # NEW: Pending upload indicator
-│
-└── hooks/
-    └── useOfflineQueue.ts           # NEW: React hook for queue state
+├── lib/offline-photo-queue/
+│   ├── db.ts                 IndexedDB schema and migrations
+│   ├── queue.ts              Atomic enqueue, claim, retry, complete operations
+│   ├── sync.ts               XHR orchestration and response classification
+│   ├── types.ts              Durable record and completion types
+│   └── *.test.ts
+├── hooks/useOfflinePhotoQueue.ts
+├── components/projects/
+│   ├── OfflinePhotoBadge.tsx
+│   ├── ProjectApp.tsx        One signed-in sync coordinator
+│   └── ProjectPhotoMap.tsx   Materialize, diagnose, then enqueue
+├── lib/photo-upload-transport.ts    Unchanged
+└── lib/photo-upload-diagnostics.ts  Unchanged
+
+convex/
+├── schema.ts                 Idempotency field and index
+├── attachments.ts            Atomic idempotent attachment completion
+├── photoUploads.ts           Duplicate-storage cleanup
+└── photoUploadHttp.ts        Accept the persistent client upload ID
 ```
 
----
+## Durable photo record
 
-## Phase 1: IndexedDB Schema
+The `photos` object store uses `clientUploadId` as its key.
 
-**File:** `src/lib/offline-queue/db.ts`
+| Field                                     | Purpose                                                     |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| `clientUploadId`                          | Stable UUID used for queue identity and server idempotency  |
+| `projectId`, `userId`                     | Prevent cross-project and cross-account replay              |
+| `blob`                                    | Materialized, byte-preserving photo data                    |
+| `filename`, `contentType`, `lastModified` | Metadata used to reconstruct the upload `File`              |
+| `status`                                  | `pending`, `uploading`, or `failed`                         |
+| `createdAt`, `updatedAt`                  | Stable ordering and UI state                                |
+| `leaseUntil`                              | Recovers an `uploading` item after a crash or closed page   |
+| `retryCount`, `nextAttemptAt`             | Bounded exponential retry state                             |
+| `failureKind`, `lastError`                | Distinguishes network, auth, server, and permanent failures |
+| `clientDiagnostics`                       | Diagnostics captured from the materialized selection bytes  |
 
-Two object stores:
+Queue claims and state changes are IndexedDB transactions. Expired upload leases are eligible again.
+An in-process guard and transactional claims prevent duplicate work from overlapping triggers and
+tabs; server idempotency remains the final safety boundary.
 
-### Store: `photos`
+## Server idempotency
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `id` | `string` (UUID) | Client-generated local ID |
-| `projectId` | `string` | Owning project |
-| `file` | `Blob` | Materialized via existing transport |
-| `filename` | `string` | Original name |
-| `contentType` | `string` | MIME type |
-| `status` | `'pending' \| 'uploading' \| 'failed'` | Sync state |
-| `createdAt` | `number` | Timestamp |
-| `retryCount` | `number` | Backoff tracking |
-| `clientDiagnostics` | `PhotoUploadDiagnosticEvent` | Pre-upload diagnostics |
+`clientUploadId` is submitted with every retry. Attachment completion atomically looks up an existing
+photo for the authenticated user and client upload ID before inserting. A duplicate request returns
+the original attachment ID. If a retry already stored a second Convex blob before discovering the
+completed attachment, the action deletes that redundant blob.
 
-### Store: `operations`
+The ID is scoped to the authenticated uploader and checked against the project. It is not a substitute
+for project authorization.
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `id` | `string` | Operation ID |
-| `photoId` | `string` | References queued or server photo |
-| `type` | `'setLocation' \| 'assignTask' \| 'trash' \| 'restore'` | Edit kind |
-| `payload` | `LocationPayload \| TaskPayload \| null` | Operation data |
-| `status` | `'pending' \| 'syncing' \| 'failed'` | Sync state |
-| `createdAt` | `number` | Timestamp |
-| `expectedPhotoUpdatedAt` | `number?` | For conflict resolution |
+## Sync triggers and retry policy
 
----
+One coordinator is mounted at the signed-in application level. It requests sync after enqueue and on:
 
-## Phase 2: Queue Operations
+- browser `online` events;
+- tab visibility returning to `visible`;
+- a bounded foreground interval;
+- auth-token refresh;
+- manual retry.
 
-**File:** `src/lib/offline-queue/queue.ts`
+Network errors, timeouts, HTTP 429, and HTTP 5xx use exponential backoff. After five automatic
+failures the bytes remain stored and the user can retry manually. HTTP 401 pauses until authentication
+refreshes. Other HTTP 4xx responses are retained as needs-attention failures rather than retried in a
+loop.
 
-| Function | Purpose |
-|----------|---------|
-| `enqueuePhoto(file, projectId)` | Store materialized photo, return local ID |
-| `enqueueOperation(photoId, op)` | Queue edit for existing or pending photo |
-| `getPendingPhotos()` | All photos awaiting upload |
-| `getOperationsForPhoto(photoId)` | Edits to apply after upload |
-| `markUploaded(photoId, serverId)` | Transition to synced, remap operations |
-| `markFailed(photoId, error)` | Increment retry, schedule backoff |
+No token or deployment credential is stored in IndexedDB.
 
----
+## Storage safety
 
-## Phase 3: Sync Engine
+Unsynced photos are never evicted with LRU or other automatic cleanup. The app requests persistent
+browser storage when available. If IndexedDB rejects an enqueue because of quota or browser policy,
+the picker file remains in the current page and the user receives a specific message to free storage
+and select it again.
 
-**File:** `src/lib/offline-queue/sync.ts`
+## UI behavior
 
-```typescript
-// Online detection
-window.addEventListener('online', processQueue);
-// Also poll on interval + visibility change
+- Selecting a valid photo saves it locally before any network attempt.
+- The map action bar shows waiting, uploading, offline, or needs-retry state with a count.
+- Failed uploads explain that their photos remain on the device and provide a Retry action.
+- A successful upload preserves the existing success notice, upload undo entry, and locationless-photo
+  placement prompt whenever the map is mounted.
+- Queued photos are not presented as map markers in the first release because they do not yet have a
+  server attachment or a local optimistic map model.
 
-async function processQueue() {
-  const photos = await getPendingPhotos();
-  for (const photo of photos) {
-    // 1. Upload via existing uploadPhotoForm
-    // 2. On success: apply queued operations via Convex mutations
-    // 3. On failure: exponential backoff, max 5 retries
-  }
-}
-```
+## Deferred offline editing
 
-### Integration Point
+Offline edits require a second design phase covering local photo models, operation coalescing,
+`photoUpdatedAt` chaining, undo/redo semantics, and user-visible conflict resolution. Silent
+last-write-wins is not the default because it can overwrite a collaborator's changes.
 
-Existing `uploadPhotos` callback in `ProjectPhotoMap.tsx` becomes:
+## Verification
 
-```typescript
-// BEFORE: Direct upload
-const response = await uploadPhotoForm('/api/photo-upload', authToken, form);
+Automated checks:
 
-// AFTER: Queue-first
-if (isOnline) {
-  await uploadAndSync(photo);  // Immediate
-} else {
-  await enqueuePhoto(photo);   // Deferred
-}
-```
-
----
-
-## Phase 4: UI Integration
-
-### Hook: `useOfflineQueue`
-
-**File:** `src/hooks/useOfflineQueue.ts`
-
-Provides:
-- `pendingCount`: Badge indicator
-- `isOnline`: Network status
-- `forceSync()`: Manual retry
-
-### Component: `OfflinePhotoBadge`
-
-**File:** `src/components/projects/OfflinePhotoBadge.tsx`
-
-- Shows pending count on map markers
-- "Waiting to upload" state in photo panel
-
----
-
-## What Stays Unchanged
-
-| Component | Reason |
-|-----------|--------|
-| `photo-upload-transport.ts` | Core invariant: FileReader materialization, XHR upload |
-| `photo-upload-diagnostics.ts` | Same diagnostics, deferred |
-| Server API (`/api/photo-upload`) | No changes needed |
-| Convex mutations | Called after upload, same as now |
-
----
-
-## Open Questions
-
-1. **Edit operations offline**: Should users be able to move/assign photos that are still pending upload? (Adds complexity: operations reference local IDs, remapped after upload)
-
-2. **Storage limits**: IndexedDB is ~GBs, but should we cap at e.g. 100MB with LRU eviction?
-
-3. **Conflict resolution**: If a photo is edited offline, then edited by another user online, last-write-wins or prompt?
-
----
-
-## Testing Requirements
-
-Per `AGENTS.md`, any change touching the photo upload pipeline must run:
-
-```bash
+```text
 pnpm test -- src/lib/photo-upload-transport.test.ts
+pnpm test -- src/lib/offline-photo-queue/
 pnpm typecheck
 pnpm lint
+pnpm format:check
 ```
 
-Additional tests for the queue:
+Queue tests cover byte and metadata preservation, quota failure, expired-lease recovery, retry
+classification, ambiguous successful uploads, idempotency, account isolation, and concurrent claims.
 
-```bash
-pnpm test -- src/lib/offline-queue/
-```
-
----
-
-## Implementation Order
-
-| Step | File | Dependencies |
-|------|------|--------------|
-| 1 | `types.ts` | None |
-| 2 | `db.ts` | `types.ts` |
-| 3 | `queue.ts` | `db.ts` |
-| 4 | `sync.ts` | `queue.ts`, existing transport |
-| 5 | `useOfflineQueue.ts` | `sync.ts` |
-| 6 | `OfflinePhotoBadge.tsx` | `useOfflineQueue.ts` |
-| 7 | Modify `ProjectPhotoMap.tsx` | All above |
+Before production deployment, upload the same known GPS-bearing original through the deployed site
+from at least one physical phone. Confirm `/api/photo-upload` reports `exifStatus: "found"`,
+`hasExifLocation: true`, and creates exactly one mapped marker even if the response is interrupted and
+retried.

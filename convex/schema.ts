@@ -235,6 +235,7 @@ export default defineSchema({
     contentType: v.string(),
     size: v.number(),
     uploadedBy: v.id('users'),
+    clientUploadId: v.optional(v.string()),
     createdAt: v.number(),
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
@@ -256,7 +257,8 @@ export default defineSchema({
   })
     .index('by_task', ['taskId'])
     .index('by_project_createdAt', ['projectId', 'createdAt'])
-    .index('by_storageRef', ['storageRef']),
+    .index('by_storageRef', ['storageRef'])
+    .index('by_uploadedBy_clientUploadId', ['uploadedBy', 'clientUploadId']),
 
   photoUploadDiagnostics: defineTable({
     projectId: v.id('projects'),

@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { internalQuery, mutation, query } from './_generated/server';
 import {
   CONTENT_EDITOR_ROLES,
   requireProjectMember,
@@ -103,6 +103,7 @@ export const completeUpload = mutation({
     fileName: v.string(),
     contentType: v.string(),
     size: v.number(),
+    clientUploadId: v.optional(v.string()),
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
     originalLatitude: v.optional(v.number()),
@@ -124,6 +125,24 @@ export const completeUpload = mutation({
       throw new Error('The task belongs to another project.');
     await requireProjectRole(ctx, projectId, CONTENT_EDITOR_ROLES, uploadedBy);
     if (args.size < 0) throw new Error('Attachment size cannot be negative');
+    if (args.clientUploadId !== undefined) {
+      if (args.kind !== 'photo') throw new Error('Only photos can use a client upload ID.');
+      if (!args.clientUploadId.trim() || args.clientUploadId.length > 80) {
+        throw new Error('The client upload ID is invalid.');
+      }
+      const existingUpload = await ctx.db
+        .query('attachments')
+        .withIndex('by_uploadedBy_clientUploadId', (q) =>
+          q.eq('uploadedBy', uploadedBy).eq('clientUploadId', args.clientUploadId),
+        )
+        .first();
+      if (existingUpload) {
+        if (existingUpload.projectId !== projectId) {
+          throw new Error('The client upload ID belongs to another project.');
+        }
+        return existingUpload._id;
+      }
+    }
     const hasLocation = args.latitude !== undefined || args.longitude !== undefined;
     if (hasLocation && (args.latitude === undefined || args.longitude === undefined)) {
       throw new Error('A photo location needs both latitude and longitude.');
@@ -191,6 +210,7 @@ export const completeUpload = mutation({
       contentType: storedContentType,
       size: storedFile.size,
       uploadedBy,
+      ...(args.clientUploadId ? { clientUploadId: args.clientUploadId } : {}),
       createdAt: now,
       ...(args.kind === 'photo' ? { photoMapVersion: 1, photoUpdatedAt: now } : {}),
       ...(hasLocation
@@ -215,6 +235,15 @@ export const completeUpload = mutation({
           }
         : {}),
     });
+  },
+});
+
+export const getPhotoUploadStorageRef = internalQuery({
+  args: { attachmentId: v.id('attachments') },
+  handler: async (ctx, { attachmentId }) => {
+    const attachment = await ctx.db.get(attachmentId);
+    if (attachment === null || attachment.kind !== 'photo') throw new Error('Photo not found');
+    return { storageRef: attachment.storageRef };
   },
 });
 

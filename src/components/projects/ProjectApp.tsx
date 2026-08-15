@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuthToken } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { patchAppView, readAppView } from '../../lib/app-view';
+import type { PhotoUploadDiagnosticEvent } from '../../lib/photo-upload-diagnostics';
 import { useBackGuard } from '../../hooks/useBackGuard';
+import { useOfflinePhotoQueueCoordinator } from '../../hooks/useOfflinePhotoQueue';
 import { ProjectListPage } from './ProjectListPage';
 import { ProjectPlanWorkspace } from './ProjectPlanWorkspace';
 import { ProjectPlansPage } from './ProjectPlansPage';
@@ -14,6 +17,8 @@ export function ProjectApp() {
   const projects = useQuery(api.projects.listMine);
   const invitations = useQuery(api.invitations.listMine);
   const acceptInvitation = useMutation(api.invitations.accept);
+  const recordUploadDiagnostic = useMutation(api.photoUploadDiagnostics.record);
+  const authToken = useAuthToken();
   const [activeProjectId, setActiveProjectId] = useState<Id<'projects'> | null>(
     () => (readAppView().projectId as Id<'projects'> | null) ?? null,
   );
@@ -21,6 +26,18 @@ export function ProjectApp() {
     () => (readAppView().sheetId as Id<'sheets'> | null) ?? null,
   );
   const [pendingTaskId, setPendingTaskId] = useState<Id<'tasks'> | null>(null);
+
+  const reportUploadDiagnostic = useCallback(
+    async (projectId: Id<'projects'>, event: PhotoUploadDiagnosticEvent) => {
+      await recordUploadDiagnostic({ projectId, ...event });
+    },
+    [recordUploadDiagnostic],
+  );
+  useOfflinePhotoQueueCoordinator({
+    userId: user?._id ?? null,
+    authToken,
+    reportDiagnostic: reportUploadDiagnostic,
+  });
 
   useEffect(() => {
     patchAppView({ projectId: activeProjectId, sheetId: activeSheetId });

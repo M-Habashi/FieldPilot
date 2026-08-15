@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { action } from './_generated/server';
 import { inspectExifPhotoLocation, photoByteFingerprint } from './lib/photoExif';
@@ -19,6 +19,7 @@ export const complete = action({
     contentType: v.string(),
     size: v.number(),
     attemptId: v.optional(v.string()),
+    clientUploadId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<CompletePhotoUploadResult> => {
     if ((await ctx.auth.getUserIdentity()) === null) throw new Error('Unauthenticated');
@@ -70,6 +71,17 @@ export const complete = action({
           }
         : {}),
     });
+    const completedUpload = await ctx.runQuery(internal.attachments.getPhotoUploadStorageRef, {
+      attachmentId,
+    });
+    if (completedUpload.storageRef !== uploadArgs.storageRef) {
+      await ctx.storage.delete(uploadArgs.storageRef).catch(() => {
+        console.warn(
+          'duplicate_photo_storage_cleanup_failed',
+          JSON.stringify({ clientUploadId: uploadArgs.clientUploadId }),
+        );
+      });
+    }
 
     return {
       attachmentId,

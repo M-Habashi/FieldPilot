@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuthToken } from '@convex-dev/auth/react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -20,6 +19,10 @@ import {
 } from 'lucide-react';
 import { useConvex, useMutation, useQuery } from 'convex/react';
 import { useBackGuard } from '../../hooks/useBackGuard';
+import {
+  requestOfflinePhotoQueueSync,
+  useOfflinePhotoQueue,
+} from '../../hooks/useOfflinePhotoQueue';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import type { PhotoLocation } from '../../lib/photo-location';
@@ -32,7 +35,12 @@ import {
   photoUploadFileDiagnostics,
   type PhotoUploadDiagnosticEvent,
 } from '../../lib/photo-upload-diagnostics';
-import { materializePhotoUploadFile, uploadPhotoForm } from '../../lib/photo-upload-transport';
+import { materializePhotoUploadFile } from '../../lib/photo-upload-transport';
+import {
+  enqueueMaterializedPhoto,
+  OfflinePhotoQueueStorageError,
+  subscribeOfflinePhotoUploadCompletions,
+} from '../../lib/offline-photo-queue/queue';
 import { readDeviceLocation } from '../../lib/device-location';
 import {
   detectLocationClient,
@@ -61,6 +69,7 @@ import { Dropdown, DropdownItem, DropdownLabel } from '../ui/dropdown-menu';
 import { Notice, type NoticeTone } from '../ui/notice';
 import { useNotify } from '../ui/use-notify';
 import { MapPhotoPanel } from './MapPhotoPanel';
+import { OfflinePhotoBadge } from './OfflinePhotoBadge';
 
 type ProjectRole = 'owner' | 'admin' | 'member' | 'viewer';
 type PhotoFilter = 'all' | 'assigned' | 'unassigned' | `task:${string}`;
@@ -289,7 +298,6 @@ export function ProjectPhotoMap({
   }, []);
   const { notify } = useNotify();
   const convex = useConvex();
-  const authToken = useAuthToken();
   const photoRows = useQuery(api.attachments.listProjectPhotos, { projectId: project._id });
   const tasks = useQuery(api.tasks.listByProject, { projectId: project._id });
   const recordUploadDiagnostic = useMutation(api.photoUploadDiagnostics.record);
@@ -357,6 +365,7 @@ export function ProjectPhotoMap({
   const undoScope = `${project._id}:${userId}`;
   const [undoCount, setUndoCount] = useState(() => readPhotoUndo(undoScope).length);
   const [redoCount, setRedoCount] = useState(() => readPhotoRedo(undoScope).length);
+  const offlineQueue = useOfflinePhotoQueue(project._id, userId);
 
   const reportUploadDiagnostic = useCallback(
     (event: PhotoUploadDiagnosticEvent) => {
@@ -541,6 +550,37 @@ export function ProjectPhotoMap({
       setUndoCount(pushPhotoUndo(undoScope, operation).length);
     },
     [undoScope],
+  );
+
+  useEffect(
+    () =>
+      subscribeOfflinePhotoUploadCompletions((completion) => {
+        if (completion.projectId !== project._id || completion.userId !== userId) return;
+        const attachmentId = completion.attachmentId as Id<'attachments'>;
+        setUploadNotice({ tone: 'success', message: 'Image uploaded successfully.' });
+        if (!completion.hasExifLocation) {
+          setFilter('all');
+          setPhotosPanelOpen(true);
+          setPlacePromptIds((current) =>
+            current.includes(attachmentId) ? current : [...current, attachmentId],
+          );
+        }
+        void convex
+          .query(api.attachments.getPhotoMapState, { attachmentId })
+          .then((photoState) => {
+            if (photoState.photoUpdatedAt !== undefined) {
+              pushUndo({
+                kind: 'trash',
+                attachmentId,
+                expectedPhotoUpdatedAt: photoState.photoUpdatedAt,
+              });
+            }
+          })
+          .catch((error: unknown) => {
+            console.warn('Uploaded photo undo state could not be prepared', error);
+          });
+      }),
+    [convex, project._id, pushUndo, userId],
   );
 
   const handleMove = useCallback(
@@ -904,12 +944,14 @@ export function ProjectPhotoMap({
       setUploading(true);
       setUploadNotice({
         tone: 'info',
-        message: 'Uploading image…',
+        message: 'Saving image for upload…',
       });
       let activeDiagnostic: Omit<PhotoUploadDiagnosticEvent, 'phase'> | null = null;
       try {
-        let uploaded = 0;
-        const unmappedIds: Id<'attachments'>[] = [];
+        if (userId === 'pending-user') {
+          throw new Error('Your session is still loading. Please try again.');
+        }
+        let queued = 0;
         const clientDiagnostics = photoUploadClientDiagnostics();
         for (const file of files) {
           const attemptId = createPhotoUploadAttemptId();
@@ -933,7 +975,6 @@ export function ProjectPhotoMap({
             continue;
           }
 
-          if (!authToken) throw new Error('Your session expired. Please sign in again.');
           // Pic2Map first materializes picker bytes with FileReader and then
           // uploads a new in-memory Blob. Do this before EXIF inspection so
           // diagnostics and the backend see the exact same owned bytes.
@@ -948,72 +989,36 @@ export function ProjectPhotoMap({
             phase: 'selected',
             stage: 'selection',
           });
-
-          const form = new FormData();
-          form.append('projectId', project._id);
-          form.append('attemptId', attemptId);
-          form.append('contentType', contentType);
-          form.append('photo', uploadFile, uploadFile.name);
-
           activeDiagnostic = { ...diagnosticBase, contentType, stage: 'storage-upload' };
-          const response = await uploadPhotoForm('/api/photo-upload', authToken, form);
-          activeDiagnostic = { ...activeDiagnostic, httpStatus: response.status };
-          if (!response.ok) throw new Error('A photo could not be uploaded. Please try again.');
-          reportUploadDiagnostic({
-            ...activeDiagnostic,
-            phase: 'storage-uploaded',
+          await enqueueMaterializedPhoto({
+            clientUploadId: attemptId,
+            projectId: project._id,
+            userId,
+            file: uploadFile,
+            contentType,
+            clientDiagnostics: diagnosticBase,
           });
-
-          activeDiagnostic = { ...activeDiagnostic, stage: 'backend-complete' };
-          const { attachmentId, hasExifLocation, exifStatus } = JSON.parse(response.body) as {
-            attachmentId: Id<'attachments'>;
-            hasExifLocation: boolean;
-            exifStatus: 'found' | 'missing' | 'unreadable';
-          };
-          uploaded += 1;
-          reportUploadDiagnostic({
-            ...activeDiagnostic,
-            phase: 'completed',
-            exifStatus,
-          });
-
-          activeDiagnostic = { ...activeDiagnostic, stage: 'post-complete', exifStatus };
-          const photoState = await convex.query(api.attachments.getPhotoMapState, {
-            attachmentId,
-          });
-          if (photoState.photoUpdatedAt !== undefined) {
-            pushUndo({
-              kind: 'trash',
-              attachmentId,
-              expectedPhotoUpdatedAt: photoState.photoUpdatedAt,
-            });
-          }
-          if (!hasExifLocation) {
-            unmappedIds.push(attachmentId);
-          }
+          queued += 1;
           activeDiagnostic = null;
         }
-        if (uploaded === 0) {
+        if (queued === 0) {
           setUploadNotice({
             tone: 'error',
-            message: 'Error uploading image.',
+            message: 'No supported photos were selected.',
           });
           return;
         }
         setUploadNotice({
-          tone: 'success',
-          message:
-            uploaded === 1 ? 'Image uploaded successfully.' : 'Images uploaded successfully.',
+          tone: 'info',
+          message: offlineQueue.isOnline
+            ? queued === 1
+              ? 'Image saved. Uploading now…'
+              : `${queued} images saved. Uploading now…`
+            : queued === 1
+              ? 'Image saved on this device. It will upload when you are back online.'
+              : `${queued} images saved on this device. They will upload when you are back online.`,
         });
-        if (unmappedIds.length) {
-          // A locationless upload has no marker, so reveal the durable Photos
-          // list instead of leaving the user on an unchanged-looking map.
-          // Resetting the filter ensures every newly uploaded, unassigned
-          // photo is visible immediately.
-          setFilter('all');
-          setPhotosPanelOpen(true);
-          setPlacePromptIds(unmappedIds);
-        }
+        requestOfflinePhotoQueueSync();
       } catch (error) {
         console.error('Photo upload failed', error);
         if (activeDiagnostic) {
@@ -1023,12 +1028,18 @@ export function ProjectPhotoMap({
             ...photoUploadErrorDiagnostics(error),
           });
         }
-        setUploadNotice({ tone: 'error', message: 'Error uploading image.' });
+        setUploadNotice({
+          tone: 'error',
+          message:
+            error instanceof OfflinePhotoQueueStorageError
+              ? error.message
+              : userFacingError(error, 'The photo could not be saved for upload.'),
+        });
       } finally {
         setUploading(false);
       }
     },
-    [authToken, canEdit, convex, project._id, pushUndo, reportUploadDiagnostic, uploading],
+    [canEdit, offlineQueue.isOnline, project._id, reportUploadDiagnostic, uploading, userId],
   );
 
   useEffect(() => {
@@ -1584,6 +1595,13 @@ export function ProjectPhotoMap({
         </ActionBarGroup>
 
         <ActionBarGroup align="end">
+          <OfflinePhotoBadge
+            pendingCount={offlineQueue.pendingCount}
+            uploadingCount={offlineQueue.uploadingCount}
+            failedCount={offlineQueue.failedCount}
+            isOnline={offlineQueue.isOnline}
+            onRetry={() => void offlineQueue.retry()}
+          />
           <ActionBarButton
             icon={<Images />}
             label="Photos"
@@ -1605,7 +1623,7 @@ export function ProjectPhotoMap({
       >
         <div ref={mapHostRef} className="h-full w-full" />
 
-        {(uploadNotice || locationHelp) && (
+        {(uploadNotice || locationHelp || offlineQueue.failedCount > 0) && (
           <div className="pointer-events-none absolute inset-x-3 top-3 z-[700] flex flex-col items-center gap-2">
             {uploadNotice && (
               <Notice
@@ -1615,6 +1633,20 @@ export function ProjectPhotoMap({
                 onDismiss={() => setUploadNotice(null)}
               >
                 {uploadNotice.message}
+              </Notice>
+            )}
+            {offlineQueue.failedCount > 0 && (
+              <Notice tone="error" compact className="pointer-events-auto w-full max-w-md">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {offlineQueue.failedCount === 1
+                      ? 'A photo could not upload. It is still saved on this device.'
+                      : `${offlineQueue.failedCount} photos could not upload. They are still saved on this device.`}
+                  </span>
+                  <Button variant="danger" size="sm" onClick={() => void offlineQueue.retry()}>
+                    Retry
+                  </Button>
+                </div>
               </Notice>
             )}
             {locationHelp && (
