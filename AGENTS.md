@@ -22,21 +22,17 @@ did not reliably reproduce the failure.
 
 The required pipeline is:
 
-1. On Android only, keep the file input's `accept` value supplied by `photoPickerAccept`: the
-   deliberately mixed `image/*,text/plain` list forces Chromium's generic document route and
-   prevents the Android media picker from returning a GPS-redacted copy. Non-image selections are
-   still rejected by application validation. Other platforms retain the empty `accept` value.
-2. Receive the picker-backed `File` from the existing file input.
-3. Validate its filename, media type, and size.
-4. Call `materializePhotoUploadFile` in `src/lib/photo-upload-transport.ts`.
-5. Inside that function, read the picker-backed file with `FileReader.readAsDataURL`.
-6. Decode the base64 result into a new `Uint8Array` and construct a new browser-owned `File` while
+1. Receive the picker-backed `File` from the existing file input.
+2. Validate its filename, media type, and size.
+3. Call `materializePhotoUploadFile` in `src/lib/photo-upload-transport.ts`.
+4. Inside that function, read the picker-backed file with `FileReader.readAsDataURL`.
+5. Decode the base64 result into a new `Uint8Array` and construct a new browser-owned `File` while
    preserving the original filename, MIME type, `lastModified`, and every byte of the image.
-7. Run client diagnostics against this new in-memory `File`.
-8. Append this same new in-memory `File` to `FormData`.
-9. Send the multipart form through `uploadPhotoForm`, which uses `XMLHttpRequest` and preserves the
+6. Run client diagnostics against this new in-memory `File`.
+7. Append this same new in-memory `File` to `FormData`.
+8. Send the multipart form through `uploadPhotoForm`, which uses `XMLHttpRequest` and preserves the
    `Authorization` header, JSON response handling, error handling, and 120-second timeout.
-10. Parse GPS server-side from the unchanged original image bytes: standard EXIF first, followed by
+9. Parse GPS server-side from the unchanged original image bytes: standard EXIF first, followed by
    the validated Samsung Motion Photo appended-MP4 `©xyz` fallback when needed.
 
 This makes diagnostics and the backend inspect the exact same owned bytes and prevents the browser
@@ -52,8 +48,6 @@ explicitly approves the architecture change:
 - Do not replace `XMLHttpRequest` with `fetch` for photo multipart uploads merely as cleanup.
 - Do not resize, recompress, draw the photo to a canvas, strip metadata, or create a lossy derivative
   before the server parses location data.
-- Do not replace Android's mixed `image/*,text/plain` accept list with an image-only list or an empty
-  list. The extra MIME type is a transport switch; it does not make text files valid uploads.
 - Do not run diagnostics on one file/blob and upload another.
 - Do not remove the standard EXIF parser or Samsung Motion Photo `©xyz` fallback independently.
 - Do not change the photo picker UI or add capture/location behavior as part of transport cleanup.

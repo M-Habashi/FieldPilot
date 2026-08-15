@@ -1,15 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { photoContentType, photoPickerAccept } from './photo-file';
-
-describe('photoPickerAccept', () => {
-  it('forces Android gallery uploads through the generic document picker', () => {
-    expect(photoPickerAccept(true)).toBe('image/*,text/plain');
-  });
-
-  it('does not change the picker contract on other platforms', () => {
-    expect(photoPickerAccept(false)).toBe('');
-  });
-});
+import { photoContentType } from './photo-file';
 
 describe('photoContentType', () => {
   it('preserves browser-provided image MIME types', () => {

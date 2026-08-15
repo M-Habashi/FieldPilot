@@ -23,7 +23,7 @@ import { useBackGuard } from '../../hooks/useBackGuard';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import type { PhotoLocation } from '../../lib/photo-location';
-import { photoContentType, photoPickerAccept } from '../../lib/photo-file';
+import { photoContentType } from '../../lib/photo-file';
 import {
   createPhotoUploadAttemptId,
   inspectSelectedPhotoBytes,
@@ -332,10 +332,6 @@ export function ProjectPhotoMap({
   const [uploading, setUploading] = useState(false);
   const [locating, setLocating] = useState(false);
   const locatingRef = useRef(false);
-  const pickerAccept = useMemo(
-    () => photoPickerAccept(detectLocationClient() === 'android'),
-    [],
-  );
   const [uploadNotice, setUploadNotice] = useState<UploadNotice | null>(null);
   // Recovery steps for a blocked location permission. Deliberately not on the
   // 3-second timer: the user needs to follow them inside two settings screens,
@@ -1901,12 +1897,12 @@ export function ProjectPhotoMap({
         }}
       />
 
-      {/* Keep the existing multi-file UI. Only Android receives the mixed
-          accept list that forces its non-redacting document/file workflow. */}
+      {/* Match Pic2Map's picker contract: one unfiltered, multi-file input on
+          every device so mobile browsers open the document/file workflow. */}
       <input
         ref={fileInputRef}
         type="file"
-        accept={pickerAccept}
+        accept=""
         multiple
         className="hidden"
         onChange={(event) => {
