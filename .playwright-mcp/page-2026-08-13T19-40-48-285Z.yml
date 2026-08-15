@@ -1,0 +1,50 @@
+- generic [ref=e287]:
+  - banner [ref=e288]:
+    - button "Back to project plans" [ref=e289] [cursor=pointer]:
+      - generic [ref=e290]: FieldPilot
+    - generic "demo-plan.pdf" [ref=e293]
+    - button "Sign out" [ref=e294] [cursor=pointer]
+  - generic [ref=e296]:
+    - complementary "Primary" [ref=e297]:
+      - navigation [ref=e298]:
+        - button "Plans" [ref=e299] [cursor=pointer]
+        - button "Map" [ref=e304] [cursor=pointer]
+      - separator "Resize sidebar" [ref=e307]
+    - generic [ref=e309]:
+      - banner "Plan tools" [ref=e310]:
+        - generic [ref=e311]:
+          - button "File" [ref=e314] [cursor=pointer]
+          - button "Undo" [disabled]
+          - button "Redo" [disabled]
+          - button "Add pin" [ref=e318] [cursor=pointer]
+          - button "Markup tools" [ref=e322] [cursor=pointer]:
+            - generic [ref=e323]: Markup
+          - button "Measurement tools" [ref=e326] [cursor=pointer]:
+            - generic [ref=e327]: Measure
+          - button "Turn snapping off" [pressed] [ref=e329] [cursor=pointer]:
+            - generic [ref=e330]: Snap
+            - generic [ref=e331]: "On"
+        - button "Show tasks" [ref=e333] [cursor=pointer]:
+          - generic [ref=e334]: Tasks
+          - generic [ref=e335]: "1"
+      - main [ref=e337]:
+        - generic [ref=e338]:
+          - generic [ref=e339]:
+            - img "Plan markups"
+            - 'button "Pin 1: untitled task" [ref=e341] [cursor=pointer]':
+              - generic [ref=e342]: "1"
+          - generic: Click the sheet to place a pin — Esc to finish
+          - generic: · Esc to cancel
+          - generic [ref=e344]:
+            - button "Zoom out" [ref=e345] [cursor=pointer]
+            - generic [ref=e346]: 29%
+            - button "Zoom in" [ref=e347] [cursor=pointer]
+            - button "Fit to screen" [ref=e348] [cursor=pointer]
+      - contentinfo [ref=e349]:
+        - generic [ref=e350]:
+          - button "Previous sheet" [disabled]
+          - generic [ref=e351]: Sheet 1 / 3
+          - button "Next sheet" [ref=e352] [cursor=pointer]
+        - generic [ref=e353]:
+          - generic [ref=e354]: 1 task
+          - generic [ref=e355]: P add pin · Esc cancel

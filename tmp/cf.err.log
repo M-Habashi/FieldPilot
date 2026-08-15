@@ -1,0 +1,24 @@
+2026-08-07T23:48:04Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+2026-08-07T23:48:04Z INF Requesting new quick Tunnel on trycloudflare.com...
+2026-08-07T23:48:12Z INF +--------------------------------------------------------------------------------------------+
+2026-08-07T23:48:12Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
+2026-08-07T23:48:12Z INF |  https://solar-delivered-durham-authentic.trycloudflare.com                                |
+2026-08-07T23:48:12Z INF +--------------------------------------------------------------------------------------------+
+2026-08-07T23:48:12Z INF Cannot determine default configuration path. No file [config.yml config.yaml] in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp]
+2026-08-07T23:48:12Z INF Version 2025.8.1 (Checksum b5d598b00cc3a28cabc5812d9f762819334614bae452db4e7f23eefe7b081556)
+2026-08-07T23:48:12Z INF GOOS: windows, GOVersion: go1.24.2, GoArch: amd64
+2026-08-07T23:48:12Z INF Settings: map[ha-connections:1 no-autoupdate:true protocol:quic url:http://localhost:5173]
+2026-08-07T23:48:12Z INF cloudflared will not automatically update on Windows systems.
+2026-08-07T23:48:12Z INF Generated Connector ID: cede583a-8b1a-4261-9fdf-0ff2689b727c
+2026-08-07T23:48:12Z INF Initial protocol quic
+2026-08-07T23:48:12Z INF ICMP proxy will use 10.0.0.111 as source for IPv4
+2026-08-07T23:48:12Z INF ICMP proxy will use 2601:803:8180:db70::1c9c in zone Wi-Fi 2 as source for IPv6
+2026-08-07T23:48:12Z ERR Cannot determine default origin certificate path. No file cert.pem in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp]. You need to specify the origin certificate path by specifying the origincert option in the configuration file, or set TUNNEL_ORIGIN_CERT environment variable originCertPath=
+2026-08-07T23:48:12Z INF cloudflared does not support loading the system root certificate pool on Windows. Please use --origin-ca-pool <PATH> to specify the path to the certificate pool
+2026-08-07T23:48:12Z INF ICMP proxy will use 10.0.0.111 as source for IPv4
+2026-08-07T23:48:12Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=0 event=0 ip=198.41.200.63
+2026-08-07T23:48:12Z INF ICMP proxy will use 2601:803:8180:db70::1c9c in zone Wi-Fi 2 as source for IPv6
+2026-08-07T23:48:12Z INF Starting metrics server on 127.0.0.1:20242/metrics
+2026-08-07T23:48:12Z INF Registered tunnel connection connIndex=0 connection=f3b902cc-87a5-4528-91e0-65fb9eba9fc9 event=0 ip=198.41.200.63 location=ord07 protocol=quic
+2026/08/07 20:22:07 Unsolicited response received on idle HTTP channel starting with "HTTP/1.1 400 Bad Request\r\n\r\n"; err=<nil>
+2026/08/07 21:26:38 Unsolicited response received on idle HTTP channel starting with "HTTP/1.1 400 Bad Request\r\n\r\n"; err=<nil>
