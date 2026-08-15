@@ -76,6 +76,14 @@ Do not use an email address as a foreign key. All references use `Id<'users'>`.
   isDemo?: boolean
   createdBy: Id<'users'>
   nextTaskSeq: number
+  taskAttributeSettings?: Array<{
+    key: 'plan' | 'location' | 'startDate' | 'dueDate' | 'manpower' | 'cost' | 'tags' | 'quantity'
+    visible: boolean
+  }>
+  taskAttributeLayout?: Array<
+    | { kind: 'builtin'; key: TaskAttributeKey; visible: boolean }
+    | { kind: 'custom'; definitionId: Id<'taskAttributeDefinitions'>; visible: boolean }
+  >
   createdAt: number
   updatedAt: number
   archivedAt?: number
@@ -91,6 +99,11 @@ project. Deleted sequence numbers are never reused.
 `isDemo` marks the single idempotent onboarding project created for an account. The bundled demo
 plan is linked to that project and repeated onboarding or administrative backfills do not create
 duplicates.
+
+`taskAttributeLayout` gives every task in the project one ordered layout containing both built-in
+and custom attributes. `taskAttributeSettings` remains as a backward-compatible built-in-only
+projection. Owners and administrators manage the layout; all project members read it. Status,
+priority, category, and assignee remain required and are not stored in either optional list.
 
 ### `projectMembers`
 
@@ -188,6 +201,16 @@ plan. Removing a plan also removes its related tasks, notes, and attachment reco
   priority: 1 | 2 | 3
   category: string
   color?: string
+  plannedQuantity?: number
+  completedQuantity?: number
+  quantityUnit?: string
+  quantityItemId?: Id<'quantityItems'>
+  startDate?: string
+  locationText?: string
+  tags?: string[]
+  manpowerCount?: number
+  costMinor?: number
+  currencyCode?: string
   assigneeText?: string
   assigneeUserId?: Id<'users'>
   dueDate?: string
@@ -205,8 +228,79 @@ indexes for every field.
 authorization. The create/move mutations must verify that `sheet.projectId === task.projectId`.
 Coordinates remain normalized to `0..1` relative to the PDF page box.
 
-`assigneeText` preserves the current free-text workflow. `assigneeUserId` becomes the preferred
-field once real assignment ships; the text field can remain for external contacts.
+`assigneeUserId` is the preferred assignment field and must reference a current project member.
+`assigneeText` preserves older task records and a readable assignee snapshot.
+
+The quantity fields on `tasks` are retained as a compatibility record for tasks that still have one
+legacy quantity. When a second quantity is added, the first value is moved intact into
+`taskQuantities` and the legacy fields are cleared. This lazy migration avoids a destructive bulk
+data migration and prevents reports from counting the same value twice.
+
+`costMinor` stores the amount in the currency's minor unit (for example cents) to avoid floating
+point rounding errors. All new task attributes are optional so records created before this feature
+continue to validate without a data migration.
+
+### `quantityItems`
+
+```ts
+{
+  projectId: Id<'projects'>
+  name: string
+  defaultUnit: string
+  createdBy: Id<'users'>
+  createdAt: number
+  updatedAt: number
+  archivedAt?: number
+}
+```
+
+Quantity items provide stable project-wide groupings such as Wall protection or Concrete. Names
+are unique within the active project dictionary. Owners and administrators manage items; project
+members select them on tasks. Archiving prevents new selection while retaining historical task
+references and report labels.
+
+Index: `by_project`.
+
+### `taskQuantities`
+
+```ts
+{
+  projectId: Id<'projects'>
+  taskId: Id<'tasks'>
+  quantityItemId?: Id<'quantityItems'>
+  plannedQuantity?: number
+  completedQuantity?: number
+  quantityUnit?: string
+  createdBy: Id<'users'>
+  createdAt: number
+  updatedAt: number
+}
+```
+
+Each row is an independent quantity on a task, allowing one pin to track several scopes such as
+wall protection and concrete. Remaining quantity and percent complete are derived so stored values
+cannot conflict. Reports include every row, group by item and normalized unit, calculate remaining
+and overrun per row, and never combine unlike units. Task counts remain unique even when one task
+contributes multiple rows to the same group.
+
+Indexes: `by_project`, `by_task`, and `by_quantity_item`.
+
+### `taskAttributeDefinitions`
+
+Project-wide custom field definitions store a name and one of `text`, `number`, `date`, `select`, or
+`boolean`. Number fields may include a short unit. Select fields use stable option IDs and retain
+removed options as inactive so historical values remain readable. Archiving a definition hides it
+without deleting existing task values. Owners and administrators manage definitions.
+
+Index: `by_project`.
+
+### `taskAttributeValues`
+
+Each row connects one task to one custom definition and stores exactly one typed value. The task,
+definition, and value must belong to the same project. Owners, administrators, and members may edit
+values; viewers have read-only access.
+
+Indexes: `by_project`, `by_task`, `by_definition`, and compound `by_task_definition`.
 
 ### `notes`
 
@@ -221,10 +315,42 @@ field once real assignment ships; the text field can remain for external contact
 }
 ```
 
-Indexes: `by_task` and, when an activity feed is implemented, compound `by_project_createdAt`.
+Index: `by_task`. Notes are merged into the task activity query by their original `createdAt` date.
 
 Notes are separate documents rather than an array on a task. `authorId` is set from the authenticated
 caller and is never accepted as a client argument.
+
+### `taskActivityEvents`
+
+```ts
+{
+  projectId: Id<'projects'>
+  taskId: Id<'tasks'>
+  actorId: Id<'users'>
+  kind:
+    | 'attribute_changed'
+    | 'quantity_added'
+    | 'quantity_changed'
+    | 'quantity_removed'
+    | 'photo_removed'
+  fieldKey?: string
+  fieldLabel?: string
+  oldValue?: string
+  newValue?: string
+  summary: string
+  createdAt: number
+  updatedAt: number
+}
+```
+
+Change events provide the audit portion of a task's activity feed. The activity query merges these
+events with existing notes and active photos, resolves actor names, adds the task-created event, and
+sorts the result newest first. Rapid edits to the same field by the same user are coalesced for 15
+seconds so typing a number or title produces one meaningful history entry instead of one entry per
+keystroke. Attribute history begins when this table is introduced; earlier values cannot be
+reconstructed from the current task record.
+
+Indexes: `by_project` and compound `by_task_createdAt`.
 
 ### `attachments`
 

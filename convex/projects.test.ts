@@ -36,6 +36,47 @@ async function seedMembership(
 }
 
 describe('projects, memberships, and invitations', () => {
+  it('stores a project-wide task attribute layout for owners and admins', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Layout Owner', 'layout-owner@example.com');
+    const adminId = await seedUser(t, 'Layout Admin', 'layout-admin@example.com');
+    const memberId = await seedUser(t, 'Layout Member', 'layout-member@example.com');
+    const viewerId = await seedUser(t, 'Layout Viewer', 'layout-viewer@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const admin = t.withIdentity({ subject: adminId });
+    const member = t.withIdentity({ subject: memberId });
+    const viewer = t.withIdentity({ subject: viewerId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Attribute Layout' });
+    await seedMembership(t, projectId, adminId, ownerId, 'admin');
+    await seedMembership(t, projectId, memberId, ownerId, 'member');
+    await seedMembership(t, projectId, viewerId, ownerId, 'viewer');
+
+    const settings = [
+      { key: 'quantity' as const, visible: true },
+      { key: 'plan' as const, visible: true },
+      { key: 'location' as const, visible: false },
+      { key: 'startDate' as const, visible: true },
+      { key: 'dueDate' as const, visible: true },
+      { key: 'manpower' as const, visible: false },
+      { key: 'cost' as const, visible: true },
+      { key: 'tags' as const, visible: true },
+    ];
+    await admin.mutation(api.projects.updateTaskAttributeSettings, { projectId, settings });
+    expect((await viewer.query(api.projects.get, { projectId }))?.taskAttributeSettings).toEqual(
+      settings,
+    );
+
+    await expect(
+      member.mutation(api.projects.updateTaskAttributeSettings, { projectId, settings }),
+    ).rejects.toThrow('Insufficient project permissions');
+    await expect(
+      owner.mutation(api.projects.updateTaskAttributeSettings, {
+        projectId,
+        settings: [...settings.slice(0, -1), { key: 'cost', visible: false }],
+      }),
+    ).rejects.toThrow('include every configurable attribute once');
+  });
+
   it('creates, lists, renames, invites, accepts, counts accepted members, and leaves safely', async () => {
     const t = createTest();
     const ownerId = await seedUser(t, 'Owner User', 'owner@example.com');

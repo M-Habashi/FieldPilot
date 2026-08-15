@@ -20,6 +20,7 @@ export function ProjectApp() {
   const [activeSheetId, setActiveSheetId] = useState<Id<'sheets'> | null>(
     () => (readAppView().sheetId as Id<'sheets'> | null) ?? null,
   );
+  const [pendingTaskId, setPendingTaskId] = useState<Id<'tasks'> | null>(null);
 
   useEffect(() => {
     patchAppView({ projectId: activeProjectId, sheetId: activeSheetId });
@@ -63,6 +64,12 @@ export function ProjectApp() {
         role={activeRow.membership.role}
         userId={user?._id ?? 'pending-user'}
         sheetId={activeSheetId}
+        initialTaskId={pendingTaskId}
+        onInitialTaskOpened={() => setPendingTaskId(null)}
+        onOpenQuantityTask={(sheetId, taskId) => {
+          setPendingTaskId(taskId);
+          setActiveSheetId(sheetId);
+        }}
         onBackToProject={() => setActiveSheetId(null)}
       />
     );

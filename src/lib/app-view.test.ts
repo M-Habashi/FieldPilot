@@ -35,6 +35,15 @@ describe('readAppView', () => {
     expect(readAppView()).toEqual({ projectId: 'p1', sheetId: 's1', view: 'map' });
   });
 
+  it('restores the project-wide quantities view', () => {
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ projectId: 'p1', sheetId: 's1', view: 'quantities' }),
+    );
+
+    expect(readAppView()).toEqual({ projectId: 'p1', sheetId: 's1', view: 'quantities' });
+  });
+
   it('drops a sheet stored without its project, which cannot be reopened safely', () => {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sheetId: 's1', view: 'map' }));
 

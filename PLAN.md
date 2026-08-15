@@ -35,8 +35,10 @@ the office or the field.
 
 - [ ] Drop a pin anywhere on a sheet with one click/tap
 - [ ] Pin opens a side panel with full detail view
-- [ ] Task properties: title, category, status (P1/P2/P3 priority or custom workflow),
-      assignee(s), watcher(s), start/due date, tags, cost/manpower fields (later)
+- [x] Consistent core task properties: title, category, status, P1/P2/P3 priority, one project
+      assignee, planned/completed/remaining quantity, start/due dates, location, tags, manpower,
+      and cost/currency
+- [ ] Multiple assignees, watchers, and custom project workflows
 - [ ] Notes / comment thread on each pin (chronological activity feed)
 - [ ] Photo attachments (camera or file upload), file attachments
 - [ ] Checklists inside a task
@@ -190,8 +192,8 @@ properties, notes, and images. Everything persists locally.
 **1.3 Side panel (task detail)**
 
 - Slide-in panel from the right when a pin is selected
-- Editable fields: title, category (color-coded), status, priority, assignee (free text for
-  now), due date, description
+- Editable fields: title, category, status, priority, project-member assignee, quantity progress,
+  start/due dates, location, tags, manpower, cost, pin color, and description
 - Notes: add timestamped notes, shown newest-first
 - Images: attach one or more images (file picker / paste / drag-drop), thumbnail grid,
   click to view full-size (lightbox)

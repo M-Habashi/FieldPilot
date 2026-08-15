@@ -41,21 +41,23 @@ disable new temporary-account sign-ins everywhere, set
 
 ## Using it
 
-| Action           | How                                                                                                                        |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Open a plan      | **Open PDF** in the action bar, or drag a PDF onto the empty state                                                         |
-| Navigate sheets  | Status-bar arrows (bottom), or `←` / `→`                                                                                   |
-| Pan / zoom       | Drag to pan (or middle-mouse drag in any mode), scroll or pinch to zoom, controls bottom-right                             |
-| Add a pin        | Toggle **Add pin** (or press `P`), click the sheet                                                                         |
-| Edit a task      | Click its pin — the properties panel has title, status, priority, category, assignee, due date, description, notes, photos |
-| Move a pin       | Drag it                                                                                                                    |
-| Add a markup     | **Markup** menu: text, pen, highlight, lines, shapes, revision clouds, callouts, or Cloud+                                 |
-| Edit a markup    | Choose **Markup → Select / edit**, then drag the markup or its blue handles; double-click its text to edit                 |
-| Measure a plan   | **Measure** menu: calibrate a sheet, then add dimensions, areas, radii, diameters, or arcs                                 |
-| Constrain / snap | Hold `Shift` for orthogonal drawing; toggle **Snap** to target plan geometry and other markup points                       |
-| Save annotations | **File → Save marked-up PDF** downloads the source PDF with its current markups flattened onto each sheet                  |
-| Task list        | Toggle **Tasks** (right-side pane) — click a row to jump to its pin                                                        |
-| Backup / share   | **Import** / **Export** in the action bar (JSON, photos included)                                                          |
+| Action           | How                                                                                                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open a plan      | **Open PDF** in the action bar, or drag a PDF onto the empty state                                                                                                                        |
+| Navigate sheets  | Status-bar arrows (bottom), or `←` / `→`                                                                                                                                                  |
+| Pan / zoom       | Drag to pan (or middle-mouse drag in any mode), scroll or pinch to zoom, controls bottom-right                                                                                            |
+| Add a pin        | Toggle **Add pin** (or press `P`), click the sheet                                                                                                                                        |
+| Edit a task      | Click its pin — edit workflow, assignment, one or more quantity items, dates, location, tags, resources, notes, and photos; owners/admins can manage the shared optional-attribute layout |
+| Move a pin       | Drag it                                                                                                                                                                                   |
+| Add a markup     | **Markup** menu: text, pen, highlight, lines, shapes, revision clouds, callouts, or Cloud+                                                                                                |
+| Edit a markup    | Choose **Markup → Select / edit**, then drag the markup or its blue handles; double-click its text to edit                                                                                |
+| Measure a plan   | **Measure** menu: calibrate a sheet, then add dimensions, areas, radii, diameters, or arcs                                                                                                |
+| Constrain / snap | Hold `Shift` for orthogonal drawing; toggle **Snap** to target plan geometry and other markup points                                                                                      |
+| Save annotations | **File → Save marked-up PDF** downloads the source PDF with its current markups flattened onto each sheet                                                                                 |
+| Task list        | Toggle **Tasks** (right-side pane) — click a row to jump to its pin                                                                                                                       |
+| Quantity report  | Open **Quantities** in the project rail to total planned, completed, remaining, and overrun work across every plan                                                                        |
+| Task activity    | Open a pin to review dated comments, photo uploads, and attribute or quantity changes in one chronological log                                                                            |
+| Backup / share   | **Import** / **Export** in the action bar (JSON, photos included)                                                                                                                         |
 
 Tasks, markups, and per-sheet measurement calibrations are stored in Convex and shared with
 project members according to their role.

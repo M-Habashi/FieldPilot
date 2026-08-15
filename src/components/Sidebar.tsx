@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ChevronsLeftRight, Layers, Map } from 'lucide-react';
+import { ChevronsLeftRight, Layers, Map, Sigma } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useProject } from '../store/project';
 
@@ -15,11 +15,13 @@ import { useProject } from '../store/project';
 export function Sidebar({
   onShowPlans,
   onShowMap,
+  onShowQuantities,
   activeItem = 'plans',
 }: {
   onShowPlans?: () => void;
   onShowMap?: () => void;
-  activeItem?: 'plans' | 'map';
+  onShowQuantities?: () => void;
+  activeItem?: 'plans' | 'map' | 'quantities';
 } = {}) {
   const collapsed = useProject((s) => s.sidebarCollapsed);
   const toggleSidebar = useProject((s) => s.toggleSidebar);
@@ -111,6 +113,13 @@ export function Sidebar({
             active={activeItem === 'map'}
             collapsed={collapsed && !mobileOpen}
             onClick={navTo(onShowMap)}
+          />
+          <SidebarItem
+            icon={<Sigma />}
+            label="Quantities"
+            active={activeItem === 'quantities'}
+            collapsed={collapsed && !mobileOpen}
+            onClick={navTo(onShowQuantities)}
           />
         </nav>
 

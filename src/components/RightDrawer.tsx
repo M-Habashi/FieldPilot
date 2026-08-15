@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react';
 import { useProject } from '../store/project';
 import { usePresence } from '../hooks/usePresence';
 import { TaskListBody } from './TaskList';
-import { TaskPanelBody } from './TaskPanel';
+import { TaskPanelBody, type ProjectMemberOption } from './TaskPanel';
+import type {
+  CustomTaskAttributeDefinition,
+  CustomTaskAttributeValue,
+  CustomTaskAttributeValueRow,
+  TaskAttributeConfigurationDraft,
+  TaskAttributeLayoutItem,
+} from '../task-attributes';
+import type { QuantityItemOption, TaskQuantityLine, TaskQuantityPatch } from '../quantities';
+import type { Id } from '../../convex/_generated/dataModel';
+import type { TaskActivityEntry } from '../task-activity';
 
 /**
  * One right-hand drawer shell shared by Tasks and Task Properties. Both render
@@ -13,7 +23,44 @@ import { TaskPanelBody } from './TaskPanel';
  * Layout: always overlays the plan. Reflowing the viewer while the drawer width
  * animates makes the PDF appear to flash/jump during a double-click open.
  */
-export function RightDrawer() {
+export function RightDrawer({
+  canEdit,
+  canManageAttributes,
+  members,
+  projectId,
+  quantityItems,
+  taskQuantityLines,
+  taskActivity,
+  taskAttributeLayout,
+  customTaskAttributeDefinitions,
+  customTaskAttributeValues,
+  onTaskAttributeConfigurationChange,
+  onCustomTaskAttributeValueChange,
+  onAddTaskQuantityLine,
+  onUpdateTaskQuantityLine,
+  onRemoveTaskQuantityLine,
+}: {
+  canEdit: boolean;
+  canManageAttributes: boolean;
+  members: ProjectMemberOption[];
+  projectId: Id<'projects'>;
+  quantityItems: QuantityItemOption[];
+  taskQuantityLines: TaskQuantityLine[] | undefined;
+  taskActivity: TaskActivityEntry[] | undefined;
+  taskAttributeLayout: TaskAttributeLayoutItem[];
+  customTaskAttributeDefinitions: CustomTaskAttributeDefinition[];
+  customTaskAttributeValues: CustomTaskAttributeValueRow[];
+  onTaskAttributeConfigurationChange: (
+    configuration: TaskAttributeConfigurationDraft,
+  ) => Promise<void>;
+  onCustomTaskAttributeValueChange: (
+    definitionId: string,
+    value: CustomTaskAttributeValue | null,
+  ) => Promise<void>;
+  onAddTaskQuantityLine: () => Promise<void>;
+  onUpdateTaskQuantityLine: (lineId: string | undefined, patch: TaskQuantityPatch) => Promise<void>;
+  onRemoveTaskQuantityLine: (lineId: string | undefined) => Promise<void>;
+}) {
   const taskListOpen = useProject((s) => s.taskListOpen);
   const selectedTaskId = useProject((s) => s.selectedTaskId);
   const present = taskListOpen || selectedTaskId !== null;
@@ -46,10 +93,7 @@ export function RightDrawer() {
       data-state={state}
       onAnimationEnd={onAnimationEnd}
       aria-label={showProps ? 'Task details' : 'Task list'}
-      className={
-        'fp-panel z-30 flex min-h-0 w-full max-w-[var(--fp-drawer-width)] flex-col ' +
-        'absolute inset-y-0 right-0'
-      }
+      className={`${showProps ? 'fp-task-workspace max-w-[min(1120px,100%)]' : 'fp-task-queue max-w-[var(--fp-drawer-width)]'} fp-panel absolute inset-y-0 right-0 z-30 flex min-h-0 w-full flex-col`}
     >
       <div
         // Keep the Properties view mounted while switching tasks. A task-id key
@@ -58,7 +102,28 @@ export function RightDrawer() {
         key={showProps ? 'props' : 'list'}
         className="fp-drawer-view flex min-h-0 flex-1 flex-col"
       >
-        {showProps && visibleTaskId ? <TaskPanelBody taskId={visibleTaskId} /> : <TaskListBody />}
+        {showProps && visibleTaskId ? (
+          <TaskPanelBody
+            taskId={visibleTaskId}
+            canEdit={canEdit}
+            canManageAttributes={canManageAttributes}
+            members={members}
+            projectId={projectId}
+            quantityItems={quantityItems}
+            taskQuantityLines={taskQuantityLines}
+            taskActivity={taskActivity}
+            taskAttributeLayout={taskAttributeLayout}
+            customTaskAttributeDefinitions={customTaskAttributeDefinitions}
+            customTaskAttributeValues={customTaskAttributeValues}
+            onTaskAttributeConfigurationChange={onTaskAttributeConfigurationChange}
+            onCustomTaskAttributeValueChange={onCustomTaskAttributeValueChange}
+            onAddTaskQuantityLine={onAddTaskQuantityLine}
+            onUpdateTaskQuantityLine={onUpdateTaskQuantityLine}
+            onRemoveTaskQuantityLine={onRemoveTaskQuantityLine}
+          />
+        ) : (
+          <TaskListBody canEdit={canEdit} members={members} projectId={projectId} />
+        )}
       </div>
     </aside>
   );

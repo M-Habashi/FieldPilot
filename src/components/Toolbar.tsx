@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import {
   ArrowUpRight,
+  BriefcaseBusiness,
   Circle,
   Cloud,
   Download,
@@ -14,15 +15,16 @@ import {
   Magnet,
   MessageSquareText,
   Minus,
+  MoreHorizontal,
   MousePointer2,
   Pencil,
   Pin,
+  Redo2,
   Ruler,
   Scale,
   Shapes,
   Square,
   Type,
-  Redo2,
   Undo2,
 } from 'lucide-react';
 import { useProject } from '../store/project';
@@ -33,7 +35,6 @@ import {
   ActionBarButton,
   ActionBarDot,
   ActionBarGroup,
-  ActionBarSeparator,
 } from './ui/action-bar';
 import { Button } from './ui/button';
 import { Dropdown, DropdownItem, DropdownLabel } from './ui/dropdown-menu';
@@ -49,7 +50,7 @@ interface ToolbarProps {
 }
 
 export function AppHeader({ onLogoClick }: { onLogoClick?: () => void } = {}) {
-  const fileName = useProject((s) => s.fileName);
+  const fileName = useProject((state) => state.fileName);
   const { signOut } = useAuthActions();
 
   const handleSignOut = () => {
@@ -102,133 +103,89 @@ export function Toolbar({
   onSavePdf,
   allowLocalFiles = true,
 }: ToolbarProps) {
-  const addPinMode = useProject((s) => s.addPinMode);
-  const setAddPinMode = useProject((s) => s.setAddPinMode);
-  const taskListOpen = useProject((s) => s.taskListOpen);
-  const selectedTaskId = useProject((s) => s.selectedTaskId);
-  const showTaskList = useProject((s) => s.showTaskList);
-  const closeTaskList = useProject((s) => s.closeTaskList);
-  const taskCount = useProject((s) => Object.keys(s.tasks).length);
-  const markupTool = useProject((s) => s.markupTool);
-  const setMarkupTool = useProject((s) => s.setMarkupTool);
-  const currentPage = useProject((s) => s.currentPage);
-  const calibrated = useProject((s) => Boolean(s.calibrations[s.currentPage]));
-  const snappingEnabled = useProject((s) => s.snappingEnabled);
-  const setSnappingEnabled = useProject((s) => s.setSnappingEnabled);
-  const canUndo = useProject((s) => s.historyPast.length > 0);
-  const canRedo = useProject((s) => s.historyFuture.length > 0);
-  const undo = useProject((s) => s.undo);
-  const redo = useProject((s) => s.redo);
+  const addPinMode = useProject((state) => state.addPinMode);
+  const setAddPinMode = useProject((state) => state.setAddPinMode);
+  const taskListOpen = useProject((state) => state.taskListOpen);
+  const selectedTaskId = useProject((state) => state.selectedTaskId);
+  const showTaskList = useProject((state) => state.showTaskList);
+  const closeTaskList = useProject((state) => state.closeTaskList);
+  const taskCount = useProject((state) => Object.keys(state.tasks).length);
+  const markupTool = useProject((state) => state.markupTool);
+  const setMarkupTool = useProject((state) => state.setMarkupTool);
+  const currentPage = useProject((state) => state.currentPage);
+  const calibrated = useProject((state) => Boolean(state.calibrations[state.currentPage]));
+  const snappingEnabled = useProject((state) => state.snappingEnabled);
+  const setSnappingEnabled = useProject((state) => state.setSnappingEnabled);
+  const canUndo = useProject((state) => state.historyPast.length > 0);
+  const canRedo = useProject((state) => state.historyFuture.length > 0);
+  const undo = useProject((state) => state.undo);
+  const redo = useProject((state) => state.redo);
   const taskListActive = taskListOpen && selectedTaskId === null;
   const measuring =
     markupTool === 'calibrate' ||
     markupTool === 'dimension' ||
+    markupTool === 'area' ||
     markupTool === 'radius' ||
     markupTool === 'diameter' ||
     markupTool === 'arc';
-
+  const drawing = Boolean(markupTool) && !measuring;
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
+  const chooseMarkup = (tool: Parameters<typeof setMarkupTool>[0], close: () => void) => {
+    setMarkupTool(tool);
+    close();
+  };
+
   return (
     <>
-      {/* One compact workspace bar, shared with every other tab via ActionBar.
-          Its first control is the mobile navigation button; desktop content
-          starts directly beside the reserved sidebar rail. */}
       <ActionBar label="Plan tools" onOpenNav={() => useProject.getState().toggleSidebarMobile()}>
         <ActionBarGroup>
-          <Dropdown
-            align="left"
-            trigger={<ActionBarButton icon={<FolderOpen />} label="File" menu />}
-          >
-            {(close) => (
-              <>
-                <DropdownItem
-                  className="text-t2 hover:text-t1"
-                  disabled={!allowLocalFiles}
-                  onClick={() => {
-                    pdfInputRef.current?.click();
-                    close();
-                  }}
-                >
-                  <FolderOpen />
-                  Open PDF
-                </DropdownItem>
-                <DropdownItem
-                  className="text-t2 hover:text-t1"
-                  disabled={!hasDoc || !allowLocalFiles}
-                  onClick={() => {
-                    jsonInputRef.current?.click();
-                    close();
-                  }}
-                >
-                  <FileUp />
-                  Import project
-                </DropdownItem>
-                <DropdownItem
-                  className="text-t2 hover:text-t1"
-                  disabled={!hasDoc}
-                  onClick={() => {
-                    const s = useProject.getState();
-                    void exportProject({
-                      fileName: s.fileName,
-                      fingerprint: s.fingerprint,
-                      nextSeq: s.nextSeq,
-                      tasks: s.tasks,
-                      markups: s.markups,
-                      calibrations: s.calibrations,
-                    });
-                    close();
-                  }}
-                >
-                  <Download />
-                  Export project
-                </DropdownItem>
-                <DropdownItem
-                  className="text-t2 hover:text-t1"
-                  disabled={!hasDoc || savingPdf}
-                  onClick={() => {
-                    onSavePdf();
-                    close();
-                  }}
-                >
-                  <FileDown />
-                  {savingPdf ? 'Saving PDF…' : 'Save marked-up PDF'}
-                </DropdownItem>
-              </>
-            )}
-          </Dropdown>
-
-          <ActionBarSeparator />
-
-          <ActionBarButton
-            icon={<Undo2 />}
-            label="Undo"
-            labelFrom="lg"
-            title="Undo (Ctrl/Cmd+Z)"
-            disabled={!hasDoc || !canUndo}
-            onClick={undo}
-          />
-          <ActionBarButton
-            icon={<Redo2 />}
-            label="Redo"
-            labelFrom="lg"
-            title="Redo (Ctrl/Cmd+Y)"
-            disabled={!hasDoc || !canRedo}
-            onClick={redo}
-          />
-
-          <ActionBarSeparator />
-
           <ActionBarButton
             icon={<Pin />}
             label="Add pin"
             title="Add pin (P)"
             active={addPinMode}
+            emphasis
             aria-pressed={addPinMode}
             disabled={!hasDoc}
             onClick={() => setAddPinMode(!addPinMode)}
           />
+
+          <Dropdown
+            align="left"
+            trigger={
+              <ActionBarButton
+                icon={<BriefcaseBusiness />}
+                label="Work"
+                active={taskListActive}
+                disabled={!hasDoc}
+                menu
+              >
+                {taskCount > 0 && <ActionBarBadge>{taskCount}</ActionBarBadge>}
+              </ActionBarButton>
+            }
+          >
+            {(close) => (
+              <>
+                <DropdownLabel>Field work</DropdownLabel>
+                <DropdownItem
+                  onClick={() => {
+                    if (taskListActive) closeTaskList();
+                    else showTaskList();
+                    close();
+                  }}
+                >
+                  <ListTodo />
+                  {taskListActive ? 'Close task queue' : 'Open task queue'}
+                  {taskCount > 0 && (
+                    <span className="ml-auto font-mono text-[10px]">{taskCount}</span>
+                  )}
+                </DropdownItem>
+              </>
+            )}
+          </Dropdown>
+
           <Dropdown
             align="left"
             trigger={
@@ -236,90 +193,54 @@ export function Toolbar({
                 icon={<Shapes />}
                 label="Markup"
                 aria-label="Markup tools"
-                active={Boolean(markupTool)}
+                active={drawing}
                 disabled={!hasDoc}
                 menu
               />
             }
           >
-            {(close) => {
-              const choose = (tool: Parameters<typeof setMarkupTool>[0]) => {
-                setMarkupTool(tool);
-                close();
-              };
-              return (
-                <>
-                  <DropdownLabel>Edit</DropdownLabel>
-                  <DropdownItem onClick={() => choose('select')}>
-                    <MousePointer2 />
-                    Select / edit
-                  </DropdownItem>
-                  <DropdownItem
-                    className="sm:hidden"
-                    disabled={!canUndo}
-                    onClick={() => {
-                      undo();
-                      close();
-                    }}
-                  >
-                    <Undo2 /> Undo
-                  </DropdownItem>
-                  <DropdownItem
-                    className="sm:hidden"
-                    disabled={!canRedo}
-                    onClick={() => {
-                      redo();
-                      close();
-                    }}
-                  >
-                    <Redo2 /> Redo
-                  </DropdownItem>
-                  <DropdownLabel>Text & freehand</DropdownLabel>
-                  <DropdownItem onClick={() => choose('text')}>
-                    <Type />
-                    Text box
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('pen')}>
-                    <Pencil />
-                    Pen
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('highlight')}>
-                    <Highlighter />
-                    Highlight
-                  </DropdownItem>
-                  <DropdownLabel>Lines & shapes</DropdownLabel>
-                  <DropdownItem onClick={() => choose('line')}>
-                    <Minus />
-                    Line
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('arrow')}>
-                    <ArrowUpRight />
-                    Arrow
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('rectangle')}>
-                    <Square />
-                    Rectangle
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('ellipse')}>
-                    <Circle />
-                    Ellipse
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('cloud')}>
-                    <Cloud />
-                    Revision cloud
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('callout')}>
-                    <MessageSquareText />
-                    Callout
-                  </DropdownItem>
-                  <DropdownItem onClick={() => choose('cloud-plus')}>
-                    <Cloud />
-                    Cloud+
-                  </DropdownItem>
-                </>
-              );
-            }}
+            {(close) => (
+              <>
+                <DropdownLabel>Edit</DropdownLabel>
+                <DropdownItem onClick={() => chooseMarkup('select', close)}>
+                  <MousePointer2 /> Select / edit markup
+                </DropdownItem>
+                <DropdownLabel>Text and freehand</DropdownLabel>
+                <DropdownItem onClick={() => chooseMarkup('text', close)}>
+                  <Type /> Text box
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('pen', close)}>
+                  <Pencil /> Pen
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('highlight', close)}>
+                  <Highlighter /> Highlight
+                </DropdownItem>
+                <DropdownLabel>Lines and shapes</DropdownLabel>
+                <DropdownItem onClick={() => chooseMarkup('line', close)}>
+                  <Minus /> Line
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('arrow', close)}>
+                  <ArrowUpRight /> Arrow
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('rectangle', close)}>
+                  <Square /> Rectangle
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('ellipse', close)}>
+                  <Circle /> Ellipse
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('cloud', close)}>
+                  <Cloud /> Revision cloud
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('callout', close)}>
+                  <MessageSquareText /> Callout
+                </DropdownItem>
+                <DropdownItem onClick={() => chooseMarkup('cloud-plus', close)}>
+                  <Cloud /> Cloud+
+                </DropdownItem>
+              </>
+            )}
           </Dropdown>
+
           <Dropdown
             align="left"
             trigger={
@@ -343,95 +264,123 @@ export function Toolbar({
             {(close) => (
               <>
                 <DropdownLabel>Sheet {currentPage}</DropdownLabel>
-                <DropdownItem
-                  onClick={() => {
-                    setMarkupTool('calibrate');
-                    close();
-                  }}
-                >
-                  <Scale />
-                  {calibrated ? 'Recalibrate scale' : 'Calibrate scale'}
+                <DropdownItem onClick={() => chooseMarkup('calibrate', close)}>
+                  <Scale /> {calibrated ? 'Recalibrate scale' : 'Calibrate scale'}
                 </DropdownItem>
                 <DropdownItem
                   disabled={!calibrated}
-                  onClick={() => {
-                    setMarkupTool('dimension');
-                    close();
-                  }}
+                  onClick={() => chooseMarkup('dimension', close)}
                 >
-                  <Ruler />
-                  Dimension{!calibrated && ' (calibrate first)'}
+                  <Ruler /> Dimension{!calibrated && ' (calibrate first)'}
+                </DropdownItem>
+                <DropdownItem disabled={!calibrated} onClick={() => chooseMarkup('area', close)}>
+                  <Square /> Area{!calibrated && ' (calibrate first)'}
+                </DropdownItem>
+                <DropdownItem disabled={!calibrated} onClick={() => chooseMarkup('radius', close)}>
+                  <Circle /> Radius{!calibrated && ' (calibrate first)'}
                 </DropdownItem>
                 <DropdownItem
                   disabled={!calibrated}
-                  onClick={() => {
-                    setMarkupTool('radius');
-                    close();
-                  }}
+                  onClick={() => chooseMarkup('diameter', close)}
                 >
-                  <Circle />
-                  Radius{!calibrated && ' (calibrate first)'}
+                  <Circle /> Diameter{!calibrated && ' (calibrate first)'}
                 </DropdownItem>
-                <DropdownItem
-                  disabled={!calibrated}
-                  onClick={() => {
-                    setMarkupTool('diameter');
-                    close();
-                  }}
-                >
-                  <Circle />
-                  Diameter{!calibrated && ' (calibrate first)'}
-                </DropdownItem>
-                <DropdownItem
-                  disabled={!calibrated}
-                  onClick={() => {
-                    setMarkupTool('arc');
-                    close();
-                  }}
-                >
-                  <Circle />
-                  Arc{!calibrated && ' (calibrate first)'}
-                </DropdownItem>
-                <DropdownItem
-                  disabled={!calibrated}
-                  onClick={() => {
-                    setMarkupTool('area');
-                    close();
-                  }}
-                >
-                  <Square />
-                  Area{!calibrated && ' (calibrate first)'}
+                <DropdownItem disabled={!calibrated} onClick={() => chooseMarkup('arc', close)}>
+                  <Circle /> Arc{!calibrated && ' (calibrate first)'}
                 </DropdownItem>
               </>
             )}
           </Dropdown>
-          <ActionBarButton
-            icon={<Magnet />}
-            label="Snap"
-            aria-label={snappingEnabled ? 'Turn snapping off' : 'Turn snapping on'}
-            aria-pressed={snappingEnabled}
-            active={snappingEnabled}
-            disabled={!hasDoc}
-            onClick={() => setSnappingEnabled(!snappingEnabled)}
-            title={`Snap to plan points: ${snappingEnabled ? 'On' : 'Off'}`}
-          >
-            <ActionBarBadge>{snappingEnabled ? 'On' : 'Off'}</ActionBarBadge>
-          </ActionBarButton>
-        </ActionBarGroup>
 
-        <ActionBarGroup align="end">
-          <ActionBarButton
-            icon={<ListTodo />}
-            label="Tasks"
-            aria-label={taskListActive ? 'Close tasks' : 'Show tasks'}
-            aria-pressed={taskListActive}
-            active={taskListActive}
-            disabled={!hasDoc}
-            onClick={() => (taskListActive ? closeTaskList() : showTaskList())}
-            title={taskListActive ? 'Close tasks' : 'Show tasks'}
+          <Dropdown
+            align="left"
+            trigger={<ActionBarButton icon={<MoreHorizontal />} label="More" menu />}
           >
-            {taskCount > 0 && <ActionBarBadge>{taskCount}</ActionBarBadge>}
-          </ActionBarButton>
+            {(close) => (
+              <>
+                <DropdownLabel>History</DropdownLabel>
+                <DropdownItem
+                  disabled={!hasDoc || !canUndo}
+                  onClick={() => {
+                    undo();
+                    close();
+                  }}
+                >
+                  <Undo2 /> Undo <span className="ml-auto text-[10px] text-t3">Ctrl/Cmd+Z</span>
+                </DropdownItem>
+                <DropdownItem
+                  disabled={!hasDoc || !canRedo}
+                  onClick={() => {
+                    redo();
+                    close();
+                  }}
+                >
+                  <Redo2 /> Redo <span className="ml-auto text-[10px] text-t3">Ctrl/Cmd+Y</span>
+                </DropdownItem>
+                <DropdownLabel>Plan aids</DropdownLabel>
+                <DropdownItem
+                  disabled={!hasDoc}
+                  onClick={() => {
+                    setSnappingEnabled(!snappingEnabled);
+                    close();
+                  }}
+                >
+                  <Magnet /> Snapping
+                  <span className="ml-auto font-mono text-[10px]">
+                    {snappingEnabled ? 'On' : 'Off'}
+                  </span>
+                </DropdownItem>
+                <DropdownLabel>Files</DropdownLabel>
+                {allowLocalFiles && (
+                  <>
+                    <DropdownItem
+                      onClick={() => {
+                        pdfInputRef.current?.click();
+                        close();
+                      }}
+                    >
+                      <FolderOpen /> Open PDF
+                    </DropdownItem>
+                    <DropdownItem
+                      disabled={!hasDoc}
+                      onClick={() => {
+                        jsonInputRef.current?.click();
+                        close();
+                      }}
+                    >
+                      <FileUp /> Import project
+                    </DropdownItem>
+                  </>
+                )}
+                <DropdownItem
+                  disabled={!hasDoc}
+                  onClick={() => {
+                    const state = useProject.getState();
+                    void exportProject({
+                      fileName: state.fileName,
+                      fingerprint: state.fingerprint,
+                      nextSeq: state.nextSeq,
+                      tasks: state.tasks,
+                      markups: state.markups,
+                      calibrations: state.calibrations,
+                    });
+                    close();
+                  }}
+                >
+                  <Download /> Export project
+                </DropdownItem>
+                <DropdownItem
+                  disabled={!hasDoc || savingPdf}
+                  onClick={() => {
+                    onSavePdf();
+                    close();
+                  }}
+                >
+                  <FileDown /> {savingPdf ? 'Saving PDF…' : 'Save marked-up PDF'}
+                </DropdownItem>
+              </>
+            )}
+          </Dropdown>
         </ActionBarGroup>
       </ActionBar>
 
@@ -440,10 +389,10 @@ export function Toolbar({
         type="file"
         accept="application/pdf,.pdf"
         className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onOpenPdf(f);
-          e.target.value = '';
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) onOpenPdf(file);
+          event.target.value = '';
         }}
       />
       <input
@@ -451,10 +400,10 @@ export function Toolbar({
         type="file"
         accept="application/json,.json"
         className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onImportJson(f);
-          e.target.value = '';
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) onImportJson(file);
+          event.target.value = '';
         }}
       />
     </>

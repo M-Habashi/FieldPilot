@@ -36,7 +36,18 @@ type RemoteTaskPatch = Partial<
     | 'category'
     | 'color'
     | 'assignee'
+    | 'assigneeUserId'
+    | 'plannedQuantity'
+    | 'completedQuantity'
+    | 'quantityUnit'
+    | 'quantityItemId'
+    | 'startDate'
     | 'dueDate'
+    | 'locationText'
+    | 'tags'
+    | 'manpowerCount'
+    | 'costMinor'
+    | 'currencyCode'
   >
 >;
 
@@ -170,7 +181,18 @@ function remotePatch(task: Task): RemoteTaskPatch {
     category: task.category,
     color: task.color,
     assignee: task.assignee,
+    assigneeUserId: task.assigneeUserId,
+    plannedQuantity: task.plannedQuantity,
+    completedQuantity: task.completedQuantity,
+    quantityUnit: task.quantityUnit,
+    quantityItemId: task.quantityItemId,
+    startDate: task.startDate,
     dueDate: task.dueDate,
+    locationText: task.locationText,
+    tags: task.tags,
+    manpowerCount: task.manpowerCount,
+    costMinor: task.costMinor,
+    currencyCode: task.currencyCode,
   };
 }
 
@@ -378,7 +400,18 @@ export const useProject = create<ProjectState>((set, get) => ({
       category: 'general',
       color: get().lastTaskColor,
       assignee: '',
+      assigneeUserId: null,
+      plannedQuantity: null,
+      completedQuantity: null,
+      quantityUnit: 'EA',
+      quantityItemId: null,
+      startDate: null,
       dueDate: null,
+      locationText: '',
+      tags: [],
+      manpowerCount: null,
+      costMinor: null,
+      currencyCode: 'USD',
       notes: [],
       photos: [],
       createdAt: now,
