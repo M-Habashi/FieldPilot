@@ -19,6 +19,7 @@ import type * as lib_authz from "../lib/authz.js";
 import type * as lib_demoProject from "../lib/demoProject.js";
 import type * as lib_markup from "../lib/markup.js";
 import type * as lib_photoExif from "../lib/photoExif.js";
+import type * as lib_photoExifFallback from "../lib/photoExifFallback.js";
 import type * as lib_taskActivity from "../lib/taskActivity.js";
 import type * as lib_taskAttributes from "../lib/taskAttributes.js";
 import type * as lib_tmpAccountDevFeature from "../lib/tmpAccountDevFeature.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "lib/demoProject": typeof lib_demoProject;
   "lib/markup": typeof lib_markup;
   "lib/photoExif": typeof lib_photoExif;
+  "lib/photoExifFallback": typeof lib_photoExifFallback;
   "lib/taskActivity": typeof lib_taskActivity;
   "lib/taskAttributes": typeof lib_taskAttributes;
   "lib/tmpAccountDevFeature": typeof lib_tmpAccountDevFeature;
