@@ -23,7 +23,7 @@ import { useBackGuard } from '../../hooks/useBackGuard';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import type { PhotoLocation } from '../../lib/photo-location';
-import { photoContentType } from '../../lib/photo-file';
+import { photoContentType, photoPickerAccept } from '../../lib/photo-file';
 import {
   createPhotoUploadAttemptId,
   inspectSelectedPhotoBytes,
@@ -332,6 +332,10 @@ export function ProjectPhotoMap({
   const [uploading, setUploading] = useState(false);
   const [locating, setLocating] = useState(false);
   const locatingRef = useRef(false);
+  const pickerAccept = useMemo(
+    () => photoPickerAccept(detectLocationClient() === 'android'),
+    [],
+  );
   const [uploadNotice, setUploadNotice] = useState<UploadNotice | null>(null);
   // Recovery steps for a blocked location permission. Deliberately not on the
   // 3-second timer: the user needs to follow them inside two settings screens,
@@ -1902,7 +1906,7 @@ export function ProjectPhotoMap({
       <input
         ref={fileInputRef}
         type="file"
-        accept=""
+        accept={pickerAccept}
         multiple
         className="hidden"
         onChange={(event) => {
