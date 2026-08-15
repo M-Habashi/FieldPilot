@@ -1,7 +1,15 @@
 @import 'tailwindcss';
 
 @import './themes/tokens.css';
+
 @import './components/marketing/marketing.css';
+
+@media (pointer: coarse) {
+  .fp-select-trigger,
+  .fp-select-option {
+    min-height: 44px;
+  }
+}
 
 /* Map raw --fp-* tokens to Tailwind semantic utilities.
    `inline` keeps the var() reference so per-design overrides win. */
@@ -726,6 +734,10 @@ select {
   .fp-panel {
     max-width: 86vw;
   }
+
+  .fp-task-workspace {
+    max-width: 100vw;
+  }
 }
 
 /* Touch: bigger hit targets for the zoom/fit bar and the resize handles. */
@@ -856,6 +868,13 @@ select {
   to {
     transform: translateX(18px);
     opacity: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .fp-task-queue .fp-task-queue-touch {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 

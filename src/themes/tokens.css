@@ -16,12 +16,14 @@
   /* Ink and semantic colors */
   --fp-text-1: #172236;
   --fp-text-2: #46586d;
-  --fp-text-3: #687b91;
+  --fp-text-3: #607287;
   --fp-accent: #1767c9;
   --fp-accent-hover: #0f4f9d;
   --fp-accent-soft: #e2eefb;
   --fp-on-accent: #ffffff;
-  --fp-danger: #d33636;
+  --fp-switch-on: #2f66f5;
+  --fp-switch-off: #c8d1dc;
+  --fp-danger: #c52e2e;
   --fp-danger-soft: #fbe9e9;
   --fp-ok: #1c8a4f;
   --fp-warn: #c07a12;

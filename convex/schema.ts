@@ -2,6 +2,11 @@ import { authTables } from '@convex-dev/auth/server';
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 import { markupData, pageCalibration } from './lib/markup';
+import {
+  customTaskAttributeType,
+  taskAttributeLayoutItem,
+  taskAttributeSetting,
+} from './lib/taskAttributes';
 
 export const projectRole = v.union(
   v.literal('owner'),
@@ -30,6 +35,8 @@ export default defineSchema({
     isDemo: v.optional(v.boolean()),
     createdBy: v.id('users'),
     nextTaskSeq: v.number(),
+    taskAttributeSettings: v.optional(v.array(taskAttributeSetting)),
+    taskAttributeLayout: v.optional(v.array(taskAttributeLayoutItem)),
     createdAt: v.number(),
     updatedAt: v.number(),
     archivedAt: v.optional(v.number()),
@@ -107,8 +114,14 @@ export default defineSchema({
     priority: taskPriority,
     category: v.string(),
     color: v.optional(v.string()),
-    // Retained for older task records already stored in the shared development deployment.
+    plannedQuantity: v.optional(v.number()),
+    completedQuantity: v.optional(v.number()),
     quantityUnit: v.optional(v.string()),
+    quantityItemId: v.optional(v.id('quantityItems')),
+    startDate: v.optional(v.string()),
+    locationText: v.optional(v.string()),
+    manpowerCount: v.optional(v.number()),
+    costMinor: v.optional(v.number()),
     currencyCode: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     assigneeText: v.optional(v.string()),
@@ -122,6 +135,85 @@ export default defineSchema({
     .index('by_sheet', ['sheetId'])
     .index('by_project_seq', ['projectId', 'seq'])
     .index('by_project_status', ['projectId', 'status']),
+
+  quantityItems: defineTable({
+    projectId: v.id('projects'),
+    name: v.string(),
+    defaultUnit: v.string(),
+    createdBy: v.id('users'),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    archivedAt: v.optional(v.number()),
+  }).index('by_project', ['projectId']),
+
+  taskQuantities: defineTable({
+    projectId: v.id('projects'),
+    taskId: v.id('tasks'),
+    quantityItemId: v.optional(v.id('quantityItems')),
+    plannedQuantity: v.optional(v.number()),
+    completedQuantity: v.optional(v.number()),
+    quantityUnit: v.optional(v.string()),
+    createdBy: v.id('users'),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_task', ['taskId'])
+    .index('by_quantity_item', ['quantityItemId']),
+
+  taskActivityEvents: defineTable({
+    projectId: v.id('projects'),
+    taskId: v.id('tasks'),
+    actorId: v.id('users'),
+    kind: v.union(
+      v.literal('attribute_changed'),
+      v.literal('quantity_added'),
+      v.literal('quantity_changed'),
+      v.literal('quantity_removed'),
+      v.literal('photo_removed'),
+    ),
+    fieldKey: v.optional(v.string()),
+    fieldLabel: v.optional(v.string()),
+    oldValue: v.optional(v.string()),
+    newValue: v.optional(v.string()),
+    summary: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_task_createdAt', ['taskId', 'createdAt']),
+
+  taskAttributeDefinitions: defineTable({
+    projectId: v.id('projects'),
+    name: v.string(),
+    type: customTaskAttributeType,
+    unit: v.optional(v.string()),
+    options: v.optional(
+      v.array(v.object({ id: v.string(), label: v.string(), active: v.boolean() })),
+    ),
+    createdBy: v.id('users'),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    archivedAt: v.optional(v.number()),
+  }).index('by_project', ['projectId']),
+
+  taskAttributeValues: defineTable({
+    projectId: v.id('projects'),
+    taskId: v.id('tasks'),
+    definitionId: v.id('taskAttributeDefinitions'),
+    textValue: v.optional(v.string()),
+    numberValue: v.optional(v.number()),
+    dateValue: v.optional(v.string()),
+    booleanValue: v.optional(v.boolean()),
+    selectOptionId: v.optional(v.string()),
+    updatedBy: v.id('users'),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_task', ['taskId'])
+    .index('by_definition', ['definitionId'])
+    .index('by_task_definition', ['taskId', 'definitionId']),
 
   notes: defineTable({
     projectId: v.id('projects'),

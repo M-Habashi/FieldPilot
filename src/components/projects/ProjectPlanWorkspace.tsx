@@ -17,13 +17,25 @@ import { AppHeader, Toolbar } from '../Toolbar';
 import { Viewer } from '../Viewer';
 import { MarkupPropertiesBar } from '../MarkupPropertiesBar';
 import { ProjectPhotoMap } from './ProjectPhotoMap';
+import { ProjectQuantities } from './ProjectQuantities';
 import { Notice } from '../ui/notice';
+import {
+  normalizeTaskAttributeLayout,
+  type CustomTaskAttributeDefinition,
+  type CustomTaskAttributeValue,
+  type TaskAttributeConfigurationDraft,
+} from '../../task-attributes';
+import type { QuantityItemOption, TaskQuantityLine, TaskQuantityPatch } from '../../quantities';
+import type { TaskActivityEntry } from '../../task-activity';
 
 interface ProjectPlanWorkspaceProps {
   project: Doc<'projects'>;
   role: 'owner' | 'admin' | 'member' | 'viewer';
   userId: string;
   sheetId: Id<'sheets'>;
+  initialTaskId: Id<'tasks'> | null;
+  onInitialTaskOpened: () => void;
+  onOpenQuantityTask: (sheetId: Id<'sheets'>, taskId: Id<'tasks'>) => void;
   onBackToProject: () => void;
 }
 
@@ -32,10 +44,14 @@ export function ProjectPlanWorkspace({
   role,
   userId,
   sheetId,
+  initialTaskId,
+  onInitialTaskOpened,
+  onOpenQuantityTask,
   onBackToProject,
 }: ProjectPlanWorkspaceProps) {
   const workspace = useQuery(api.sheets.getPdfWorkspace, { sheetId });
   const taskRows = useQuery(api.tasks.listByPdf, { sheetId });
+  const projectMembers = useQuery(api.projects.listMembers, { projectId: project._id });
   const markupRows = useQuery(api.markups.listByPdf, { sheetId });
   const selectedTaskId = useProject((state) => state.selectedTaskId);
   const selectedRemoteTaskId =
@@ -48,6 +64,22 @@ export function ProjectPlanWorkspace({
     api.attachments.listPhotosByTask,
     selectedRemoteTaskId ? { taskId: selectedRemoteTaskId } : 'skip',
   );
+  const selectedActivityRows = useQuery(
+    api.activity.listByTask,
+    selectedRemoteTaskId ? { taskId: selectedRemoteTaskId } : 'skip',
+  );
+  const taskAttributeConfiguration = useQuery(api.taskAttributes.getConfiguration, {
+    projectId: project._id,
+  });
+  const quantityItemRows = useQuery(api.quantities.listItems, { projectId: project._id });
+  const selectedTaskAttributeValues = useQuery(
+    api.taskAttributes.listValuesByTask,
+    selectedRemoteTaskId ? { taskId: selectedRemoteTaskId } : 'skip',
+  );
+  const selectedTaskQuantityRows = useQuery(
+    api.quantities.listTaskLines,
+    selectedRemoteTaskId ? { taskId: selectedRemoteTaskId } : 'skip',
+  );
   const createTask = useMutation(api.tasks.create);
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
@@ -58,13 +90,130 @@ export function ProjectPlanWorkspace({
   const saveMarkupMutation = useMutation(api.markups.save);
   const removeMarkupMutation = useMutation(api.markups.remove);
   const setCalibrationMutation = useMutation(api.markups.setCalibration);
+  const saveTaskAttributeConfigurationMutation = useMutation(api.taskAttributes.saveConfiguration);
+  const setTaskAttributeValueMutation = useMutation(api.taskAttributes.setTaskValue);
+  const addTaskQuantityLineMutation = useMutation(api.quantities.addTaskLine);
+  const updateTaskQuantityLineMutation = useMutation(api.quantities.updateTaskLine);
+  const removeTaskQuantityLineMutation = useMutation(api.quantities.removeTaskLine);
 
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const sourcePdfRef = useRef<Uint8Array | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [savingPdf, setSavingPdf] = useState(false);
-  const [activeView, setActiveView] = useState<'plans' | 'map'>(() => readAppView().view);
+  const [activeView, setActiveView] = useState<'plans' | 'map' | 'quantities'>(
+    () => readAppView().view,
+  );
+  const customTaskAttributeDefinitions = useMemo<CustomTaskAttributeDefinition[]>(
+    () =>
+      (taskAttributeConfiguration?.definitions ?? []).map((definition) => ({
+        id: definition._id,
+        name: definition.name,
+        type: definition.type,
+        unit: definition.unit,
+        options: definition.options,
+        valueCount: definition.valueCount,
+      })),
+    [taskAttributeConfiguration?.definitions],
+  );
+  const taskAttributeLayout = useMemo(
+    () =>
+      normalizeTaskAttributeLayout(
+        taskAttributeConfiguration?.layout,
+        taskAttributeConfiguration?.legacySettings ?? project.taskAttributeSettings,
+        customTaskAttributeDefinitions,
+      ),
+    [customTaskAttributeDefinitions, project.taskAttributeSettings, taskAttributeConfiguration],
+  );
+  const quantityItems = useMemo<QuantityItemOption[]>(
+    () =>
+      (quantityItemRows ?? []).map((item) => ({
+        id: item._id,
+        name: item.name,
+        defaultUnit: item.defaultUnit,
+        taskCount: item.taskCount,
+      })),
+    [quantityItemRows],
+  );
+  const selectedTaskQuantityLines = useMemo<TaskQuantityLine[] | undefined>(
+    () =>
+      selectedTaskQuantityRows?.map((line) => ({
+        lineId: 'lineId' in line ? line.lineId : undefined,
+        legacy: line.legacy,
+        quantityItemId: line.quantityItemId,
+        plannedQuantity: line.plannedQuantity,
+        completedQuantity: line.completedQuantity,
+        quantityUnit: line.quantityUnit,
+      })),
+    [selectedTaskQuantityRows],
+  );
+  const selectedTaskActivity = useMemo<TaskActivityEntry[] | undefined>(
+    () =>
+      selectedActivityRows?.map((entry) =>
+        entry.type === 'photo'
+          ? { ...entry, attachmentId: entry.attachmentId, url: entry.url ?? undefined }
+          : entry,
+      ),
+    [selectedActivityRows],
+  );
+
+  const addTaskQuantityLine = async () => {
+    if (!selectedRemoteTaskId)
+      throw new Error('Wait for this task to finish saving, then try again.');
+    await addTaskQuantityLineMutation({ taskId: selectedRemoteTaskId });
+  };
+
+  const updateTaskQuantityLine = async (lineId: string | undefined, patch: TaskQuantityPatch) => {
+    if (!selectedRemoteTaskId)
+      throw new Error('Wait for this task to finish saving, then try again.');
+    await updateTaskQuantityLineMutation({
+      taskId: selectedRemoteTaskId,
+      lineId: lineId ? (lineId as Id<'taskQuantities'>) : undefined,
+      quantityItemId:
+        patch.quantityItemId === undefined
+          ? undefined
+          : patch.quantityItemId
+            ? (patch.quantityItemId as Id<'quantityItems'>)
+            : null,
+      plannedQuantity: patch.plannedQuantity,
+      completedQuantity: patch.completedQuantity,
+      quantityUnit: patch.quantityUnit,
+    });
+  };
+
+  const removeTaskQuantityLine = async (lineId: string | undefined) => {
+    if (!selectedRemoteTaskId)
+      throw new Error('Wait for this task to finish saving, then try again.');
+    await removeTaskQuantityLineMutation({
+      taskId: selectedRemoteTaskId,
+      lineId: lineId ? (lineId as Id<'taskQuantities'>) : undefined,
+    });
+  };
+
+  const saveTaskAttributeConfiguration = async (configuration: TaskAttributeConfigurationDraft) => {
+    await saveTaskAttributeConfigurationMutation({
+      projectId: project._id,
+      definitions: configuration.definitions.map((definition) => ({
+        ...definition,
+        definitionId: definition.definitionId as Id<'taskAttributeDefinitions'> | undefined,
+      })),
+      layout: configuration.layout,
+      archivedDefinitionIds:
+        configuration.archivedDefinitionIds as Id<'taskAttributeDefinitions'>[],
+    });
+  };
+
+  const setTaskAttributeValue = async (
+    definitionId: string,
+    value: CustomTaskAttributeValue | null,
+  ) => {
+    if (!selectedRemoteTaskId) return;
+    await setTaskAttributeValueMutation({
+      taskId: selectedRemoteTaskId,
+      definitionId: definitionId as Id<'taskAttributeDefinitions'>,
+      value,
+    });
+  };
 
   useEffect(() => {
     patchAppView({ view: activeView });
@@ -109,7 +258,20 @@ export function ProjectPlanWorkspace({
           category: task.category,
           color: task.color,
           assigneeText: task.assignee || undefined,
+          assigneeUserId: task.assigneeUserId ? (task.assigneeUserId as Id<'users'>) : undefined,
+          plannedQuantity: task.plannedQuantity ?? undefined,
+          completedQuantity: task.completedQuantity ?? undefined,
+          quantityUnit: task.quantityUnit || undefined,
+          quantityItemId: task.quantityItemId
+            ? (task.quantityItemId as Id<'quantityItems'>)
+            : undefined,
+          startDate: task.startDate ?? undefined,
           dueDate: task.dueDate ?? undefined,
+          locationText: task.locationText || undefined,
+          tags: task.tags.length > 0 ? task.tags : undefined,
+          manpowerCount: task.manpowerCount ?? undefined,
+          costMinor: task.costMinor ?? undefined,
+          currencyCode: task.currencyCode || undefined,
         });
       },
       async updateTask(taskId, patch) {
@@ -125,7 +287,32 @@ export function ProjectPlanWorkspace({
           ...(patch.category === undefined ? {} : { category: patch.category }),
           ...(patch.color === undefined ? {} : { color: patch.color }),
           ...(patch.assignee === undefined ? {} : { assigneeText: patch.assignee || null }),
+          ...(patch.assigneeUserId === undefined
+            ? {}
+            : {
+                assigneeUserId: patch.assigneeUserId ? (patch.assigneeUserId as Id<'users'>) : null,
+              }),
+          ...(patch.plannedQuantity === undefined
+            ? {}
+            : { plannedQuantity: patch.plannedQuantity }),
+          ...(patch.completedQuantity === undefined
+            ? {}
+            : { completedQuantity: patch.completedQuantity }),
+          ...(patch.quantityUnit === undefined ? {} : { quantityUnit: patch.quantityUnit || null }),
+          ...(patch.quantityItemId === undefined
+            ? {}
+            : {
+                quantityItemId: patch.quantityItemId
+                  ? (patch.quantityItemId as Id<'quantityItems'>)
+                  : null,
+              }),
+          ...(patch.startDate === undefined ? {} : { startDate: patch.startDate }),
           ...(patch.dueDate === undefined ? {} : { dueDate: patch.dueDate }),
+          ...(patch.locationText === undefined ? {} : { locationText: patch.locationText || null }),
+          ...(patch.tags === undefined ? {} : { tags: patch.tags }),
+          ...(patch.manpowerCount === undefined ? {} : { manpowerCount: patch.manpowerCount }),
+          ...(patch.costMinor === undefined ? {} : { costMinor: patch.costMinor }),
+          ...(patch.currencyCode === undefined ? {} : { currencyCode: patch.currencyCode || null }),
         });
       },
       async deleteTask(taskId) {
@@ -216,9 +403,22 @@ export function ProjectPlanWorkspace({
         category: task.category,
         color: task.color,
         assignee: task.assigneeText ?? '',
+        assigneeUserId: task.assigneeUserId ?? null,
+        plannedQuantity: task.plannedQuantity ?? null,
+        completedQuantity: task.completedQuantity ?? null,
+        quantityUnit: task.quantityUnit ?? 'EA',
+        quantityItemId: task.quantityItemId ?? null,
+        startDate: task.startDate ?? null,
         dueDate: task.dueDate ?? null,
+        locationText: task.locationText ?? '',
+        tags: task.tags ?? [],
+        manpowerCount: task.manpowerCount ?? null,
+        costMinor: task.costMinor ?? null,
+        currencyCode: task.currencyCode ?? 'USD',
+        createdByUserId: task.createdBy,
         notes: [],
         photos: [],
+        evidencePhotoCount: row.evidencePhotoCount,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       };
@@ -284,6 +484,16 @@ export function ProjectPlanWorkspace({
   }, [selectedNotes, selectedPhotos, selectedRemoteTaskId]);
 
   useEffect(() => {
+    if (!initialTaskId || !remoteTasks?.[initialTaskId]) return;
+    const task = remoteTasks[initialTaskId];
+    setActiveView('plans');
+    useProject.getState().setPage(task.page);
+    useProject.getState().selectTask(initialTaskId);
+    useProject.getState().focusTask(initialTaskId);
+    onInitialTaskOpened();
+  }, [initialTaskId, onInitialTaskOpened, remoteTasks]);
+
+  useEffect(() => {
     if (!workspacePdfUrl || !workspaceFileName || !workspaceSourceRef) return;
     let active = true;
     setDocument(null);
@@ -345,7 +555,7 @@ export function ProjectPlanWorkspace({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (activeView === 'map') return;
+      if (activeView !== 'plans') return;
       const target = event.target as HTMLElement;
       const typing =
         target instanceof HTMLInputElement ||
@@ -405,6 +615,7 @@ export function ProjectPlanWorkspace({
           activeItem={activeView}
           onShowPlans={() => setActiveView('plans')}
           onShowMap={() => setActiveView('map')}
+          onShowQuantities={() => setActiveView('quantities')}
         />
         <div
           className={
@@ -417,6 +628,8 @@ export function ProjectPlanWorkspace({
         <div className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
           {activeView === 'map' ? (
             <ProjectPhotoMap project={project} role={role} userId={userId} />
+          ) : activeView === 'quantities' ? (
+            <ProjectQuantities project={project} role={role} onOpenTask={onOpenQuantityTask} />
           ) : (
             <>
               <Toolbar
@@ -463,7 +676,25 @@ export function ProjectPlanWorkspace({
                     </Notice>
                   )}
                 </main>
-                {document && <RightDrawer />}
+                {document && (
+                  <RightDrawer
+                    canEdit={role !== 'viewer'}
+                    canManageAttributes={role === 'owner' || role === 'admin'}
+                    members={projectMembers ?? []}
+                    projectId={project._id}
+                    quantityItems={quantityItems}
+                    taskQuantityLines={selectedTaskQuantityLines}
+                    taskActivity={selectedTaskActivity}
+                    taskAttributeLayout={taskAttributeLayout}
+                    customTaskAttributeDefinitions={customTaskAttributeDefinitions}
+                    customTaskAttributeValues={selectedTaskAttributeValues ?? []}
+                    onTaskAttributeConfigurationChange={saveTaskAttributeConfiguration}
+                    onCustomTaskAttributeValueChange={setTaskAttributeValue}
+                    onAddTaskQuantityLine={addTaskQuantityLine}
+                    onUpdateTaskQuantityLine={updateTaskQuantityLine}
+                    onRemoveTaskQuantityLine={removeTaskQuantityLine}
+                  />
+                )}
               </div>
               <StatusBar hasDoc={document !== null} />
             </>

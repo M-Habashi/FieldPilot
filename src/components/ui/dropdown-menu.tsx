@@ -12,6 +12,15 @@ interface DropdownProps {
 export function Dropdown({ trigger, align = 'right', children, className }: DropdownProps) {
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLDivElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const menuId = React.useId();
+
+  const focusTrigger = React.useCallback(() => {
+    triggerRef.current?.querySelector<HTMLElement>('button, [href], [tabindex="0"]')?.focus();
+  }, []);
+
+  const close = React.useCallback(() => setOpen(false), []);
 
   React.useEffect(() => {
     if (!open) return;
@@ -19,7 +28,10 @@ export function Dropdown({ trigger, align = 'right', children, className }: Drop
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        requestAnimationFrame(focusTrigger);
+      }
     };
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKey);
@@ -27,15 +39,56 @@ export function Dropdown({ trigger, align = 'right', children, className }: Drop
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
+  }, [focusTrigger, open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [open]);
 
-  const close = React.useCallback(() => setOpen(false), []);
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    const items = [
+      ...(menuRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? []),
+    ];
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      items[(currentIndex + direction + items.length) % items.length]?.focus();
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      items[0]?.focus();
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      items.at(-1)?.focus();
+    }
+  };
+
+  const accessibleTrigger = React.isValidElement(trigger)
+    ? React.cloneElement(trigger as React.ReactElement<React.HTMLAttributes<HTMLElement>>, {
+        'aria-haspopup': 'menu',
+        'aria-expanded': open,
+        'aria-controls': open ? menuId : undefined,
+      })
+    : trigger;
 
   return (
     <div ref={rootRef} className="relative z-50">
-      <div onClick={() => setOpen((v) => !v)}>{trigger}</div>
+      <div ref={triggerRef} onClick={() => setOpen((v) => !v)}>
+        {accessibleTrigger}
+      </div>
       {open && (
         <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          onKeyDown={handleMenuKeyDown}
           className={cn(
             'fp-dropdown-menu absolute top-full mt-1.5 z-50 min-w-48 rounded-lg border border-line bg-surface p-1 shadow-e3',
             align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
@@ -56,6 +109,7 @@ export function DropdownItem({
   return (
     <button
       type="button"
+      role="menuitem"
       className={cn(
         'flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs text-t2 cursor-pointer',
         'hover:text-t1 transition-colors duration-(--fp-dur-fast) [&_svg]:size-3.5 [&_svg]:text-current',

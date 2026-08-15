@@ -9,7 +9,7 @@
 export interface AppView {
   projectId: string | null;
   sheetId: string | null;
-  view: 'plans' | 'map';
+  view: 'plans' | 'map' | 'quantities';
 }
 
 const STORAGE_KEY = 'fp:app-view';
@@ -29,7 +29,7 @@ export function readAppView(): AppView {
         typeof parsed.projectId === 'string' && typeof parsed.sheetId === 'string'
           ? parsed.sheetId
           : null,
-      view: parsed.view === 'map' ? 'map' : 'plans',
+      view: parsed.view === 'map' || parsed.view === 'quantities' ? parsed.view : 'plans',
     };
   } catch {
     return emptyView;

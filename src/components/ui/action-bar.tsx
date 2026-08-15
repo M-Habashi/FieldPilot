@@ -100,6 +100,8 @@ export interface ActionBarButtonProps extends React.ButtonHTMLAttributes<HTMLBut
   labelFrom?: LabelFrom;
   /** Tool is engaged / panel is open — paints the control accent. */
   active?: boolean;
+  /** Prominent primary workspace action. Use sparingly. */
+  emphasis?: boolean;
   /** Adds the chevron shared by every menu trigger in the bar. */
   menu?: boolean;
   /** Trailing decoration, e.g. `ActionBarBadge` or `ActionBarDot`. */
@@ -113,6 +115,7 @@ export const ActionBarButton = React.forwardRef<HTMLButtonElement, ActionBarButt
       label,
       labelFrom = 'sm',
       active = false,
+      emphasis = false,
       menu = false,
       className,
       title,
@@ -123,7 +126,7 @@ export const ActionBarButton = React.forwardRef<HTMLButtonElement, ActionBarButt
   ) => (
     <Button
       ref={ref}
-      variant="text"
+      variant={emphasis ? 'default' : 'text'}
       size="sm"
       data-active={active}
       aria-label={label}

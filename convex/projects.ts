@@ -3,6 +3,7 @@ import { mutation, query } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 import { requireProjectMember, requireProjectRole, requireUser } from './lib/authz';
+import { taskAttributeSetting, validateTaskAttributeSettings } from './lib/taskAttributes';
 
 export const listMine = query({
   args: {},
@@ -35,6 +36,31 @@ export const get = query({
   handler: async (ctx, { projectId }) => {
     await requireProjectMember(ctx, projectId);
     return await ctx.db.get(projectId);
+  },
+});
+
+export const listMembers = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId }) => {
+    await requireProjectMember(ctx, projectId);
+    const memberships = await ctx.db
+      .query('projectMembers')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect();
+    const rows = await Promise.all(
+      memberships.map(async (membership) => {
+        const user = await ctx.db.get(membership.userId);
+        if (user === null) return null;
+        const name = user.name?.trim() || user.email?.trim() || 'Project member';
+        return {
+          userId: membership.userId,
+          name,
+          email: user.email?.trim() ?? '',
+          role: membership.role,
+        };
+      }),
+    );
+    return rows.filter((row) => row !== null).sort((a, b) => a.name.localeCompare(b.name));
   },
 });
 
@@ -81,6 +107,21 @@ export const rename = mutation({
   },
 });
 
+export const updateTaskAttributeSettings = mutation({
+  args: {
+    projectId: v.id('projects'),
+    settings: v.array(taskAttributeSetting),
+  },
+  handler: async (ctx, { projectId, settings }) => {
+    await requireProjectRole(ctx, projectId, ['owner', 'admin']);
+    validateTaskAttributeSettings(settings);
+    await ctx.db.patch(projectId, {
+      taskAttributeSettings: settings,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
   const [
     members,
@@ -91,6 +132,11 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
     attachments,
     uploadDiagnostics,
     pendingUploads,
+    taskAttributeDefinitions,
+    taskAttributeValues,
+    quantityItems,
+    taskQuantities,
+    taskActivityEvents,
   ] = await Promise.all([
     ctx.db
       .query('projectMembers')
@@ -124,6 +170,26 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
       .query('pendingUploads')
       .withIndex('by_project', (q) => q.eq('projectId', projectId))
       .collect(),
+    ctx.db
+      .query('taskAttributeDefinitions')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('taskAttributeValues')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('quantityItems')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('taskQuantities')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('taskActivityEvents')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect(),
   ]);
 
   const planStorageIds = [
@@ -144,6 +210,11 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
     ...invitations.map((doc) => ctx.db.delete(doc._id)),
     ...members.map((doc) => ctx.db.delete(doc._id)),
     ...pendingUploads.map((doc) => ctx.db.delete(doc._id)),
+    ...taskAttributeValues.map((doc) => ctx.db.delete(doc._id)),
+    ...taskAttributeDefinitions.map((doc) => ctx.db.delete(doc._id)),
+    ...quantityItems.map((doc) => ctx.db.delete(doc._id)),
+    ...taskQuantities.map((doc) => ctx.db.delete(doc._id)),
+    ...taskActivityEvents.map((doc) => ctx.db.delete(doc._id)),
   ]);
   await Promise.all(
     [...planStorageIds, ...attachmentStorageIds].map(async (storageId) => {

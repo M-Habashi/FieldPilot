@@ -33,9 +33,24 @@ export interface Task {
   /** Optional for backwards compatibility with projects saved before task colors. */
   color?: string;
   assignee: string;
+  assigneeUserId: string | null;
+  plannedQuantity: number | null;
+  completedQuantity: number | null;
+  quantityUnit: string;
+  /** Project-wide grouping definition for quantity reporting. */
+  quantityItemId?: string | null;
+  startDate: string | null;
   dueDate: string | null;
+  locationText: string;
+  tags: string[];
+  manpowerCount: number | null;
+  costMinor: number | null;
+  currencyCode: string;
+  createdByUserId?: string;
   notes: Note[];
   photos: Photo[];
+  /** Photo evidence count supplied by remote list queries for queue triage. */
+  evidencePhotoCount?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -190,4 +205,20 @@ export function pinColor(task: Task): string {
   if (task.color) return task.color;
   if (task.status === 'done' || task.status === 'verified') return STATUSES[task.status].color;
   return PRIORITIES[task.priority].color;
+}
+
+export function taskQuantityProgress(task: Task) {
+  const planned = task.plannedQuantity ?? null;
+  const completed = task.completedQuantity ?? 0;
+  if (planned === null) {
+    return { planned, completed, remaining: null, overrun: 0, percent: null };
+  }
+  const difference = planned - completed;
+  return {
+    planned,
+    completed,
+    remaining: Math.max(difference, 0),
+    overrun: Math.max(-difference, 0),
+    percent: planned === 0 ? (completed > 0 ? 100 : 0) : Math.round((completed / planned) * 100),
+  };
 }

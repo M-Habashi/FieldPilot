@@ -270,7 +270,7 @@ async function deleteSheetData(ctx: MutationCtx, sheetId: Id<'sheets'>) {
       .collect(),
   ]);
   for (const task of tasks) {
-    const [notes, attachments] = await Promise.all([
+    const [notes, attachments, attributeValues, quantityLines, activityEvents] = await Promise.all([
       ctx.db
         .query('notes')
         .withIndex('by_task', (q) => q.eq('taskId', task._id))
@@ -279,10 +279,25 @@ async function deleteSheetData(ctx: MutationCtx, sheetId: Id<'sheets'>) {
         .query('attachments')
         .withIndex('by_task', (q) => q.eq('taskId', task._id))
         .collect(),
+      ctx.db
+        .query('taskAttributeValues')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .collect(),
+      ctx.db
+        .query('taskQuantities')
+        .withIndex('by_task', (q) => q.eq('taskId', task._id))
+        .collect(),
+      ctx.db
+        .query('taskActivityEvents')
+        .withIndex('by_task_createdAt', (q) => q.eq('taskId', task._id))
+        .collect(),
     ]);
     await Promise.all([
       ...notes.map((doc) => ctx.db.delete(doc._id)),
       ...attachments.map((doc) => ctx.db.delete(doc._id)),
+      ...attributeValues.map((doc) => ctx.db.delete(doc._id)),
+      ...quantityLines.map((doc) => ctx.db.delete(doc._id)),
+      ...activityEvents.map((doc) => ctx.db.delete(doc._id)),
     ]);
     await Promise.all(
       attachments.map(async (attachment) => {

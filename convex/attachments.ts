@@ -6,6 +6,7 @@ import {
   requireProjectRole,
   requireUser,
 } from './lib/authz';
+import { recordTaskEvent } from './lib/taskActivity';
 
 function nextPhotoUpdatedAt(photo: { photoUpdatedAt?: number }): number {
   return Math.max(Date.now(), (photo.photoUpdatedAt ?? 0) + 1);
@@ -402,9 +403,22 @@ export const unassignLegacyPhotos = mutation({
 export const remove = mutation({
   args: { attachmentId: v.id('attachments') },
   handler: async (ctx, { attachmentId }) => {
+    const actorId = await requireUser(ctx);
     const attachment = await ctx.db.get(attachmentId);
     if (attachment === null) throw new Error('Attachment not found');
-    await requireProjectRole(ctx, attachment.projectId, CONTENT_EDITOR_ROLES);
+    await requireProjectRole(ctx, attachment.projectId, CONTENT_EDITOR_ROLES, actorId);
+    if (attachment.kind === 'photo' && attachment.taskId) {
+      const task = await ctx.db.get(attachment.taskId);
+      if (task) {
+        await recordTaskEvent(ctx, {
+          projectId: attachment.projectId,
+          taskId: task._id,
+          actorId,
+          kind: 'photo_removed',
+          summary: `Removed photo ${attachment.fileName}`,
+        });
+      }
+    }
     try {
       await ctx.storage.delete(attachment.storageRef);
     } catch {
