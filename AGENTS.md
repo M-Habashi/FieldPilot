@@ -22,11 +22,7 @@ did not reliably reproduce the failure.
 
 The required pipeline is:
 
-1. Receive the picker-backed `File` from the existing file input. On Android browsers that expose
-   `showOpenFilePicker`, existing photos are acquired through the unfiltered File System Access
-   picker so Chromium requests `ACTION_OPEN_DOCUMENT` instead of the location-redacting system
-   media picker. Camera capture remains on its separate `capture="environment"` input; desktop and
-   iPhone keep the existing input path.
+1. Receive the picker-backed `File` from the existing file input.
 2. Validate its filename, media type, and size.
 3. Call `materializePhotoUploadFile` in `src/lib/photo-upload-transport.ts`.
 4. Inside that function, read the picker-backed file with `FileReader.readAsDataURL`.
@@ -55,8 +51,6 @@ explicitly approves the architecture change:
 - Do not run diagnostics on one file/blob and upload another.
 - Do not remove the standard EXIF parser or Samsung Motion Photo `©xyz` fallback independently.
 - Do not change the photo picker UI or add capture/location behavior as part of transport cleanup.
-- Do not merge Android's separate camera and document-picker controls: the separation is what lets
-  gallery uploads avoid the media picker without breaking the already-working camera path.
 
 Any change touching `src/lib/photo-upload-transport.ts`, the photo-upload block in
 `src/components/projects/ProjectPhotoMap.tsx`, or the server EXIF/Motion Photo parser must preserve
@@ -64,7 +58,6 @@ these invariants and run at least:
 
 ```text
 pnpm test -- src/lib/photo-upload-transport.test.ts
-pnpm test -- src/lib/android-photo-picker.test.ts
 pnpm typecheck
 pnpm lint
 ```

@@ -33,11 +33,6 @@ import {
   type PhotoUploadDiagnosticEvent,
 } from '../../lib/photo-upload-diagnostics';
 import { materializePhotoUploadFile, uploadPhotoForm } from '../../lib/photo-upload-transport';
-import {
-  isPhotoPickerCancellation,
-  pickAndroidDocumentPhotos,
-  supportsAndroidDocumentPhotoPicker,
-} from '../../lib/android-photo-picker';
 import { readDeviceLocation } from '../../lib/device-location';
 import {
   detectLocationClient,
@@ -281,7 +276,6 @@ export function ProjectPhotoMap({
   const hasFittedRef = useRef(false);
   const legacyMigrationStartedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const moveMarkerRef = useRef<L.Marker | null>(null);
   const coarsePointerRef = useRef(false);
@@ -355,12 +349,10 @@ export function ProjectPhotoMap({
   // button to reach the camera at all. Keyed off a coarse pointer rather than
   // width: this is about having a usable camera, not a narrow viewport.
   const [showCameraButton, setShowCameraButton] = useState(false);
-  const [useAndroidDocumentPicker, setUseAndroidDocumentPicker] = useState(false);
   useEffect(() => {
     const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
     coarsePointerRef.current = coarsePointer;
     setShowCameraButton(coarsePointer);
-    setUseAndroidDocumentPicker(supportsAndroidDocumentPhotoPicker(window));
   }, []);
   const undoScope = `${project._id}:${userId}`;
   const [undoCount, setUndoCount] = useState(() => readPhotoUndo(undoScope).length);
@@ -1039,21 +1031,6 @@ export function ProjectPhotoMap({
     [authToken, canEdit, convex, project._id, pushUndo, reportUploadDiagnostic, uploading],
   );
 
-  const openAndroidDocumentPhotos = useCallback(() => {
-    void pickAndroidDocumentPhotos()
-      .then((files) => {
-        if (files.length) void uploadPhotos(files);
-      })
-      .catch((error: unknown) => {
-        if (isPhotoPickerCancellation(error)) return;
-        console.error('Android document photo picker failed', error);
-        setUploadNotice({
-          tone: 'error',
-          message: 'Could not open device files. Please try again.',
-        });
-      });
-  }, [uploadPhotos]);
-
   useEffect(() => {
     if (!canEdit || legacyMigrationStartedRef.current) return;
     legacyMigrationStartedRef.current = true;
@@ -1523,29 +1500,12 @@ export function ProjectPhotoMap({
 
           <ActionBarSeparator />
 
-          {useAndroidDocumentPicker ? (
-            <>
-              <ActionBarButton
-                icon={<Camera />}
-                label="Take photo"
-                disabled={!canEdit || uploading}
-                onClick={() => cameraInputRef.current?.click()}
-              />
-              <ActionBarButton
-                icon={<ImagePlus />}
-                label="Add photos"
-                disabled={!canEdit || uploading}
-                onClick={openAndroidDocumentPhotos}
-              />
-            </>
-          ) : (
-            <ActionBarButton
-              icon={showCameraButton ? <Camera /> : <ImagePlus />}
-              label="Add photos"
-              disabled={!canEdit || uploading}
-              onClick={() => fileInputRef.current?.click()}
-            />
-          )}
+          <ActionBarButton
+            icon={showCameraButton ? <Camera /> : <ImagePlus />}
+            label="Add photos"
+            disabled={!canEdit || uploading}
+            onClick={() => fileInputRef.current?.click()}
+          />
           <Dropdown
             align="left"
             className="max-h-[min(70vh,24rem)] overflow-y-auto"
@@ -1944,21 +1904,6 @@ export function ProjectPhotoMap({
         type="file"
         accept=""
         multiple
-        className="hidden"
-        onChange={(event) => {
-          const files = Array.from(event.target.files ?? []);
-          if (files.length) void uploadPhotos(files);
-          event.target.value = '';
-        }}
-      />
-      {/* Android document picking deliberately bypasses the system media
-          picker. Keep capture on this separate input so the working camera
-          path and every non-Android picker remain unchanged. */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
