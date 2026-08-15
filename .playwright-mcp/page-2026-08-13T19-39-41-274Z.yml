@@ -1,0 +1,84 @@
+- generic [ref=e5]:
+  - banner [ref=e6]:
+    - generic [ref=e7]:
+      - link "FieldPilot" [ref=e8] [cursor=pointer]:
+        - /url: "#/"
+      - paragraph [ref=e12]: Plans. Pins. Field progress.
+      - link "Sign in" [ref=e14] [cursor=pointer]:
+        - /url: "#/login"
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - img "Built for engineers" [ref=e18]
+        - heading "Plans move Work follows" [level=1] [ref=e19]: Plans moveWork follows
+        - paragraph [ref=e20]: Turn every drawing into a live, shared record of what needs attention—and what’s already done.
+        - button "Bring plans to life" [ref=e22] [cursor=pointer]
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic "A-204_2F.pdf" [ref=e33]
+          - generic [ref=e72]:
+            - img [ref=e73]:
+              - generic [ref=e75]: A
+              - generic [ref=e78]: B
+              - generic [ref=e81]: C
+              - generic [ref=e84]: D
+              - generic [ref=e87]: "1"
+              - generic [ref=e90]: "2"
+              - generic [ref=e93]: "3"
+              - generic [ref=e96]: 24′-0″
+              - generic [ref=e97]: 16′-0″
+              - generic [ref=e98]: 20′-0″
+              - generic [ref=e99]: 40′-0″
+              - generic [ref=e107]: MECH.
+              - generic [ref=e108]: "202"
+              - generic [ref=e109]: OPEN TO
+              - generic [ref=e110]: "201"
+              - generic [ref=e111]: CORRIDOR
+              - generic [ref=e112]: "203"
+              - generic [ref=e114]: OFFICE
+              - generic [ref=e115]: "205"
+              - generic [ref=e116]: OFFICE
+              - generic [ref=e117]: "204"
+            - generic [ref=e123]: "1"
+            - generic [ref=e125]: "2"
+            - generic [ref=e127]: "3"
+          - generic [ref=e129]:
+            - generic [ref=e130]: 1 / 1
+            - generic [ref=e135]: 100%
+        - generic [ref=e142]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: "3"
+            - paragraph [ref=e146]: Frame opening at A-204
+          - generic [ref=e151]: Open
+          - generic [ref=e154]:
+            - generic [ref=e155]:
+              - term [ref=e156]: Priority
+              - definition [ref=e157]:
+                - generic [ref=e158]: High
+            - generic [ref=e160]:
+              - term [ref=e161]: Type
+              - definition [ref=e162]: Work to be done
+            - generic [ref=e163]:
+              - term [ref=e164]: Assigned to
+              - definition [ref=e165]: Framing Crew
+            - generic [ref=e166]:
+              - term [ref=e167]: Due date
+              - definition [ref=e168]: May 23, 2024
+            - generic [ref=e169]:
+              - term [ref=e170]: Location
+              - definition [ref=e171]: A-204 - Grid B2
+          - paragraph [ref=e172]: Install header per detail 5/A-502 and shim per spec.
+          - paragraph [ref=e173]: 2 photos
+          - generic [ref=e174]:
+            - img "Framing corridor photo attached to the task" [ref=e175]
+            - img "Jobsite rebar photo attached to the task" [ref=e176]
+    - generic [ref=e177]:
+      - generic [ref=e178]:
+        - figure "5/14 — Level 2" [ref=e179]:
+          - img "Rebar and formwork on the level 2 deck" [ref=e181]
+        - figure "Grid B2" [ref=e183]:
+          - img "Wood framing along the grid B2 corridor" [ref=e185]
+      - generic [ref=e187]:
+        - paragraph [ref=e188]: A-204
+        - paragraph [ref=e189]: SECOND FLOOR PLAN
+        - paragraph [ref=e190]: "SCALE: 1/8″ = 1′-0″"

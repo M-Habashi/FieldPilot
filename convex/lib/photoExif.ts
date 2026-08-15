@@ -1,4 +1,7 @@
-import * as exifr from 'exifr';
+import exifr from 'exifr';
+import { enableExtendedHeicRecognition } from '../../src/lib/exifr-heic-compat';
+
+enableExtendedHeicRecognition(exifr);
 
 export interface ExifPhotoLocation {
   latitude: number;

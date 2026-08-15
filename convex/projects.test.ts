@@ -339,6 +339,41 @@ describe('plan metadata permissions and cleanup', () => {
     });
   });
 
+  it('completes retried photo uploads idempotently and removes duplicate storage', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Retry Owner', 'retry-owner@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Retry Photos' });
+    const firstPhoto = new Blob(['same photo bytes'], { type: 'image/jpeg' });
+    const secondPhoto = new Blob(['same photo bytes'], { type: 'image/jpeg' });
+    const [firstStorageRef, secondStorageRef] = await t.run(async (ctx) =>
+      Promise.all([ctx.storage.store(firstPhoto), ctx.storage.store(secondPhoto)]),
+    );
+    const uploadArgs = {
+      projectId,
+      fileName: 'retry.jpg',
+      contentType: 'image/jpeg',
+      size: firstPhoto.size,
+      clientUploadId: 'durable-upload-id',
+    };
+
+    const first = await owner.action(api.photoUploads.complete, {
+      ...uploadArgs,
+      storageRef: firstStorageRef,
+    });
+    const retried = await owner.action(api.photoUploads.complete, {
+      ...uploadArgs,
+      storageRef: secondStorageRef,
+    });
+
+    expect(retried.attachmentId).toBe(first.attachmentId);
+    await t.run(async (ctx) => {
+      expect(await ctx.db.query('attachments').collect()).toHaveLength(1);
+      expect(await ctx.db.system.get('_storage', firstStorageRef)).not.toBeNull();
+      expect(await ctx.db.system.get('_storage', secondStorageRef)).toBeNull();
+    });
+  });
+
   it('keeps a photo location independent from task assignment and rejects stale photo edits', async () => {
     const t = createTest();
     const ownerId = await seedUser(t, 'Photo Map Owner', 'photo-map-owner@example.com');

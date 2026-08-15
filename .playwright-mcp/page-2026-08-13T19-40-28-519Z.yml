@@ -1,0 +1,27 @@
+- generic [ref=e236]:
+  - banner [ref=e237]:
+    - link "Go to the FieldPilot landing page" [ref=e238] [cursor=pointer]:
+      - /url: "#/"
+      - generic [ref=e239]: FieldPilot
+    - button "Projects" [ref=e242] [cursor=pointer]
+    - generic [ref=e244]:
+      - button "Notifications" [ref=e247] [cursor=pointer]
+      - button "Account menu for Fake Account 1" [ref=e250] [cursor=pointer]:
+        - generic [ref=e251]: Fake Account 1
+        - generic [ref=e252]: F1
+  - main [ref=e254]:
+    - generic [ref=e255]:
+      - heading "Projects" [level=1] [ref=e256]
+      - button "Add project" [ref=e257] [cursor=pointer]
+    - article [ref=e259]:
+      - button "Open Demo project" [ref=e260] [cursor=pointer]
+      - generic:
+        - generic:
+          - heading "Demo project" [level=2]
+          - paragraph: Project owner
+        - generic [ref=e261]:
+          - img "Project admin" [ref=e262]
+          - button "Project actions for Demo project" [ref=e267] [cursor=pointer]
+      - generic:
+        - generic: Aug 5, 2026
+        - generic "1 project member": "1"

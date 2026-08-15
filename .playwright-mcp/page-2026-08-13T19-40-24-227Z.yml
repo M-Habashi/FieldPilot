@@ -1,0 +1,28 @@
+- generic [ref=e192]:
+  - generic [ref=e194]:
+    - link "FieldPilot" [ref=e195] [cursor=pointer]:
+      - /url: "#/"
+    - main [ref=e199]:
+      - heading "Good to see you" [level=1] [ref=e200]
+      - paragraph [ref=e201]: Your projects are right where you left them.
+      - generic [ref=e202]:
+        - button "Continue with Google" [ref=e203]
+        - generic [ref=e209]: or use your email
+        - generic [ref=e213]:
+          - generic [ref=e214]:
+            - generic [ref=e215]: Email address
+            - textbox "Email address" [ref=e216]: fake_acc_1@fieldpilot.dev
+          - generic [ref=e217]:
+            - generic [ref=e218]: Password
+            - generic [ref=e219]:
+              - textbox "Password" [ref=e220]: fake_acc_1
+              - button "Show password" [ref=e221] [cursor=pointer]
+          - generic [ref=e225] [cursor=pointer]:
+            - checkbox "Remember me" [ref=e226]
+            - generic [ref=e227]: Remember me
+          - button "Sign in" [ref=e228]
+      - generic [ref=e230]:
+        - button "Reset password" [ref=e231] [cursor=pointer]
+        - link "Sign up" [ref=e232] [cursor=pointer]:
+          - /url: "#/signup"
+  - paragraph [ref=e235]: Plans move. Work follows.

@@ -65,6 +65,7 @@ export const upload = httpAction(async (ctx, request) => {
     const form = await request.formData();
     const projectId = formText(form, 'projectId');
     const attemptId = formText(form, 'attemptId') ?? undefined;
+    const clientUploadId = formText(form, 'clientUploadId') ?? undefined;
     const fallbackContentType = formText(form, 'contentType') ?? 'application/octet-stream';
     const photo = form.get('photo');
 
@@ -106,6 +107,7 @@ export const upload = httpAction(async (ctx, request) => {
       contentType,
       size: photo.size,
       attemptId,
+      clientUploadId,
     });
 
     return jsonResponse(request, result);

@@ -1,0 +1,32 @@
+- generic [ref=e236]:
+  - banner [ref=e237]:
+    - link "Go to the FieldPilot landing page" [ref=e238] [cursor=pointer]:
+      - /url: "#/"
+      - generic [ref=e239]: FieldPilot
+    - button "Projects" [ref=e242] [cursor=pointer]
+    - generic [ref=e244]:
+      - button "Notifications" [ref=e247] [cursor=pointer]
+      - button "Account menu for Fake Account 1" [ref=e250] [cursor=pointer]:
+        - generic [ref=e251]: Fake Account 1
+        - generic [ref=e252]: F1
+  - main [ref=e268]:
+    - navigation "Project breadcrumb" [ref=e269]:
+      - button "Projects" [ref=e270] [cursor=pointer]
+      - heading "Demo project" [level=1] [ref=e273]
+    - generic [ref=e274]:
+      - article [ref=e275]:
+        - button "Open Demo plan" [ref=e276] [cursor=pointer]
+        - generic:
+          - generic:
+            - heading "Demo plan" [level=2]
+          - button "Plan actions for Demo plan" [ref=e280] [cursor=pointer]
+        - generic:
+          - generic:
+            - paragraph: Architectural
+            - paragraph: Version 1
+          - generic:
+            - generic: Aug 5, 2026
+            - generic "3 pages": "3"
+      - button "Drag more PDF plans here or click to upload" [ref=e281] [cursor=pointer]:
+        - text: Drag more PDF plans here
+        - generic [ref=e286]: or click to upload

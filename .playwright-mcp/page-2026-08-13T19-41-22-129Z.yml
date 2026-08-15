@@ -1,0 +1,41 @@
+- generic [ref=e287]:
+  - banner [ref=e288]:
+    - button "Back to project plans" [ref=e289] [cursor=pointer]:
+      - generic [ref=e290]: FieldPilot
+    - generic "demo-plan.pdf" [ref=e293]
+    - button "Sign out" [ref=e294] [cursor=pointer]
+  - generic [ref=e296]:
+    - complementary "Primary" [ref=e297]:
+      - navigation [ref=e298]:
+        - button "Plans" [ref=e299] [cursor=pointer]
+        - button "Map" [ref=e304] [cursor=pointer]
+      - separator "Resize sidebar" [ref=e307]
+    - region "Project photo map" [ref=e356]:
+      - generic "Map tools" [ref=e357]:
+        - generic [ref=e358]:
+          - button "Undo" [ref=e412] [cursor=pointer]
+          - button "Redo" [disabled]
+          - button "Add photos" [ref=e360] [cursor=pointer]
+          - button "Filter photos" [ref=e364] [cursor=pointer]:
+            - generic [ref=e365]: Filter
+        - button "Show photos list" [ref=e367] [cursor=pointer]:
+          - generic [ref=e368]: Photos
+      - generic [ref=e370]:
+        - button [ref=e414] [cursor=pointer]
+        - generic:
+          - button "Map" [pressed] [ref=e371]
+          - generic:
+            - generic [ref=e374]:
+              - button "Zoom in" [ref=e375] [cursor=pointer]: +
+              - button "Zoom out" [ref=e376] [cursor=pointer]: −
+              - button "Go to current location" [ref=e377] [cursor=pointer]
+              - button "Fit photos to view" [ref=e380] [cursor=pointer]
+            - generic [ref=e386]:
+              - link "Leaflet" [ref=e387] [cursor=pointer]:
+                - /url: https://leafletjs.com/
+              - text: "| Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+      - generic "Map statistics" [ref=e398]:
+        - generic [ref=e399]:
+          - generic [ref=e400]: 2 photos
+          - generic [ref=e401]: 1 mapped
+          - generic [ref=e402]: 1 unmapped
