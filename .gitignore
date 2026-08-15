@@ -6,6 +6,8 @@ vite.*.log
 .DS_Store
 
 .vercel
+__pycache__/
+*.py[cod]
 
 # impeccable-ignore-start
 # Ephemeral Impeccable output; shared config and critique files stay tracked.

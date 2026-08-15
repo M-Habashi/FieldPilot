@@ -1,4 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{.agents/**,.git/**,convex/**,design-concepts/**,docs/**,node_modules/**,public/**,src/**,tests/**,tmp/**}",
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
     {
       "source": "/api/photo-upload",

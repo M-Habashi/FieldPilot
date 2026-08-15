@@ -3,6 +3,11 @@ import { api, internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { action } from './_generated/server';
 import { inspectExifPhotoLocation, photoByteFingerprint } from './lib/photoExif';
+import {
+  heicContentType,
+  inspectWithPillowFallback,
+  preferPillowInspection,
+} from './lib/photoExifFallback';
 
 interface CompletePhotoUploadResult {
   attachmentId: Id<'attachments'>;
@@ -27,7 +32,25 @@ export const complete = action({
     const { attemptId, ...uploadArgs } = args;
     const file = await ctx.storage.get(uploadArgs.storageRef);
     if (file === null) throw new Error('The uploaded file could not be found.');
-    const inspection = await inspectExifPhotoLocation(file);
+    let inspection = await inspectExifPhotoLocation(file);
+    let parser: 'primary' | 'pillow' = 'primary';
+    let pillowAttempted = false;
+    const storedContentType = file.type || uploadArgs.contentType;
+    const pillowContentType = heicContentType(uploadArgs.fileName, storedContentType);
+    if (inspection.status !== 'found' && pillowContentType !== null) {
+      const sourceUrl = await ctx.storage.getUrl(uploadArgs.storageRef);
+      if (sourceUrl !== null) {
+        pillowAttempted = true;
+        const pillowInspection = await inspectWithPillowFallback({
+          contentType: pillowContentType,
+          size: file.size,
+          sourceUrl,
+        });
+        const preferred = preferPillowInspection(inspection, pillowInspection);
+        if (preferred !== inspection) parser = 'pillow';
+        inspection = preferred;
+      }
+    }
     const location = inspection.status === 'found' ? inspection.location : null;
     if (attemptId) {
       try {
@@ -36,7 +59,7 @@ export const complete = action({
           attemptId,
           phase: 'storage-uploaded',
           stage: 'storage-persisted',
-          contentType: file.type || uploadArgs.contentType,
+          contentType: storedContentType,
           size: file.size,
           exifStatus: inspection.status,
           byteFingerprint: await photoByteFingerprint(file),
@@ -51,6 +74,8 @@ export const complete = action({
       JSON.stringify({
         attemptId,
         status: inspection.status,
+        parser,
+        pillowAttempted,
         claimedContentType: uploadArgs.contentType,
         claimedSize: uploadArgs.size,
         storedContentType: file.type || undefined,
