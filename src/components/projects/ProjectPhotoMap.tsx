@@ -1901,8 +1901,8 @@ export function ProjectPhotoMap({
         }}
       />
 
-      {/* Match Pic2Map's picker contract: one unfiltered, multi-file input on
-          every device so mobile browsers open the document/file workflow. */}
+      {/* Keep the existing multi-file UI. Only Android receives the mixed
+          accept list that forces its non-redacting document/file workflow. */}
       <input
         ref={fileInputRef}
         type="file"
