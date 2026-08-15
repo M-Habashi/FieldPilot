@@ -1,4 +1,7 @@
-import * as exifr from 'exifr';
+import exifr from 'exifr';
+import { enableExtendedHeicRecognition } from './exifr-heic-compat';
+
+enableExtendedHeicRecognition(exifr);
 
 export type PhotoUploadStage =
   | 'selection'

@@ -338,6 +338,11 @@ export function ProjectPhotoMap({
   const [justPlacedId, setJustPlacedId] = useState<string | null>(null);
   const [pingPhotoId, setPingPhotoId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // A located upload is announced before the live attachment query necessarily
+  // contains its new row. Hold the id until that row arrives, then fit once to
+  // the complete photo extent so sequential/background uploads do not race the
+  // map subscription.
+  const [pendingUploadFitId, setPendingUploadFitId] = useState<Id<'attachments'> | null>(null);
   const [locating, setLocating] = useState(false);
   const locatingRef = useRef(false);
   const [uploadNotice, setUploadNotice] = useState<UploadNotice | null>(null);
@@ -478,6 +483,30 @@ export function ProjectPhotoMap({
   const fitPhotosRef = useRef(fitPhotos);
   fitPhotosRef.current = fitPhotos;
 
+  useEffect(() => {
+    if (pendingUploadFitId === null || photoRows === undefined || !mapReady) return;
+    const uploadedPhoto = photoRows.find((photo) => photo.attachment._id === pendingUploadFitId);
+    if (!uploadedPhoto) return;
+    if (!hasLocation(uploadedPhoto)) {
+      setPendingUploadFitId(null);
+      return;
+    }
+
+    const locatedPhotos = photoRows.filter(hasLocation);
+    const map = mapRef.current;
+    if (!map || locatedPhotos.length === 0) return;
+    map.fitBounds(
+      L.latLngBounds(
+        locatedPhotos.map(
+          (photo) => [photo.attachment.latitude, photo.attachment.longitude] as L.LatLngTuple,
+        ),
+      ),
+      { padding: [72, 72], maxZoom: 18 },
+    );
+    hasFittedRef.current = true;
+    setPendingUploadFitId(null);
+  }, [mapReady, pendingUploadFitId, photoRows]);
+
   const locateCurrentPosition = useCallback(async () => {
     if (locatingRef.current) return;
     locatingRef.current = true;
@@ -558,12 +587,14 @@ export function ProjectPhotoMap({
         if (completion.projectId !== project._id || completion.userId !== userId) return;
         const attachmentId = completion.attachmentId as Id<'attachments'>;
         setUploadNotice({ tone: 'success', message: 'Image uploaded successfully.' });
+        setFilter('all');
         if (!completion.hasExifLocation) {
-          setFilter('all');
           setPhotosPanelOpen(true);
           setPlacePromptIds((current) =>
             current.includes(attachmentId) ? current : [...current, attachmentId],
           );
+        } else {
+          setPendingUploadFitId(attachmentId);
         }
         void convex
           .query(api.attachments.getPhotoMapState, { attachmentId })
@@ -1436,10 +1467,17 @@ export function ProjectPhotoMap({
   }, [mappedPhotos.length]);
 
   useEffect(() => {
-    if (hasFittedRef.current || mappedPhotos.length === 0 || !mapReady) return;
+    if (
+      pendingUploadFitId !== null ||
+      hasFittedRef.current ||
+      mappedPhotos.length === 0 ||
+      !mapReady
+    ) {
+      return;
+    }
     fitPhotos();
     hasFittedRef.current = true;
-  }, [fitPhotos, mapReady, mappedPhotos.length]);
+  }, [fitPhotos, mapReady, mappedPhotos.length, pendingUploadFitId]);
 
   const openTaskAssignment = (photo: MapPhoto) => {
     setSelectedPhotos([photo]);

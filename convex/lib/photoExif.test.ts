@@ -5,7 +5,7 @@ import {
   photoByteFingerprint,
 } from './photoExif';
 
-function jpegWithGpsExif(): Blob {
+function gpsTiff(): Uint8Array {
   const tiff = new Uint8Array(128);
   const view = new DataView(tiff.buffer);
   const u16 = (offset: number, value: number) => view.setUint16(offset, value, true);
@@ -49,6 +49,12 @@ function jpegWithGpsExif(): Blob {
   rational(112, 9);
   rational(120, 2916, 100);
 
+  return tiff;
+}
+
+function jpegWithGpsExif(): Blob {
+  const tiff = gpsTiff();
+
   const exifHeader = new TextEncoder().encode('Exif\0\0');
   const segmentLength = exifHeader.length + tiff.length + 2;
   return new Blob(
@@ -60,6 +66,55 @@ function jpegWithGpsExif(): Blob {
     ],
     { type: 'image/jpeg' },
   );
+}
+
+function heicWithExpandedFtypGpsExif(): Blob {
+  const tiff = gpsTiff();
+  const ftypLength = 52;
+  const iinfLength = 34;
+  const ilocLength = 30;
+  const metaLength = 12 + iinfLength + ilocLength;
+  const mdatOffset = ftypLength + metaLength;
+  const exifItemOffset = mdatOffset + 8;
+  const exifItemLength = 4 + tiff.length;
+  const bytes = new Uint8Array(exifItemOffset + exifItemLength);
+  const view = new DataView(bytes.buffer);
+  const text = new TextEncoder();
+  const box = (offset: number, length: number, type: string) => {
+    view.setUint32(offset, length, false);
+    bytes.set(text.encode(type), offset + 4);
+  };
+
+  box(0, ftypLength, 'ftyp');
+  bytes.set(text.encode('heic'), 8);
+  ['mif1', 'MiHB', 'MiHA', 'heix', 'MiHE', 'MiPr', 'miaf', 'heic', 'tmap'].forEach((brand, index) =>
+    bytes.set(text.encode(brand), 16 + index * 4),
+  );
+
+  const metaOffset = ftypLength;
+  box(metaOffset, metaLength, 'meta');
+  const iinfOffset = metaOffset + 12;
+  box(iinfOffset, iinfLength, 'iinf');
+  view.setUint16(iinfOffset + 12, 1, false);
+  const infeOffset = iinfOffset + 14;
+  box(infeOffset, 20, 'infe');
+  view.setUint32(infeOffset + 8, 0x02000000, false);
+  view.setUint16(infeOffset + 12, 1, false);
+  bytes.set(text.encode('Exif'), infeOffset + 16);
+
+  const ilocOffset = iinfOffset + iinfLength;
+  box(ilocOffset, ilocLength, 'iloc');
+  bytes[ilocOffset + 12] = 0x44;
+  view.setUint16(ilocOffset + 14, 1, false);
+  view.setUint16(ilocOffset + 16, 1, false);
+  view.setUint16(ilocOffset + 20, 1, false);
+  view.setUint32(ilocOffset + 22, exifItemOffset, false);
+  view.setUint32(ilocOffset + 26, exifItemLength, false);
+
+  box(mdatOffset, 8 + exifItemLength, 'mdat');
+  view.setUint32(exifItemOffset, 0, false);
+  bytes.set(tiff, exifItemOffset + 4);
+  return new Blob([bytes], { type: 'image/heic' });
 }
 
 function motionPhotoWithLocation(location: string): Blob {
@@ -81,6 +136,16 @@ describe('extractExifPhotoLocation', () => {
     await expect(extractExifPhotoLocation(jpegWithGpsExif())).resolves.toEqual({
       latitude: 39.76840277777778,
       longitude: -86.1581,
+    });
+  });
+
+  it('reads GPS from a HEIC with an expanded compatible-brand box', async () => {
+    await expect(inspectExifPhotoLocation(heicWithExpandedFtypGpsExif())).resolves.toEqual({
+      status: 'found',
+      location: {
+        latitude: 39.76840277777778,
+        longitude: -86.1581,
+      },
     });
   });
 
