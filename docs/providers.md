@@ -2,7 +2,7 @@
 
 Authoritative list of external providers. Update this file with every provider change.
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-16
 
 ## Selected
 
@@ -13,6 +13,7 @@ Last reviewed: 2026-08-01
 | [Convex](https://www.convex.dev/)                         | Configured             | Database, server functions, realtime, auth, and authorization | App records, identities, logs, and optional files |
 | [Google Identity](https://developers.google.com/identity) | Configured             | Google OAuth sign-in                                          | Consent, identity, and sign-in events             |
 | [Brevo](https://www.brevo.com/)                           | Configuration required | Email verification and password-reset codes                   | Recipient, message, and delivery data             |
+| [OpenAI](https://openai.com/)                             | Configuration required | AI chat assistant replies (OpenAI-compatible endpoint)        | Chat prompts and project context snippets         |
 
 ## Brevo requirements
 
@@ -27,6 +28,19 @@ Last reviewed: 2026-08-01
   returns a configuration error.
 - Unverified password users receive no app session; reminders and change-email actions stay in auth,
   and successful verification goes directly to Projects.
+
+## AI chat requirements
+
+- Call the LLM only from the Convex `chat.send` action; never expose the API key to the browser or
+  through a `VITE_*` variable.
+- Set `AI_CHAT_API_KEY` on every Convex deployment that enables AI chat. `AI_CHAT_BASE_URL`
+  (default `https://api.openai.com/v1`) and `AI_CHAT_MODEL` (default `gpt-4o-mini`) are optional;
+  together they must form an OpenAI-compatible chat-completions endpoint, so compatible providers
+  such as OpenRouter or a self-hosted gateway also work.
+- Chat history is stored per project member (`chatMessages` table); conversations are private to
+  each member, never shared project-wide.
+- Until `AI_CHAT_API_KEY` is configured, the chat panel opens normally but replies return a
+  configuration error.
 
 ## Conditional
 

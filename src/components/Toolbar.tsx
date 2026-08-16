@@ -146,7 +146,6 @@ export function Toolbar({
             label="Add pin"
             title="Add pin (P)"
             active={addPinMode}
-            emphasis
             aria-pressed={addPinMode}
             disabled={!hasDoc}
             onClick={() => setAddPinMode(!addPinMode)}

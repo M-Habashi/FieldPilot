@@ -49,10 +49,7 @@ export function StatusBar({ hasDoc }: StatusBarProps) {
             <span className="font-mono tabular-nums">
               {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
             </span>
-            <span
-              className="hidden transition-opacity duration-(--fp-dur-fast) ease-(--fp-ease) sm:inline"
-              style={{ opacity: addPinMode ? 1 : 0.55 }}
-            >
+            <span className="hidden sm:inline" style={{ opacity: addPinMode ? 1 : 0.55 }}>
               <kbd className="font-mono">P</kbd> add pin · <kbd className="font-mono">Esc</kbd>{' '}
               cancel
             </span>

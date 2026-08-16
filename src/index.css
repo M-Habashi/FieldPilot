@@ -898,6 +898,107 @@ select {
   }
 }
 
+/* ============ AI chat ============ */
+
+/* Launch button: a plain action-bar tool; the only motion is fading/sliding
+   out of the way while the panel is open. */
+.fp-chat-launch {
+  transition:
+    opacity var(--fp-dur-fast) var(--fp-ease),
+    transform var(--fp-dur-fast) var(--fp-ease),
+    color var(--fp-dur-fast) var(--fp-ease);
+}
+
+/* While the panel is open the button fades/slides away instead of vanishing.
+   animation:none is required so the entrance keyframes' fill stops winning. */
+.fp-chat-launch[data-open='true'] {
+  animation: none;
+  opacity: 0;
+  transform: translateX(10px) scale(0.94);
+  pointer-events: none;
+}
+
+/* The chat panel sits on a greyer surface than the near-white toolbars so
+   the window reads as its own layer; header/composer bars stay near-white. */
+.fp-chat-panel {
+  background: var(--fp-bg-surface-2);
+}
+
+/* Panel sections (close bar, header, messages, composer) stagger in after
+   the panel slide, so the window assembles instead of appearing at once. */
+.fp-chat-panel[data-state='open'] .fp-chat-section {
+  animation: fp-chat-section-in var(--fp-dur-med) var(--fp-ease) both;
+}
+
+.fp-chat-panel[data-state='open'] .fp-chat-section:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.fp-chat-panel[data-state='open'] .fp-chat-section:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.fp-chat-panel[data-state='open'] .fp-chat-section:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+/* Chat bubbles rise and settle as they arrive. */
+.fp-chat-msg {
+  animation: fp-chat-msg-in var(--fp-dur-med) var(--fp-ease) both;
+}
+
+/* The AI mark is a canvas element (thinking-orbs); keep it from shrinking in
+   flex rows. Its motion, theming and reduced-motion fallback are internal. */
+.fp-ai-orb {
+  flex: none;
+}
+
+/* "Thinking…" label beside the orb: a light sweep rolls across the text. */
+.fp-chat-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--fp-text-3) 25%,
+    var(--fp-text-1) 50%,
+    var(--fp-text-3) 75%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: fp-chat-shimmer 1.6s linear infinite;
+}
+
+@keyframes fp-chat-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fp-chat-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fp-chat-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

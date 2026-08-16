@@ -10,6 +10,7 @@ import { photoContentType } from '../../lib/photo-file';
 import { setRemoteProjectSync, useProject, type RemoteProjectSync } from '../../store/project';
 import type { Markup, PageCalibration, Priority, Status, Task } from '../../types';
 import { Lightbox } from '../Lightbox';
+import { AIChat } from '../chat/AIChat';
 import { RightDrawer } from '../RightDrawer';
 import { Sidebar } from '../Sidebar';
 import { StatusBar } from '../StatusBar';
@@ -700,6 +701,7 @@ export function ProjectPlanWorkspace({
             </>
           )}
         </div>
+        <AIChat projectId={project._id} projectName={project.name} activeView={activeView} />
       </div>
       <Lightbox />
     </div>
