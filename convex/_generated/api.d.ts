@@ -9,6 +9,10 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as agentData from "../agentData.js";
+import type * as agents_fieldPilot from "../agents/fieldPilot.js";
+import type * as agents_provider from "../agents/provider.js";
+import type * as agents_tools_reads from "../agents/tools/reads.js";
 import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
 import type * as authEmail from "../authEmail.js";
@@ -21,6 +25,8 @@ import type * as lib_demoProject from "../lib/demoProject.js";
 import type * as lib_markup from "../lib/markup.js";
 import type * as lib_photoExif from "../lib/photoExif.js";
 import type * as lib_photoExifFallback from "../lib/photoExifFallback.js";
+import type * as lib_quantityReport from "../lib/quantityReport.js";
+import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_taskActivity from "../lib/taskActivity.js";
 import type * as lib_taskAttributes from "../lib/taskAttributes.js";
 import type * as lib_tmpAccountDevFeature from "../lib/tmpAccountDevFeature.js";
@@ -45,6 +51,10 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  agentData: typeof agentData;
+  "agents/fieldPilot": typeof agents_fieldPilot;
+  "agents/provider": typeof agents_provider;
+  "agents/tools/reads": typeof agents_tools_reads;
   attachments: typeof attachments;
   auth: typeof auth;
   authEmail: typeof authEmail;
@@ -57,6 +67,8 @@ declare const fullApi: ApiFromModules<{
   "lib/markup": typeof lib_markup;
   "lib/photoExif": typeof lib_photoExif;
   "lib/photoExifFallback": typeof lib_photoExifFallback;
+  "lib/quantityReport": typeof lib_quantityReport;
+  "lib/rateLimits": typeof lib_rateLimits;
   "lib/taskActivity": typeof lib_taskActivity;
   "lib/taskAttributes": typeof lib_taskAttributes;
   "lib/tmpAccountDevFeature": typeof lib_tmpAccountDevFeature;
@@ -100,4 +112,7 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  agent: import("@convex-dev/agent/_generated/component.js").ComponentApi<"agent">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+};

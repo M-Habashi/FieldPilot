@@ -326,4 +326,26 @@ export default defineSchema({
   })
     .index('by_project_user', ['projectId', 'userId'])
     .index('by_project_user_thread', ['projectId', 'userId', 'threadId']),
+
+  // App-owned authorization boundary around component-managed agent threads.
+  // The browser only knows clientThreadId; componentThreadId never grants
+  // access without a matching project membership and user binding.
+  agentThreadBindings: defineTable({
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    clientThreadId: v.string(),
+    componentThreadId: v.string(),
+    runStatus: v.union(
+      v.literal('idle'),
+      v.literal('queued'),
+      v.literal('running'),
+      v.literal('failed'),
+    ),
+    activePromptMessageId: v.optional(v.string()),
+    lastError: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_project_user_client', ['projectId', 'userId', 'clientThreadId'])
+    .index('by_component_thread', ['componentThreadId']),
 });

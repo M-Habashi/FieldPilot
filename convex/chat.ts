@@ -1,35 +1,45 @@
+import { listUIMessages, syncStreams, vStreamArgs } from '@convex-dev/agent';
+import { paginationOptsValidator } from 'convex/server';
 import { v } from 'convex/values';
-import { internal } from './_generated/api';
-import { action, internalMutation, internalQuery, mutation, query } from './_generated/server';
+import { components, internal } from './_generated/api';
+import type { Id } from './_generated/dataModel';
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
+import {
+  createFieldPilotAgent,
+  fieldPilotInstructions,
+  type FieldPilotAgentContext,
+} from './agents/fieldPilot';
+import { assertChatConfigured } from './agents/provider';
 import { requireProjectMember, requireUser } from './lib/authz';
+import { limitAiChat } from './lib/rateLimits';
 
 const MAX_MESSAGE_CHARS = 4000;
 const MAX_THREAD_ID_CHARS = 128;
 const HISTORY_LIMIT = 100;
-const PROMPT_HISTORY_LIMIT = 20;
-const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
-const DEFAULT_MODEL = 'gpt-4o-mini';
 
-// The LLM is called through an OpenAI-compatible chat-completions endpoint so
-// any compatible provider (OpenAI, OpenRouter, a self-hosted gateway) works.
-// Only variable NAMES are committed; the key lives in the Convex deployment.
-function environment(name: 'AI_CHAT_API_KEY' | 'AI_CHAT_BASE_URL' | 'AI_CHAT_MODEL') {
-  return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[
-    name
-  ];
-}
+const chatContextArgs = v.optional(
+  v.object({
+    projectName: v.optional(v.string()),
+    sheetName: v.optional(v.string()),
+    page: v.optional(v.number()),
+    view: v.optional(v.string()),
+    localDate: v.optional(v.string()),
+  }),
+);
 
-interface ChatPromptMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-interface ChatContext {
+type ChatContext = {
   projectName?: string;
   sheetName?: string;
   page?: number;
   view?: string;
-}
+  localDate?: string;
+};
 
 function requireThreadId(threadId: string) {
   const normalized = threadId.trim();
@@ -38,15 +48,35 @@ function requireThreadId(threadId: string) {
   return normalized;
 }
 
-const chatContextArgs = v.optional(
-  v.object({
-    projectName: v.optional(v.string()),
-    sheetName: v.optional(v.string()),
-    page: v.optional(v.number()),
-    view: v.optional(v.string()),
-  }),
-);
+function requireMessage(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed) throw new Error('Message is required');
+  if (trimmed.length > MAX_MESSAGE_CHARS) {
+    throw new Error(`Message is too long (max ${MAX_MESSAGE_CHARS} characters)`);
+  }
+  return trimmed;
+}
 
+function normalizedLocalDate(value?: string) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : new Date().toISOString().slice(0, 10);
+}
+
+async function findBinding(
+  ctx: Parameters<typeof requireProjectMember>[0],
+  projectId: Id<'projects'>,
+  userId: Id<'users'>,
+  clientThreadId: string,
+) {
+  return await ctx.db
+    .query('agentThreadBindings')
+    .withIndex('by_project_user_client', (q) =>
+      q.eq('projectId', projectId).eq('userId', userId).eq('clientThreadId', clientThreadId),
+    )
+    .unique();
+}
+
+// Legacy history remains readable during the rollout. New messages are owned
+// by the Agent component and rendered through listThreadMessages below.
 export const history = query({
   args: { projectId: v.id('projects'), threadId: v.string() },
   handler: async (ctx, { projectId, threadId }) => {
@@ -85,39 +115,15 @@ export const recordUserMessage = internalMutation({
   handler: async (ctx, { projectId, threadId, content }) => {
     const userId = await requireUser(ctx);
     await requireProjectMember(ctx, projectId, userId);
-    const currentThreadId = requireThreadId(threadId);
-    const trimmed = content.trim();
-    if (!trimmed) throw new Error('Message is required');
-    if (trimmed.length > MAX_MESSAGE_CHARS) {
-      throw new Error(`Message is too long (max ${MAX_MESSAGE_CHARS} characters)`);
-    }
     await ctx.db.insert('chatMessages', {
       projectId,
       userId,
-      threadId: currentThreadId,
+      threadId: requireThreadId(threadId),
       role: 'user',
-      content: trimmed,
+      content: requireMessage(content),
       createdAt: Date.now(),
     });
     return { userId };
-  },
-});
-
-export const recentForPrompt = internalQuery({
-  args: { projectId: v.id('projects'), userId: v.id('users'), threadId: v.string() },
-  handler: async (ctx, { projectId, userId, threadId }) => {
-    await requireProjectMember(ctx, projectId, userId);
-    const currentThreadId = requireThreadId(threadId);
-    const recent = await ctx.db
-      .query('chatMessages')
-      .withIndex('by_project_user_thread', (q) =>
-        q.eq('projectId', projectId).eq('userId', userId).eq('threadId', currentThreadId),
-      )
-      .order('desc')
-      .take(PROMPT_HISTORY_LIMIT);
-    return recent
-      .reverse()
-      .map((message): ChatPromptMessage => ({ role: message.role, content: message.content }));
   },
 });
 
@@ -130,11 +136,10 @@ export const recordAssistantMessage = internalMutation({
   },
   handler: async (ctx, { projectId, userId, threadId, content }) => {
     await requireProjectMember(ctx, projectId, userId);
-    const currentThreadId = requireThreadId(threadId);
     await ctx.db.insert('chatMessages', {
       projectId,
       userId,
-      threadId: currentThreadId,
+      threadId: requireThreadId(threadId),
       role: 'assistant',
       content,
       createdAt: Date.now(),
@@ -142,92 +147,186 @@ export const recordAssistantMessage = internalMutation({
   },
 });
 
-export const send = action({
+export const threadState = query({
+  args: { projectId: v.id('projects'), threadId: v.string() },
+  handler: async (ctx, { projectId, threadId }) => {
+    const userId = await requireUser(ctx);
+    await requireProjectMember(ctx, projectId, userId);
+    const binding = await findBinding(ctx, projectId, userId, requireThreadId(threadId));
+    if (binding === null) return { exists: false as const, runStatus: 'idle' as const };
+    return {
+      exists: true as const,
+      runStatus: binding.runStatus,
+      lastError: binding.lastError,
+    };
+  },
+});
+
+export const listThreadMessages = query({
+  args: {
+    projectId: v.id('projects'),
+    threadId: v.string(),
+    paginationOpts: paginationOptsValidator,
+    streamArgs: vStreamArgs,
+  },
+  handler: async (ctx, { projectId, threadId, paginationOpts, streamArgs }) => {
+    const userId = await requireUser(ctx);
+    await requireProjectMember(ctx, projectId, userId);
+    const binding = await findBinding(ctx, projectId, userId, requireThreadId(threadId));
+    if (binding === null) throw new Error('Conversation not found');
+    const paginated = await listUIMessages(ctx, components.agent, {
+      threadId: binding.componentThreadId,
+      paginationOpts,
+    });
+    const streams = await syncStreams(ctx, components.agent, {
+      threadId: binding.componentThreadId,
+      streamArgs,
+    });
+    return { ...paginated, streams };
+  },
+});
+
+export const sendMessage = mutation({
   args: {
     projectId: v.id('projects'),
     threadId: v.string(),
     content: v.string(),
     context: chatContextArgs,
   },
-  handler: async (ctx, { projectId, threadId, content, context }): Promise<{ reply: string }> => {
+  handler: async (ctx, { projectId, threadId, content, context }) => {
+    const userId = await requireUser(ctx);
+    await requireProjectMember(ctx, projectId, userId);
     const currentThreadId = requireThreadId(threadId);
-    // Persisting the user message first lets the client render it immediately
-    // through the realtime history query while the provider call is pending.
-    const { userId } = await ctx.runMutation(internal.chat.recordUserMessage, {
-      projectId,
-      threadId: currentThreadId,
-      content,
+    const prompt = requireMessage(content);
+    let binding = await findBinding(ctx, projectId, userId, currentThreadId);
+    if (binding?.runStatus === 'queued' || binding?.runStatus === 'running') {
+      throw new Error('Please wait for the current reply to finish');
+    }
+    await limitAiChat(ctx, userId);
+
+    const agent = createFieldPilotAgent();
+    if (binding === null) {
+      const { threadId: componentThreadId } = await agent.createThread(ctx, {
+        userId: `${projectId}:${userId}`,
+        title: `FieldPilot project conversation ${currentThreadId}`,
+      });
+      const now = Date.now();
+      const bindingId = await ctx.db.insert('agentThreadBindings', {
+        projectId,
+        userId,
+        clientThreadId: currentThreadId,
+        componentThreadId,
+        runStatus: 'idle',
+        createdAt: now,
+        updatedAt: now,
+      });
+      binding = await ctx.db.get(bindingId);
+      if (binding === null) throw new Error('Could not create conversation');
+    }
+
+    const { messageId } = await agent.saveMessage(ctx, {
+      threadId: binding.componentThreadId,
+      userId: `${projectId}:${userId}`,
+      prompt,
+      skipEmbeddings: true,
     });
-    const messages = await ctx.runQuery(internal.chat.recentForPrompt, {
-      projectId,
-      userId,
-      threadId: currentThreadId,
+    await ctx.db.patch(binding._id, {
+      runStatus: 'queued',
+      activePromptMessageId: messageId,
+      lastError: undefined,
+      updatedAt: Date.now(),
     });
-    const reply = await completeChatReply(messages, context);
-    await ctx.runMutation(internal.chat.recordAssistantMessage, {
-      projectId,
-      userId,
-      threadId: currentThreadId,
-      content: reply,
+    await ctx.scheduler.runAfter(0, internal.chat.generateResponse, {
+      bindingId: binding._id,
+      promptMessageId: messageId,
+      context,
     });
-    return { reply };
+    return { accepted: true as const };
   },
 });
 
-function systemPrompt(context?: ChatContext) {
-  const lines = [
-    'You are FieldPilot AI, an assistant built into a construction field-management app.',
-    'You help field crews and project managers with construction plans, tasks, quantities, punch items, and day-to-day site questions.',
-    'Answer concisely and practically, in the language the user writes in.',
-    'You cannot see the plan drawing itself, only the context listed below. If an answer needs drawing details you do not have, say so instead of inventing them.',
-  ];
-  if (context?.projectName) lines.push(`Current project: ${context.projectName}.`);
-  if (context?.sheetName) {
-    lines.push(`Open sheet: ${context.sheetName}${context.page ? ` (page ${context.page})` : ''}.`);
-  }
-  if (context?.view) lines.push(`The user is currently viewing: ${context.view}.`);
-  return lines.join('\n');
-}
+export const getRunBinding = internalQuery({
+  args: { bindingId: v.id('agentThreadBindings') },
+  handler: async (ctx, { bindingId }) => {
+    const binding = await ctx.db.get(bindingId);
+    if (binding === null) throw new Error('Conversation not found');
+    await requireProjectMember(ctx, binding.projectId, binding.userId);
+    return binding;
+  },
+});
 
-async function completeChatReply(
-  messages: ChatPromptMessage[],
-  context?: ChatContext,
-): Promise<string> {
-  const apiKey = environment('AI_CHAT_API_KEY');
-  if (!apiKey) {
-    throw new Error(
-      'AI chat is not configured yet. Set AI_CHAT_API_KEY (and optionally AI_CHAT_BASE_URL and AI_CHAT_MODEL) on the Convex deployment.',
-    );
-  }
-  const baseUrl = (environment('AI_CHAT_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const model = environment('AI_CHAT_MODEL') ?? DEFAULT_MODEL;
+export const setRunState = internalMutation({
+  args: {
+    bindingId: v.id('agentThreadBindings'),
+    promptMessageId: v.string(),
+    runStatus: v.union(v.literal('running'), v.literal('idle'), v.literal('failed')),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, { bindingId, promptMessageId, runStatus, error }) => {
+    const binding = await ctx.db.get(bindingId);
+    if (binding === null || binding.activePromptMessageId !== promptMessageId) return;
+    await requireProjectMember(ctx, binding.projectId, binding.userId);
+    await ctx.db.patch(bindingId, {
+      runStatus,
+      activePromptMessageId: runStatus === 'running' ? promptMessageId : undefined,
+      lastError: error,
+      updatedAt: Date.now(),
+    });
+  },
+});
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.3,
-      max_tokens: 800,
-      messages: [{ role: 'system', content: systemPrompt(context) }, ...messages],
-    }),
-  });
-
-  if (!response.ok) {
-    // Do not log the provider response body: it can echo prompt content.
-    console.error('AI chat provider rejected the request', response.status);
-    throw new Error('The AI assistant is unavailable right now. Try again in a moment.');
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: unknown } }>;
-  };
-  const reply = data.choices?.[0]?.message?.content;
-  if (typeof reply !== 'string' || !reply.trim()) {
-    throw new Error('The AI assistant returned an empty reply. Try again.');
-  }
-  return reply.trim();
-}
+export const generateResponse = internalAction({
+  args: {
+    bindingId: v.id('agentThreadBindings'),
+    promptMessageId: v.string(),
+    context: chatContextArgs,
+  },
+  handler: async (ctx, { bindingId, promptMessageId, context }) => {
+    const binding = await ctx.runQuery(internal.chat.getRunBinding, { bindingId });
+    await ctx.runMutation(internal.chat.setRunState, {
+      bindingId,
+      promptMessageId,
+      runStatus: 'running',
+    });
+    try {
+      assertChatConfigured();
+      const today = normalizedLocalDate(context?.localDate);
+      const agentCtx = {
+        ...ctx,
+        projectId: binding.projectId,
+        actorId: binding.userId,
+        today,
+      } satisfies typeof ctx & FieldPilotAgentContext;
+      const agent = createFieldPilotAgent();
+      await agent.streamText(
+        agentCtx,
+        {
+          userId: `${binding.projectId}:${binding.userId}`,
+          threadId: binding.componentThreadId,
+        },
+        {
+          promptMessageId,
+          instructions: fieldPilotInstructions(context as ChatContext | undefined),
+        },
+        { saveStreamDeltas: true },
+      );
+      await ctx.runMutation(internal.chat.setRunState, {
+        bindingId,
+        promptMessageId,
+        runStatus: 'idle',
+      });
+    } catch (cause) {
+      const message =
+        cause instanceof Error && cause.message.startsWith('AI chat is not configured')
+          ? cause.message
+          : 'The AI assistant is unavailable right now. Try again in a moment.';
+      console.error('FieldPilot agent run failed', cause instanceof Error ? cause.name : 'Error');
+      await ctx.runMutation(internal.chat.setRunState, {
+        bindingId,
+        promptMessageId,
+        runStatus: 'failed',
+        error: message,
+      });
+    }
+  },
+});

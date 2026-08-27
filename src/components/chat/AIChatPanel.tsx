@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAction, useQuery } from 'convex/react';
-import { Paperclip, SendHorizontal, SlidersHorizontal, SquarePen, X } from 'lucide-react';
+import { useUIMessages } from '@convex-dev/agent/react';
+import { useMutation, useQuery } from 'convex/react';
+import {
+  Check,
+  CircleAlert,
+  Paperclip,
+  Search,
+  SendHorizontal,
+  SlidersHorizontal,
+  SquarePen,
+  X,
+} from 'lucide-react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
@@ -13,10 +23,27 @@ import { AIOrb } from './AIOrb';
 const MAX_MESSAGE_CHARS = 4000;
 
 const SUGGESTED_PROMPTS = [
-  'Summarize what this sheet shows',
-  'What should I double-check on site today?',
-  'Help me write a clear punch-list item',
+  'Summarize open work on this project',
+  'What overdue high-priority tasks need attention?',
+  'Which quantities are at risk of overrunning?',
 ];
+
+type MessagePart = {
+  type: string;
+  text?: string;
+  state?: string;
+  toolName?: string;
+  title?: string;
+  errorText?: string;
+};
+
+function localIsoDate() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export function AIChatPanel({
   projectId,
@@ -33,20 +60,29 @@ export function AIChatPanel({
   onNewThread: () => void;
   onClose: () => void;
 }) {
-  const messages = useQuery(api.chat.history, { projectId, threadId });
-  const send = useAction(api.chat.send);
+  const threadState = useQuery(api.chat.threadState, { projectId, threadId });
+  const messageQuery = useUIMessages(
+    api.chat.listThreadMessages,
+    threadState?.exists ? { projectId, threadId } : 'skip',
+    { initialNumItems: 50, stream: true },
+  );
+  const send = useMutation(api.chat.sendMessage);
   const fileName = useProject((state) => state.fileName);
   const currentPage = useProject((state) => state.currentPage);
   const [draft, setDraft] = useState('');
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const messageCount = messages?.length ?? 0;
+  const messages = threadState?.exists ? messageQuery.results : [];
+  const pending =
+    submitting || threadState?.runStatus === 'queued' || threadState?.runStatus === 'running';
+  const loading =
+    threadState === undefined || (threadState.exists && messageQuery.status === 'LoadingFirstPage');
+  const error = submitError ?? threadState?.lastError ?? null;
+  const messageCount = messages.length;
 
-  // Keep the newest exchange in view as messages stream in or the typing
-  // indicator appears.
   useEffect(() => {
     const element = scrollRef.current;
     if (element) element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
@@ -55,10 +91,8 @@ export function AIChatPanel({
   const submit = async (text: string) => {
     const content = text.trim();
     if (!content || pending) return;
-    setDraft('');
-    setError(null);
-    setPending(true);
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    setSubmitError(null);
+    setSubmitting(true);
     try {
       await send({
         projectId,
@@ -69,12 +103,15 @@ export function AIChatPanel({
           sheetName: fileName ?? undefined,
           page: currentPage,
           view: activeView,
+          localDate: localIsoDate(),
         },
       });
+      setDraft('');
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
     } catch (cause) {
-      setError(userFacingError(cause));
+      setSubmitError(userFacingError(cause));
     } finally {
-      setPending(false);
+      setSubmitting(false);
       textareaRef.current?.focus();
     }
   };
@@ -88,7 +125,6 @@ export function AIChatPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Full-width close button pinned to the top of the panel. */}
       <Button
         variant="ghost"
         className="fp-chat-section h-10 w-full shrink-0 rounded-none font-semibold"
@@ -101,7 +137,7 @@ export function AIChatPanel({
       <div className="fp-chat-section flex shrink-0 items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-t1">FieldPilot AI</div>
-          <div className="truncate text-[11px] text-t3">{projectName}</div>
+          <div className="truncate text-[11px] text-t3">{projectName} · Read-only agent</div>
         </div>
         <Button
           variant="ghost"
@@ -119,7 +155,7 @@ export function AIChatPanel({
         ref={scrollRef}
         className="fp-chat-section flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
       >
-        {messages === undefined ? (
+        {loading ? (
           <div
             className="flex flex-1 flex-col items-center justify-center gap-2 text-t2"
             role="status"
@@ -141,7 +177,8 @@ export function AIChatPanel({
             <div>
               <p className="text-sm font-semibold text-t1">Ask FieldPilot AI</p>
               <p className="mt-1 text-xs text-t2">
-                Questions about this plan, tasks, quantities, or site work.
+                It can now inspect this project&apos;s tasks, plans, quantities, notes, and
+                activity.
               </p>
             </div>
             <div className="flex w-full flex-col gap-1.5">
@@ -161,7 +198,11 @@ export function AIChatPanel({
           </div>
         ) : (
           messages.map((message) => (
-            <ChatBubble key={message._id} role={message.role} content={message.content} />
+            <AgentMessage
+              key={message.key}
+              role={message.role}
+              parts={message.parts as MessagePart[]}
+            />
           ))
         )}
 
@@ -172,7 +213,9 @@ export function AIChatPanel({
             aria-live="polite"
           >
             <AIOrb size="sm" state="searching" />
-            <span className="text-xs font-medium">Thinking…</span>
+            <span className="text-xs font-medium">
+              {threadState?.runStatus === 'running' ? 'Checking project data…' : 'Starting…'}
+            </span>
           </div>
         )}
 
@@ -204,7 +247,7 @@ export function AIChatPanel({
                 void submit(draft);
               }
             }}
-            placeholder="Ask anything about this plan…"
+            placeholder="Ask about this project…"
             maxLength={MAX_MESSAGE_CHARS}
             rows={1}
             className="max-h-32 min-h-9 resize-none border-0 bg-transparent px-0 py-0 leading-5 shadow-none hover:border-transparent focus:border-transparent focus-visible:shadow-none focus:ring-0"
@@ -253,20 +296,61 @@ export function AIChatPanel({
   );
 }
 
-function ChatBubble({ role, content }: { role: 'user' | 'assistant'; content: string }) {
+function AgentMessage({
+  role,
+  parts,
+}: {
+  role: 'system' | 'user' | 'assistant';
+  parts: MessagePart[];
+}) {
   const isUser = role === 'user';
+  const text = parts
+    .filter((part) => part.type === 'text' && part.text)
+    .map((part) => part.text)
+    .join('');
+  const toolParts = parts.filter(
+    (part) => part.type === 'dynamic-tool' || part.type.startsWith('tool-'),
+  );
+  if (!text && toolParts.length === 0) return null;
+
   return (
-    <div className={cn('fp-chat-msg flex items-end', isUser ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-lg px-3 py-2 text-sm break-words whitespace-pre-wrap',
-          isUser
-            ? 'rounded-br-xs bg-accent text-on-accent'
-            : 'rounded-bl-xs border border-line bg-surface text-t1',
-        )}
-      >
-        {content}
-      </div>
+    <div className={cn('fp-chat-msg flex flex-col gap-1.5', isUser ? 'items-end' : 'items-start')}>
+      {text && (
+        <div
+          className={cn(
+            'max-w-[85%] rounded-lg px-3 py-2 text-sm break-words whitespace-pre-wrap',
+            isUser
+              ? 'rounded-br-xs bg-accent text-on-accent'
+              : 'rounded-bl-xs border border-line bg-surface text-t1',
+          )}
+        >
+          {text}
+        </div>
+      )}
+      {toolParts.map((part, index) => (
+        <ToolActivity key={`${part.type}-${index}`} part={part} />
+      ))}
+    </div>
+  );
+}
+
+function ToolActivity({ part }: { part: MessagePart }) {
+  const rawName = part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
+  const name = rawName ? rawName.replaceAll('_', ' ') : 'project data';
+  const failed = part.state === 'output-error' || part.state === 'output-denied';
+  const complete = part.state === 'output-available';
+  const Icon = failed ? CircleAlert : complete ? Check : Search;
+  const verb = failed ? 'Could not check' : complete ? 'Checked' : 'Checking';
+  return (
+    <div
+      className={cn(
+        'flex max-w-[90%] items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs',
+        failed ? 'border-danger/30 bg-danger-soft text-danger' : 'border-line bg-surface-2 text-t2',
+      )}
+      title={failed ? part.errorText : undefined}
+    >
+      <Icon className="size-3.5 shrink-0" />
+      <span className="capitalize">{`${verb} ${name}`}</span>
     </div>
   );
 }

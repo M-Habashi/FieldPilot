@@ -1,12 +1,17 @@
+import agentTest from '@convex-dev/agent/test';
+import rateLimiterTest from '@convex-dev/rate-limiter/test';
 import { convexTest } from 'convex-test';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { api, internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import schema from './schema';
 import { modules } from './test.setup';
 
 function createTest() {
-  return convexTest(schema, modules);
+  const t = convexTest(schema, modules);
+  agentTest.register(t);
+  rateLimiterTest.register(t);
+  return t;
 }
 
 type TestInstance = ReturnType<typeof createTest>;
@@ -172,5 +177,68 @@ describe('AI chat', () => {
         (message) => message.content,
       ),
     ).toEqual(['Owner note']);
+  });
+
+  it('binds component threads to the member and rate limits model runs', async () => {
+    vi.useFakeTimers();
+    try {
+      const t = createTest();
+      const ownerId = await seedUser(t, 'Chat Owner', 'chat-owner@example.com');
+      const outsiderId = await seedUser(t, 'Chat Outsider', 'chat-outsider@example.com');
+      const owner = t.withIdentity({ subject: ownerId });
+      const outsider = t.withIdentity({ subject: outsiderId });
+      const projectId = await owner.mutation(api.projects.create, { name: 'Agent Chat Project' });
+      const threadId = 'agent-thread';
+
+      for (let index = 0; index < 3; index += 1) {
+        await owner.mutation(api.chat.sendMessage, {
+          projectId,
+          threadId,
+          content: `Question ${index + 1}`,
+          context: { localDate: '2026-08-27' },
+        });
+        await t.run(async (ctx) => {
+          const binding = await ctx.db
+            .query('agentThreadBindings')
+            .withIndex('by_project_user_client', (q) =>
+              q.eq('projectId', projectId).eq('userId', ownerId).eq('clientThreadId', threadId),
+            )
+            .unique();
+          if (binding === null) throw new Error('Expected an agent thread binding');
+          await ctx.db.patch(binding._id, {
+            runStatus: 'idle',
+            activePromptMessageId: undefined,
+          });
+        });
+      }
+
+      const state = await owner.query(api.chat.threadState, { projectId, threadId });
+      expect(state).toMatchObject({ exists: true, runStatus: 'idle' });
+      await expect(outsider.query(api.chat.threadState, { projectId, threadId })).rejects.toThrow(
+        'Not authorized for this project',
+      );
+
+      const messages = await owner.query(api.chat.listThreadMessages, {
+        projectId,
+        threadId,
+        paginationOpts: { cursor: null, numItems: 10 },
+      });
+      expect(messages.page.map((message) => message.text)).toEqual([
+        'Question 1',
+        'Question 2',
+        'Question 3',
+      ]);
+
+      await expect(
+        owner.mutation(api.chat.sendMessage, {
+          projectId,
+          threadId,
+          content: 'One too many',
+          context: { localDate: '2026-08-27' },
+        }),
+      ).rejects.toThrow('AI message limit reached');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
