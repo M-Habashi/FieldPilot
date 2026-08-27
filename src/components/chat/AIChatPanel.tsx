@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAction, useMutation, useQuery } from 'convex/react';
-import { Loader2, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Loader2, Paperclip, SendHorizontal, SlidersHorizontal, SquarePen, X } from 'lucide-react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
@@ -89,14 +89,14 @@ export function AIChatPanel({
       {/* Full-width close button pinned to the top of the panel. */}
       <Button
         variant="ghost"
-        className="fp-chat-section h-10 w-full shrink-0 rounded-none border-b border-line bg-surface font-semibold"
+        className="fp-chat-section h-10 w-full shrink-0 rounded-none font-semibold"
         onClick={onClose}
       >
         <X />
         Close chat
       </Button>
 
-      <div className="fp-chat-section flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-2.5">
+      <div className="fp-chat-section flex shrink-0 items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-t1">FieldPilot AI</div>
           <div className="truncate text-[11px] text-t3">{projectName}</div>
@@ -109,7 +109,7 @@ export function AIChatPanel({
           disabled={!messageCount || pending}
           onClick={() => setConfirmClear(true)}
         >
-          <Trash2 />
+          <SquarePen />
         </Button>
       </div>
 
@@ -150,10 +150,13 @@ export function AIChatPanel({
         )}
 
         {pending && (
-          <div className="fp-chat-msg flex justify-start">
-            <div className="flex items-center rounded-full border border-line bg-surface px-3.5 py-1.5 shadow-e1">
-              <span className="fp-chat-shimmer-text text-xs font-medium">Thinking…</span>
-            </div>
+          <div
+            className="fp-chat-msg flex items-center gap-2 text-t2"
+            role="status"
+            aria-live="polite"
+          >
+            <AIOrb size="sm" />
+            <span className="text-xs font-medium">Thinking…</span>
           </div>
         )}
 
@@ -165,13 +168,13 @@ export function AIChatPanel({
       </div>
 
       <form
-        className="fp-chat-section shrink-0 border-t border-line bg-surface p-3"
+        className="fp-chat-section shrink-0 px-3 pt-3 pb-12"
         onSubmit={(event) => {
           event.preventDefault();
           void submit(draft);
         }}
       >
-        <div className="flex items-end gap-2">
+        <div className="rounded-lg border border-line-strong px-3 py-2.5 shadow-e1 transition-[border-color,box-shadow] duration-(--fp-dur-fast) ease-(--fp-ease) focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15">
           <Textarea
             ref={textareaRef}
             value={draft}
@@ -185,24 +188,50 @@ export function AIChatPanel({
                 void submit(draft);
               }
             }}
-            placeholder="Ask about this plan…"
+            placeholder="Ask anything about this plan…"
             maxLength={MAX_MESSAGE_CHARS}
             rows={1}
-            className="max-h-32 min-h-9 flex-1 resize-none"
+            className="max-h-32 min-h-9 resize-none border-0 bg-transparent px-0 py-0 leading-5 shadow-none hover:border-transparent focus:border-transparent focus-visible:shadow-none focus:ring-0"
             aria-label="Message FieldPilot AI"
           />
-          <Button
-            type="submit"
-            variant="default"
-            size="icon"
-            title="Send message"
-            aria-label="Send message"
-            disabled={!draft.trim() || pending}
-          >
-            {pending ? <Loader2 className="animate-spin" /> : <SendHorizontal />}
-          </Button>
+          <div className="mt-2 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="iconXs"
+                title="Attachments are coming soon"
+                aria-label="Attachments are coming soon"
+                disabled
+                className="text-t3"
+              >
+                <Paperclip />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="iconXs"
+                title="Prompt settings are coming soon"
+                aria-label="Prompt settings are coming soon"
+                disabled
+                className="text-t3"
+              >
+                <SlidersHorizontal />
+              </Button>
+            </div>
+            <Button
+              type="submit"
+              variant="default"
+              size="iconSm"
+              title="Send message"
+              aria-label="Send message"
+              disabled={!draft.trim() || pending}
+              className="rounded-full"
+            >
+              {pending ? <Loader2 className="animate-spin" /> : <SendHorizontal />}
+            </Button>
+          </div>
         </div>
-        <p className="mt-1.5 text-[10px] text-t3">Enter to send · Shift+Enter for a new line</p>
       </form>
 
       <ConfirmDialog

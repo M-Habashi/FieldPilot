@@ -9,7 +9,7 @@ const ORB_SIZES = {
 
 /**
  * FieldPilot AI mark: the dotted "composing" thought-orb (an undulating
- * multi-band sash) from the thinking-orbs package, run at half speed.
+ * multi-band sash) from the thinking-orbs package, run at normal speed.
  * Canvas-rendered, pauses offscreen, and renders a static frame under
  * prefers-reduced-motion. The theme is pinned to light because every chat
  * surface it sits on is light.
@@ -25,7 +25,7 @@ export function AIOrb({
     <ThinkingOrb
       state="composing"
       size={ORB_SIZES[size]}
-      speed={0.5}
+      speed={1}
       theme="light"
       className={cn('fp-ai-orb', className)}
       aria-label="FieldPilot AI"
