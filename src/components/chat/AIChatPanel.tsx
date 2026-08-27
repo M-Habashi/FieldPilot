@@ -130,7 +130,7 @@ export function AIChatPanel({
           </div>
         ) : messages.length === 0 ? (
           <div className="fp-chat-msg flex flex-1 flex-col items-center justify-center gap-3 p-3 text-center">
-            <AIOrb size="lg" />
+            <AIOrb size="lg" state="searching" />
             <div>
               <p className="text-sm font-semibold text-t1">Ask FieldPilot AI</p>
               <p className="mt-1 text-xs text-t2">
