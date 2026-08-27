@@ -42,16 +42,24 @@ Last reviewed: 2026-08-27
     remains optional for an approved OpenAI-compatible network proxy, and `AI_CHAT_MODEL` selects
     the OpenAI model.
 - `AI_CHAT_BASE_URL` defaults to `https://api.openai.com/v1` and `AI_CHAT_MODEL` defaults to
-  `gpt-4o-mini`. A third-party compatible endpoint must support function tools and streaming for
-  the agent experience; compatibility should be verified before production use.
+  `gpt-4o-mini`. A third-party compatible endpoint must support Chat Completions function tools;
+  this path does not require response streaming. The native OpenAI path uses Responses with
+  persisted streaming deltas. Compatibility should be verified before production use.
 - New chat history and tool events are stored by the Convex Agent component. The app-owned
   `agentThreadBindings` table binds each component thread to one project member and browser
   conversation. Entering a project starts a fresh conversation, while refreshing or navigating
   inside that project keeps the current one. Conversations are private to each member and never
   shared project-wide. The legacy `chatMessages` table remains temporarily for rollback.
-- The current agent release is read-only. Its six project-data tools re-check project membership on
-  every call. Write tools will be added only with persisted approval, execution-time role checks,
-  idempotency, audit receipts, and task pin placement before row creation.
+- Six project-data read tools execute automatically and re-check project membership on every call.
+  The initial write set is deliberately narrow: update a task's status, priority, due date, or
+  assignee; add a task note; and prepare a task for pin placement. Every write requires persisted
+  approval. Viewers receive read tools only, and deletes, invitations, project settings, outbound
+  messages, and bulk changes are not exposed.
+- Approved writes re-check the member's current role at execution time and use `agentOperations`
+  receipts keyed by the component tool-call ID for transactional idempotency. Task updates and
+  notes provide guarded Undo. A prepared task is not inserted into `tasks` until the user clicks
+  the approved sheet; the placement mutation requires the existing non-optional `sheetId`, `x`,
+  and `y` fields and is itself idempotent.
 - Chat requests are limited per authenticated user to a short burst of three, replenishing at six
   per minute, plus 60 per hour. The limit is consumed transactionally before any prompt is saved or
   model run is scheduled.

@@ -15,8 +15,13 @@ import {
   fieldPilotInstructions,
   type FieldPilotAgentContext,
 } from './agents/fieldPilot';
-import { assertChatConfigured } from './agents/provider';
-import { requireProjectMember, requireUser } from './lib/authz';
+import { assertChatConfigured, chatProviderInfo } from './agents/provider';
+import {
+  CONTENT_EDITOR_ROLES,
+  requireProjectMember,
+  requireProjectRole,
+  requireUser,
+} from './lib/authz';
 import { limitAiChat } from './lib/rateLimits';
 
 const MAX_MESSAGE_CHARS = 4000;
@@ -245,13 +250,56 @@ export const sendMessage = mutation({
   },
 });
 
+export const respondToApproval = mutation({
+  args: {
+    projectId: v.id('projects'),
+    threadId: v.string(),
+    approvalId: v.string(),
+    approved: v.boolean(),
+    context: chatContextArgs,
+  },
+  handler: async (ctx, { projectId, threadId, approvalId, approved, context }) => {
+    const userId = await requireUser(ctx);
+    await requireProjectMember(ctx, projectId, userId);
+    if (approved) await requireProjectRole(ctx, projectId, CONTENT_EDITOR_ROLES, userId);
+    const binding = await findBinding(ctx, projectId, userId, requireThreadId(threadId));
+    if (binding === null) throw new Error('Conversation not found');
+    if (binding.runStatus === 'queued' || binding.runStatus === 'running') {
+      throw new Error('Please wait for the current reply to finish');
+    }
+    await limitAiChat(ctx, userId);
+    const agent = createFieldPilotAgent();
+    const { messageId } = approved
+      ? await agent.approveToolCall(ctx, {
+          threadId: binding.componentThreadId,
+          approvalId,
+        })
+      : await agent.denyToolCall(ctx, {
+          threadId: binding.componentThreadId,
+          approvalId,
+          reason: 'The user declined this action.',
+        });
+    await ctx.db.patch(binding._id, {
+      runStatus: 'queued',
+      activePromptMessageId: messageId,
+      lastError: undefined,
+      updatedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, internal.chat.generateResponse, {
+      bindingId: binding._id,
+      promptMessageId: messageId,
+      context,
+    });
+  },
+});
+
 export const getRunBinding = internalQuery({
   args: { bindingId: v.id('agentThreadBindings') },
   handler: async (ctx, { bindingId }) => {
     const binding = await ctx.db.get(bindingId);
     if (binding === null) throw new Error('Conversation not found');
-    await requireProjectMember(ctx, binding.projectId, binding.userId);
-    return binding;
+    const membership = await requireProjectMember(ctx, binding.projectId, binding.userId);
+    return { ...binding, role: membership.role };
   },
 });
 
@@ -295,21 +343,26 @@ export const generateResponse = internalAction({
         ...ctx,
         projectId: binding.projectId,
         actorId: binding.userId,
+        bindingId: binding._id,
         today,
       } satisfies typeof ctx & FieldPilotAgentContext;
-      const agent = createFieldPilotAgent();
-      await agent.streamText(
-        agentCtx,
-        {
-          userId: `${binding.projectId}:${binding.userId}`,
-          threadId: binding.componentThreadId,
-        },
-        {
-          promptMessageId,
-          instructions: fieldPilotInstructions(context as ChatContext | undefined),
-        },
-        { saveStreamDeltas: true },
-      );
+      const agent = createFieldPilotAgent(binding.role !== 'viewer');
+      const scope = {
+        userId: `${binding.projectId}:${binding.userId}`,
+        threadId: binding.componentThreadId,
+      };
+      const prompt = {
+        promptMessageId,
+        instructions: fieldPilotInstructions(context as ChatContext | undefined),
+      };
+      if (chatProviderInfo().provider === 'openai') {
+        await agent.streamText(agentCtx, scope, prompt, { saveStreamDeltas: true });
+      } else {
+        // The existing provider contract guarantees Chat Completions and tool
+        // calling, not SSE streaming. Keep that path non-streaming so current
+        // OpenAI-compatible gateways continue to work unchanged.
+        await agent.generateText(agentCtx, scope, prompt);
+      }
       await ctx.runMutation(internal.chat.setRunState, {
         bindingId,
         promptMessageId,

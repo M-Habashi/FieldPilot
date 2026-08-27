@@ -52,7 +52,7 @@ type RemoteTaskPatch = Partial<
 >;
 
 export interface RemoteProjectSync {
-  createTask(task: Task): Promise<string>;
+  createTask(task: Task, agentOperationId?: string): Promise<string>;
   updateTask(taskId: string, patch: RemoteTaskPatch): Promise<void>;
   deleteTask(taskId: string): Promise<void>;
   addNote(taskId: string, text: string): Promise<string>;
@@ -61,6 +61,23 @@ export interface RemoteProjectSync {
   saveMarkup(markup: Markup): Promise<void>;
   deleteMarkup(markupId: string): Promise<void>;
   setCalibration(page: number, calibration: PageCalibration | null): Promise<void>;
+}
+
+export interface AgentTaskPlacement {
+  operationId: string;
+  page: number;
+  task: {
+    title: string;
+    description: string;
+    status: Task['status'];
+    priority: Task['priority'];
+    category: string;
+    assigneeText?: string;
+    assigneeUserId?: string;
+    dueDate?: string;
+    locationText?: string;
+    tags?: string[];
+  };
 }
 
 let remoteSync: RemoteProjectSync | null = null;
@@ -219,6 +236,7 @@ interface ProjectState {
   // ui
   selectedTaskId: string | null;
   addPinMode: boolean;
+  agentTaskPlacement: AgentTaskPlacement | null;
   taskListOpen: boolean;
   sidebarCollapsed: boolean;
   // Phones: the sidebar is an overlay drawer, hidden until the hamburger
@@ -247,6 +265,7 @@ interface ProjectState {
   selectTask(id: string | null): void;
   focusTask(id: string): void;
   setAddPinMode(on: boolean): void;
+  startAgentTaskPlacement(placement: AgentTaskPlacement): void;
   setMarkupTool(tool: MarkupTool | null): void;
   setSnappingEnabled(enabled: boolean): void;
   addMarkup(markup: Omit<Markup, 'id' | 'createdAt' | 'updatedAt'>): string;
@@ -318,6 +337,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   calibrations: {},
   selectedTaskId: null,
   addPinMode: false,
+  agentTaskPlacement: null,
   taskListOpen: false,
   // Default to the narrow icon rail; the single "Plans" item doesn't justify
   // the wide sidebar. Users expand it explicitly via the chevron.
@@ -348,6 +368,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       selectedMarkupId: null,
       markupTool: null,
       addPinMode: false,
+      agentTaskPlacement: null,
       focusRequest: null,
       historyPast: [],
       historyFuture: [],
@@ -368,6 +389,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       selectedMarkupId: null,
       markupTool: null,
       addPinMode: false,
+      agentTaskPlacement: null,
       taskListOpen: false,
       focusRequest: null,
       syncError: null,
@@ -384,6 +406,14 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   addTask(page, x, y) {
     const adapter = remoteSync;
+    const placement = get().agentTaskPlacement;
+    if (placement && placement.page !== page) {
+      set({
+        currentPage: placement.page,
+        syncError: `Place this task on page ${placement.page}.`,
+      });
+      return '';
+    }
     const id = adapter ? `local:${uid()}` : uid();
     const now = Date.now();
     const seq = get().nextSeq;
@@ -393,22 +423,22 @@ export const useProject = create<ProjectState>((set, get) => ({
       x,
       y,
       seq,
-      title: '',
-      description: '',
-      status: 'open',
-      priority: 2,
-      category: 'general',
+      title: placement?.task.title ?? '',
+      description: placement?.task.description ?? '',
+      status: placement?.task.status ?? 'open',
+      priority: placement?.task.priority ?? 2,
+      category: placement?.task.category ?? 'general',
       color: get().lastTaskColor,
-      assignee: '',
-      assigneeUserId: null,
+      assignee: placement?.task.assigneeText ?? '',
+      assigneeUserId: placement?.task.assigneeUserId ?? null,
       plannedQuantity: null,
       completedQuantity: null,
       quantityUnit: 'EA',
       quantityItemId: null,
       startDate: null,
-      dueDate: null,
-      locationText: '',
-      tags: [],
+      dueDate: placement?.task.dueDate ?? null,
+      locationText: placement?.task.locationText ?? '',
+      tags: placement?.task.tags ?? [],
       manpowerCount: null,
       costMinor: null,
       currencyCode: 'USD',
@@ -421,26 +451,36 @@ export const useProject = create<ProjectState>((set, get) => ({
       tasks: { ...s.tasks, [id]: task },
       nextSeq: seq + 1,
       selectedTaskId: id,
+      agentTaskPlacement: null,
+      addPinMode: placement ? false : s.addPinMode,
     }));
     schedulePersist(get);
     if (adapter) {
       void adapter
-        .createTask(task)
+        .createTask(task, placement?.operationId)
         .then((serverId) => {
           let currentTask: Task | null = null;
+          let shouldUpdate = false;
           set((state) => {
             const current = state.tasks[id];
             if (!current) return state;
+            shouldUpdate = current.updatedAt !== task.updatedAt;
             currentTask = { ...current, id: serverId };
             const tasks = { ...state.tasks };
             delete tasks[id];
+            if (tasks[serverId]) {
+              return {
+                tasks,
+                selectedTaskId: state.selectedTaskId === id ? serverId : state.selectedTaskId,
+              };
+            }
             tasks[serverId] = currentTask;
             return {
               tasks,
               selectedTaskId: state.selectedTaskId === id ? serverId : state.selectedTaskId,
             };
           });
-          if (currentTask) {
+          if (currentTask && shouldUpdate) {
             pendingRemoteUpdates.add(serverId);
             void adapter
               .updateTask(serverId, remotePatch(currentTask))
@@ -450,8 +490,19 @@ export const useProject = create<ProjectState>((set, get) => ({
           }
         })
         .catch((error: unknown) => {
-          set({
-            syncError: error instanceof Error ? error.message : 'The pin could not be saved.',
+          set((state) => {
+            if (!placement) {
+              return {
+                syncError: error instanceof Error ? error.message : 'The pin could not be saved.',
+              };
+            }
+            const tasks = { ...state.tasks };
+            delete tasks[id];
+            return {
+              tasks,
+              selectedTaskId: state.selectedTaskId === id ? null : state.selectedTaskId,
+              syncError: error instanceof Error ? error.message : 'The pin could not be saved.',
+            };
           });
         });
     }
@@ -674,13 +725,31 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   setAddPinMode(on) {
-    set({ addPinMode: on, markupTool: on ? null : get().markupTool, selectedMarkupId: null });
+    set({
+      addPinMode: on,
+      agentTaskPlacement: on ? get().agentTaskPlacement : null,
+      markupTool: on ? null : get().markupTool,
+      selectedMarkupId: null,
+    });
+  },
+
+  startAgentTaskPlacement(placement) {
+    set({
+      currentPage: placement.page,
+      agentTaskPlacement: placement,
+      addPinMode: true,
+      markupTool: null,
+      selectedTaskId: null,
+      selectedMarkupId: null,
+      syncError: null,
+    });
   },
 
   setMarkupTool(tool) {
     set({
       markupTool: tool,
       addPinMode: false,
+      agentTaskPlacement: null,
       selectedTaskId: null,
       taskListOpen: false,
       selectedMarkupId: tool === 'select' ? get().selectedMarkupId : null,

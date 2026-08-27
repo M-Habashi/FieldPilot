@@ -222,6 +222,7 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
   const currentPage = useProject((s) => s.currentPage);
   const currentCalibration = useProject((s) => s.calibrations[s.currentPage]);
   const addPinMode = useProject((s) => s.addPinMode);
+  const agentTaskPlacement = useProject((s) => s.agentTaskPlacement);
   const markupTool = useProject((s) => s.markupTool);
   const addTask = useProject((s) => s.addTask);
   const moveTask = useProject((s) => s.moveTask);
@@ -1025,7 +1026,9 @@ export function Viewer({ doc }: { doc: PDFDocumentProxy }) {
           addPinMode ? 'opacity-100 translate-y-0' : '-translate-y-3 opacity-0',
         )}
       >
-        Click the sheet to place a pin — Esc to finish
+        {agentTaskPlacement
+          ? `Click the sheet to place “${agentTaskPlacement.task.title}” — Esc to cancel`
+          : 'Click the sheet to place a pin — Esc to finish'}
       </div>
 
       <div

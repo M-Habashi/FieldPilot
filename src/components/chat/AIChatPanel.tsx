@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react';
 import {
   Check,
   CircleAlert,
+  MapPin,
   Paperclip,
   Search,
   SendHorizontal,
@@ -35,6 +36,33 @@ type MessagePart = {
   toolName?: string;
   title?: string;
   errorText?: string;
+  input?: unknown;
+  output?: unknown;
+  approval?: { id: string; approved?: boolean };
+};
+
+type OperationOutput = {
+  operationId: string;
+  summary: string;
+  undoAvailable?: boolean;
+  clientDirective?: {
+    kind: 'place_task_pin';
+    operationId: string;
+    page: number;
+    sheetNumber: string;
+    task: {
+      title: string;
+      description: string;
+      status: 'open' | 'in-progress' | 'done' | 'verified';
+      priority: 1 | 2 | 3;
+      category: string;
+      assigneeText?: string;
+      assigneeUserId?: string;
+      dueDate?: string;
+      locationText?: string;
+      tags?: string[];
+    };
+  };
 };
 
 function localIsoDate() {
@@ -67,11 +95,16 @@ export function AIChatPanel({
     { initialNumItems: 50, stream: true },
   );
   const send = useMutation(api.chat.sendMessage);
+  const respondToApproval = useMutation(api.chat.respondToApproval);
+  const undoOperation = useMutation(api.agentOperations.undo);
+  const cancelPlacement = useMutation(api.agentOperations.cancelPlacement);
   const fileName = useProject((state) => state.fileName);
   const currentPage = useProject((state) => state.currentPage);
   const [draft, setDraft] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [actionPending, setActionPending] = useState<string | null>(null);
+  const [undoneOperations, setUndoneOperations] = useState<Set<string>>(() => new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -82,6 +115,15 @@ export function AIChatPanel({
     threadState === undefined || (threadState.exists && messageQuery.status === 'LoadingFirstPage');
   const error = submitError ?? threadState?.lastError ?? null;
   const messageCount = messages.length;
+  const startAgentTaskPlacement = useProject((state) => state.startAgentTaskPlacement);
+
+  const currentContext = () => ({
+    projectName,
+    sheetName: fileName ?? undefined,
+    page: currentPage,
+    view: activeView,
+    localDate: localIsoDate(),
+  });
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -98,13 +140,7 @@ export function AIChatPanel({
         projectId,
         threadId,
         content,
-        context: {
-          projectName,
-          sheetName: fileName ?? undefined,
-          page: currentPage,
-          view: activeView,
-          localDate: localIsoDate(),
-        },
+        context: currentContext(),
       });
       setDraft('');
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -113,6 +149,60 @@ export function AIChatPanel({
     } finally {
       setSubmitting(false);
       textareaRef.current?.focus();
+    }
+  };
+
+  const respond = async (approvalId: string, approved: boolean) => {
+    setSubmitError(null);
+    setActionPending(approvalId);
+    try {
+      await respondToApproval({
+        projectId,
+        threadId,
+        approvalId,
+        approved,
+        context: currentContext(),
+      });
+    } catch (cause) {
+      setSubmitError(userFacingError(cause));
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  const undo = async (operationId: string) => {
+    setSubmitError(null);
+    setActionPending(operationId);
+    try {
+      await undoOperation({ operationId: operationId as Id<'agentOperations'> });
+      setUndoneOperations((current) => new Set(current).add(operationId));
+    } catch (cause) {
+      setSubmitError(userFacingError(cause));
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  const placeTask = (output: OperationOutput) => {
+    const directive = output.clientDirective;
+    if (!directive) return;
+    startAgentTaskPlacement({
+      operationId: directive.operationId,
+      page: directive.page,
+      task: directive.task,
+    });
+    onClose();
+  };
+
+  const cancelTaskPlacement = async (operationId: string) => {
+    setSubmitError(null);
+    setActionPending(operationId);
+    try {
+      await cancelPlacement({ operationId: operationId as Id<'agentOperations'> });
+    } catch (cause) {
+      setSubmitError(userFacingError(cause));
+    } finally {
+      setActionPending(null);
     }
   };
 
@@ -137,7 +227,9 @@ export function AIChatPanel({
       <div className="fp-chat-section flex shrink-0 items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-t1">FieldPilot AI</div>
-          <div className="truncate text-[11px] text-t3">{projectName} · Read-only agent</div>
+          <div className="truncate text-[11px] text-t3">
+            {projectName} · Approval required for changes
+          </div>
         </div>
         <Button
           variant="ghost"
@@ -202,6 +294,12 @@ export function AIChatPanel({
               key={message.key}
               role={message.role}
               parts={message.parts as MessagePart[]}
+              actionPending={actionPending}
+              undoneOperations={undoneOperations}
+              onApproval={respond}
+              onUndo={undo}
+              onPlaceTask={placeTask}
+              onCancelPlacement={cancelTaskPlacement}
             />
           ))
         )}
@@ -299,9 +397,21 @@ export function AIChatPanel({
 function AgentMessage({
   role,
   parts,
+  actionPending,
+  undoneOperations,
+  onApproval,
+  onUndo,
+  onPlaceTask,
+  onCancelPlacement,
 }: {
   role: 'system' | 'user' | 'assistant';
   parts: MessagePart[];
+  actionPending: string | null;
+  undoneOperations: Set<string>;
+  onApproval: (approvalId: string, approved: boolean) => Promise<void>;
+  onUndo: (operationId: string) => Promise<void>;
+  onPlaceTask: (output: OperationOutput) => void;
+  onCancelPlacement: (operationId: string) => Promise<void>;
 }) {
   const isUser = role === 'user';
   const text = parts
@@ -328,15 +438,114 @@ function AgentMessage({
         </div>
       )}
       {toolParts.map((part, index) => (
-        <ToolActivity key={`${part.type}-${index}`} part={part} />
+        <ToolActivity
+          key={`${part.type}-${index}`}
+          part={part}
+          actionPending={actionPending}
+          undoneOperations={undoneOperations}
+          onApproval={onApproval}
+          onUndo={onUndo}
+          onPlaceTask={onPlaceTask}
+          onCancelPlacement={onCancelPlacement}
+        />
       ))}
     </div>
   );
 }
 
-function ToolActivity({ part }: { part: MessagePart }) {
+function ToolActivity({
+  part,
+  actionPending,
+  undoneOperations,
+  onApproval,
+  onUndo,
+  onPlaceTask,
+  onCancelPlacement,
+}: {
+  part: MessagePart;
+  actionPending: string | null;
+  undoneOperations: Set<string>;
+  onApproval: (approvalId: string, approved: boolean) => Promise<void>;
+  onUndo: (operationId: string) => Promise<void>;
+  onPlaceTask: (output: OperationOutput) => void;
+  onCancelPlacement: (operationId: string) => Promise<void>;
+}) {
   const rawName = part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
   const name = rawName ? rawName.replaceAll('_', ' ') : 'project data';
+  const approvalId = part.state === 'approval-requested' ? part.approval?.id : undefined;
+  const operation = asOperationOutput(part.output);
+  if (approvalId) {
+    return (
+      <div className="max-w-[95%] rounded-lg border border-accent/35 bg-accent-soft p-3 text-xs text-t1">
+        <div className="font-semibold">Approval required</div>
+        <div className="mt-1 text-t2">{describeToolAction(rawName, part.input)}</div>
+        <div className="mt-3 flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={actionPending !== null}
+            onClick={() => void onApproval(approvalId, true)}
+          >
+            Approve
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={actionPending !== null}
+            onClick={() => void onApproval(approvalId, false)}
+          >
+            Deny
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (operation) {
+    const undone = undoneOperations.has(operation.operationId);
+    return (
+      <div className="max-w-[95%] rounded-lg border border-line bg-surface p-3 text-xs text-t1">
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 size-3.5 shrink-0 text-success" />
+          <span>{undone ? `Undid: ${operation.summary}` : operation.summary}</span>
+        </div>
+        {!undone && operation.clientDirective?.kind === 'place_task_pin' && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={actionPending !== null}
+              onClick={() => onPlaceTask(operation)}
+            >
+              <MapPin data-icon="inline-start" />
+              Place pin on {operation.clientDirective.sheetNumber}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={actionPending !== null}
+              onClick={() => void onCancelPlacement(operation.operationId)}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
+        {!undone && operation.undoAvailable && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            disabled={actionPending !== null}
+            onClick={() => void onUndo(operation.operationId)}
+          >
+            Undo
+          </Button>
+        )}
+      </div>
+    );
+  }
   const failed = part.state === 'output-error' || part.state === 'output-denied';
   const complete = part.state === 'output-available';
   const Icon = failed ? CircleAlert : complete ? Check : Search;
@@ -353,4 +562,30 @@ function ToolActivity({ part }: { part: MessagePart }) {
       <span className="capitalize">{`${verb} ${name}`}</span>
     </div>
   );
+}
+
+function asOperationOutput(value: unknown): OperationOutput | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<OperationOutput>;
+  return typeof candidate.operationId === 'string' && typeof candidate.summary === 'string'
+    ? (candidate as OperationOutput)
+    : null;
+}
+
+function describeToolAction(toolName: string | undefined, value: unknown) {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const taskNumber = typeof input.taskNumber === 'number' ? `Task #${input.taskNumber}` : 'task';
+  if (toolName === 'add_task_note') return `Add a note to ${taskNumber}.`;
+  if (toolName === 'create_task') {
+    const title = typeof input.title === 'string' ? `“${input.title}”` : 'a new task';
+    const sheet = typeof input.sheetNumber === 'string' ? ` on ${input.sheetNumber}` : '';
+    return `Prepare ${title}${sheet}, then ask you to place its pin.`;
+  }
+  if (toolName === 'update_task') {
+    const fields = ['status', 'priority', 'dueDate', 'assigneeName'].filter(
+      (field) => input[field] !== undefined,
+    );
+    return `Update ${taskNumber}${fields.length ? ` (${fields.join(', ')})` : ''}.`;
+  }
+  return `Run ${toolName?.replaceAll('_', ' ') ?? 'this action'}.`;
 }

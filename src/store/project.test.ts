@@ -87,6 +87,8 @@ afterEach(() => {
     historyPast: [],
     historyFuture: [],
     syncError: null,
+    agentTaskPlacement: null,
+    addPinMode: false,
   });
 });
 
@@ -141,5 +143,43 @@ describe('remote project synchronization', () => {
     projectStore.useProject.getState().redo();
     expect(projectStore.useProject.getState().markups[markupId]).toBeDefined();
     expect(saveMarkup).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for the plan click before creating an agent-prepared task', async () => {
+    const createTask = vi.fn(async () => 'agent-task');
+    projectStore.setRemoteProjectSync(remoteSync({ createTask }));
+    projectStore.useProject.getState().startAgentTaskPlacement({
+      operationId: 'operation-1',
+      page: 2,
+      task: {
+        title: 'Install firestopping',
+        description: 'At the rated corridor wall',
+        status: 'open',
+        priority: 1,
+        category: 'punch',
+        dueDate: '2026-09-01',
+      },
+    });
+
+    expect(createTask).not.toHaveBeenCalled();
+    expect(projectStore.useProject.getState()).toMatchObject({ currentPage: 2, addPinMode: true });
+
+    projectStore.useProject.getState().addTask(2, 0.4, 0.6);
+    expect(createTask).toHaveBeenCalledOnce();
+    expect(createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: 2,
+        x: 0.4,
+        y: 0.6,
+        title: 'Install firestopping',
+        priority: 1,
+      }),
+      'operation-1',
+    );
+    expect(projectStore.useProject.getState().addPinMode).toBe(false);
+
+    await vi.waitFor(() => {
+      expect(projectStore.useProject.getState().tasks['agent-task']).toBeDefined();
+    });
   });
 });

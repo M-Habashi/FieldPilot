@@ -348,4 +348,28 @@ export default defineSchema({
   })
     .index('by_project_user_client', ['projectId', 'userId', 'clientThreadId'])
     .index('by_component_thread', ['componentThreadId']),
+
+  // One durable receipt per model tool call. The binding/tool-call index is
+  // the idempotency key, so an approved write can be retried without applying
+  // the domain change twice.
+  agentOperations: defineTable({
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    threadBindingId: v.id('agentThreadBindings'),
+    toolCallId: v.string(),
+    kind: v.union(v.literal('update_task'), v.literal('add_task_note'), v.literal('create_task')),
+    status: v.union(v.literal('awaiting-placement'), v.literal('executed'), v.literal('undone')),
+    summary: v.string(),
+    input: v.any(),
+    undoData: v.optional(v.any()),
+    targetTaskId: v.optional(v.id('tasks')),
+    targetNoteId: v.optional(v.id('notes')),
+    targetSheetId: v.optional(v.id('sheets')),
+    targetUpdatedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    undoneAt: v.optional(v.number()),
+  })
+    .index('by_binding_tool_call', ['threadBindingId', 'toolCallId'])
+    .index('by_project_user', ['projectId', 'userId']),
 });

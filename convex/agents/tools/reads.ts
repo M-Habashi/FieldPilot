@@ -6,6 +6,7 @@ import type { DataModel, Id } from '../../_generated/dataModel';
 export type FieldPilotToolCtx = ToolCtx<DataModel> & {
   projectId: Id<'projects'>;
   actorId: Id<'users'>;
+  bindingId: Id<'agentThreadBindings'>;
   today: string;
 };
 

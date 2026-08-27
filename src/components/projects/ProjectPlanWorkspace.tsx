@@ -86,6 +86,7 @@ export function ProjectPlanWorkspace({
     selectedRemoteTaskId ? { taskId: selectedRemoteTaskId } : 'skip',
   );
   const createTask = useMutation(api.tasks.create);
+  const placeAgentTask = useMutation(api.agentOperations.placeTask);
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
   const createNote = useMutation(api.notes.create);
@@ -249,8 +250,17 @@ export function ProjectPlanWorkspace({
     }
 
     return {
-      async createTask(task) {
+      async createTask(task, agentOperationId) {
         const page = pageSheet(task.page);
+        if (agentOperationId) {
+          const placed = await placeAgentTask({
+            operationId: agentOperationId as Id<'agentOperations'>,
+            sheetId: page._id,
+            x: task.x,
+            y: task.y,
+          });
+          return placed.taskId;
+        }
         return await createTask({
           projectId: project._id,
           sheetId: page._id,
@@ -374,6 +384,7 @@ export function ProjectPlanWorkspace({
     createNote,
     createTask,
     generateAttachmentUploadUrl,
+    placeAgentTask,
     project._id,
     removeAttachment,
     removeTask,

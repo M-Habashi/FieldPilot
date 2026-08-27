@@ -10,9 +10,11 @@
 
 import type * as activity from "../activity.js";
 import type * as agentData from "../agentData.js";
+import type * as agentOperations from "../agentOperations.js";
 import type * as agents_fieldPilot from "../agents/fieldPilot.js";
 import type * as agents_provider from "../agents/provider.js";
 import type * as agents_tools_reads from "../agents/tools/reads.js";
+import type * as agents_tools_writes from "../agents/tools/writes.js";
 import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
 import type * as authEmail from "../authEmail.js";
@@ -52,9 +54,11 @@ import type {
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   agentData: typeof agentData;
+  agentOperations: typeof agentOperations;
   "agents/fieldPilot": typeof agents_fieldPilot;
   "agents/provider": typeof agents_provider;
   "agents/tools/reads": typeof agents_tools_reads;
+  "agents/tools/writes": typeof agents_tools_writes;
   attachments: typeof attachments;
   auth: typeof auth;
   authEmail: typeof authEmail;

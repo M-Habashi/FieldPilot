@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
-import type { Doc } from './_generated/dataModel';
-import { mutation, query } from './_generated/server';
+import type { Doc, Id } from './_generated/dataModel';
+import { mutation, query, type MutationCtx } from './_generated/server';
 import {
   CONTENT_EDITOR_ROLES,
   requireProjectMember,
@@ -120,6 +120,203 @@ function normalizeTags(value: string[] | undefined | null) {
   return tags.length > 0 ? tags : undefined;
 }
 
+export type CoreTaskUpdateArgs = {
+  taskId: Id<'tasks'>;
+  status?: Doc<'tasks'>['status'];
+  priority?: Doc<'tasks'>['priority'];
+  dueDate?: string | null;
+  assigneeText?: string | null;
+  assigneeUserId?: Id<'users'> | null;
+};
+
+// Shared by ordinary UI mutations and approved agent tools for the most
+// common field operations. Keeping validation, authorization, and activity
+// events here prevents the two write paths from drifting apart.
+export async function updateCoreTaskFieldsForActor(
+  ctx: MutationCtx,
+  args: CoreTaskUpdateArgs,
+  actorId: Id<'users'>,
+) {
+  const task = await ctx.db.get(args.taskId);
+  if (task === null) throw new Error('Task not found');
+  await requireProjectRole(ctx, task.projectId, CONTENT_EDITOR_ROLES, actorId);
+  if (args.assigneeUserId) {
+    await requireProjectMember(ctx, task.projectId, args.assigneeUserId);
+  }
+  const dueDate =
+    args.dueDate === undefined ? task.dueDate : normalizeDate(args.dueDate, 'Due date');
+  assertDateRange(task.startDate, dueDate);
+
+  const patch: Partial<Doc<'tasks'>> = { updatedAt: Date.now() };
+  if (args.status !== undefined) patch.status = args.status;
+  if (args.priority !== undefined) patch.priority = args.priority;
+  if (args.dueDate !== undefined) patch.dueDate = dueDate;
+  if (args.assigneeText !== undefined) {
+    patch.assigneeText = args.assigneeText?.trim() || undefined;
+  }
+  if (args.assigneeUserId !== undefined) {
+    patch.assigneeUserId = args.assigneeUserId ?? undefined;
+  }
+  await ctx.db.patch(task._id, patch);
+  const next = { ...task, ...patch };
+
+  const changes: Array<{
+    fieldKey: string;
+    fieldLabel: string;
+    oldValue?: string;
+    newValue?: string;
+  }> = [];
+  if (args.status !== undefined && task.status !== next.status) {
+    changes.push({
+      fieldKey: 'status',
+      fieldLabel: 'Status',
+      oldValue: STATUS_LABELS[task.status],
+      newValue: STATUS_LABELS[next.status],
+    });
+  }
+  if (args.priority !== undefined && task.priority !== next.priority) {
+    changes.push({
+      fieldKey: 'priority',
+      fieldLabel: 'Priority',
+      oldValue: PRIORITY_LABELS[task.priority],
+      newValue: PRIORITY_LABELS[next.priority],
+    });
+  }
+  if (args.dueDate !== undefined && task.dueDate !== next.dueDate) {
+    changes.push({
+      fieldKey: 'dueDate',
+      fieldLabel: 'Due date',
+      oldValue: task.dueDate,
+      newValue: next.dueDate,
+    });
+  }
+  if (
+    (args.assigneeUserId !== undefined || args.assigneeText !== undefined) &&
+    (task.assigneeUserId !== next.assigneeUserId || task.assigneeText !== next.assigneeText)
+  ) {
+    changes.push({
+      fieldKey: 'assignee',
+      fieldLabel: 'Assignee',
+      oldValue: task.assigneeText,
+      newValue: next.assigneeText,
+    });
+  }
+  for (const change of changes) {
+    await recordTaskChange(ctx, {
+      projectId: task.projectId,
+      taskId: task._id,
+      actorId,
+      ...change,
+    });
+  }
+  return await ctx.db.get(task._id);
+}
+
+export type CreateTaskForActorArgs = {
+  projectId: Id<'projects'>;
+  sheetId: Id<'sheets'>;
+  x: number;
+  y: number;
+  title?: string;
+  description?: string;
+  status?: Doc<'tasks'>['status'];
+  priority?: Doc<'tasks'>['priority'];
+  category?: string;
+  color?: string;
+  plannedQuantity?: number;
+  completedQuantity?: number;
+  quantityUnit?: string;
+  quantityItemId?: Id<'quantityItems'>;
+  startDate?: string;
+  locationText?: string;
+  tags?: string[];
+  manpowerCount?: number;
+  costMinor?: number;
+  currencyCode?: string;
+  assigneeText?: string;
+  assigneeUserId?: Id<'users'>;
+  dueDate?: string;
+};
+
+export async function createTaskForActor(
+  ctx: MutationCtx,
+  args: CreateTaskForActorArgs,
+  userId: Id<'users'>,
+) {
+  await requireProjectRole(ctx, args.projectId, CONTENT_EDITOR_ROLES, userId);
+  assertNormalizedCoordinate(args.x, 'x');
+  assertNormalizedCoordinate(args.y, 'y');
+
+  const sheet = await ctx.db.get(args.sheetId);
+  if (sheet === null || sheet.projectId !== args.projectId) {
+    throw new Error('Sheet does not belong to this project');
+  }
+  if (args.assigneeUserId !== undefined) {
+    await requireProjectMember(ctx, args.projectId, args.assigneeUserId);
+  }
+  const quantityItem = args.quantityItemId ? await ctx.db.get(args.quantityItemId) : undefined;
+  if (
+    quantityItem !== undefined &&
+    (quantityItem === null ||
+      quantityItem.projectId !== args.projectId ||
+      quantityItem.archivedAt !== undefined)
+  ) {
+    throw new Error('Quantity item does not belong to this project');
+  }
+
+  assertNonNegativeNumber(args.plannedQuantity, 'Planned quantity');
+  assertNonNegativeNumber(args.completedQuantity, 'Completed quantity');
+  assertNonNegativeInteger(args.manpowerCount, 'Manpower');
+  assertNonNegativeInteger(args.costMinor, 'Cost');
+  const quantityUnit = normalizeText(
+    args.quantityUnit ?? quantityItem?.defaultUnit,
+    'Quantity unit',
+    24,
+  );
+  const startDate = normalizeDate(args.startDate, 'Start date');
+  const dueDate = normalizeDate(args.dueDate, 'Due date');
+  assertDateRange(startDate, dueDate);
+  const locationText = normalizeText(args.locationText, 'Location', 120);
+  const tags = normalizeTags(args.tags);
+  const currencyCode = normalizeCurrencyCode(args.currencyCode);
+
+  const project = await ctx.db.get(args.projectId);
+  if (project === null) throw new Error('Project not found');
+  const now = Date.now();
+  const seq = project.nextTaskSeq;
+  await ctx.db.patch(project._id, { nextTaskSeq: seq + 1, updatedAt: now });
+
+  return await ctx.db.insert('tasks', {
+    projectId: args.projectId,
+    sheetId: args.sheetId,
+    seq,
+    x: args.x,
+    y: args.y,
+    title: args.title?.trim() ?? '',
+    description: args.description?.trim() ?? '',
+    status: args.status ?? 'open',
+    priority: args.priority ?? 2,
+    category: args.category?.trim() || 'general',
+    color: args.color,
+    plannedQuantity: args.plannedQuantity,
+    completedQuantity: args.completedQuantity,
+    quantityUnit,
+    quantityItemId: args.quantityItemId,
+    startDate,
+    locationText,
+    tags,
+    manpowerCount: args.manpowerCount,
+    costMinor: args.costMinor,
+    currencyCode,
+    assigneeText: args.assigneeText?.trim() || undefined,
+    assigneeUserId: args.assigneeUserId,
+    dueDate,
+    createdBy: userId,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
 export const listByPdf = query({
   args: { sheetId: v.id('sheets') },
   handler: async (ctx, { sheetId }) => {
@@ -214,78 +411,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
-    await requireProjectRole(ctx, args.projectId, CONTENT_EDITOR_ROLES, userId);
-    assertNormalizedCoordinate(args.x, 'x');
-    assertNormalizedCoordinate(args.y, 'y');
-
-    const sheet = await ctx.db.get(args.sheetId);
-    if (sheet === null || sheet.projectId !== args.projectId) {
-      throw new Error('Sheet does not belong to this project');
-    }
-    if (args.assigneeUserId !== undefined) {
-      await requireProjectMember(ctx, args.projectId, args.assigneeUserId);
-    }
-    const quantityItem = args.quantityItemId ? await ctx.db.get(args.quantityItemId) : undefined;
-    if (
-      quantityItem !== undefined &&
-      (quantityItem === null ||
-        quantityItem.projectId !== args.projectId ||
-        quantityItem.archivedAt !== undefined)
-    ) {
-      throw new Error('Quantity item does not belong to this project');
-    }
-
-    assertNonNegativeNumber(args.plannedQuantity, 'Planned quantity');
-    assertNonNegativeNumber(args.completedQuantity, 'Completed quantity');
-    assertNonNegativeInteger(args.manpowerCount, 'Manpower');
-    assertNonNegativeInteger(args.costMinor, 'Cost');
-    const quantityUnit = normalizeText(
-      args.quantityUnit ?? quantityItem?.defaultUnit,
-      'Quantity unit',
-      24,
-    );
-    const startDate = normalizeDate(args.startDate, 'Start date');
-    const dueDate = normalizeDate(args.dueDate, 'Due date');
-    assertDateRange(startDate, dueDate);
-    const locationText = normalizeText(args.locationText, 'Location', 120);
-    const tags = normalizeTags(args.tags);
-    const currencyCode = normalizeCurrencyCode(args.currencyCode);
-
-    const project = await ctx.db.get(args.projectId);
-    if (project === null) throw new Error('Project not found');
-    const now = Date.now();
-    const seq = project.nextTaskSeq;
-    await ctx.db.patch(project._id, { nextTaskSeq: seq + 1, updatedAt: now });
-
-    return await ctx.db.insert('tasks', {
-      projectId: args.projectId,
-      sheetId: args.sheetId,
-      seq,
-      x: args.x,
-      y: args.y,
-      title: args.title?.trim() ?? '',
-      description: args.description?.trim() ?? '',
-      status: args.status ?? 'open',
-      priority: args.priority ?? 2,
-      category: args.category?.trim() || 'general',
-      color: args.color,
-      plannedQuantity: args.plannedQuantity,
-      completedQuantity: args.completedQuantity,
-      quantityUnit,
-      quantityItemId: args.quantityItemId,
-      startDate,
-      locationText,
-      tags,
-      manpowerCount: args.manpowerCount,
-      costMinor: args.costMinor,
-      currencyCode,
-      assigneeText: args.assigneeText?.trim() || undefined,
-      assigneeUserId: args.assigneeUserId,
-      dueDate,
-      createdBy: userId,
-      createdAt: now,
-      updatedAt: now,
-    });
+    return await createTaskForActor(ctx, args, userId);
   },
 });
 
@@ -317,6 +443,17 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const actorId = await requireUser(ctx);
+    const suppliedKeys = Object.keys(args).filter(
+      (key) => key !== 'taskId' && args[key as keyof typeof args] !== undefined,
+    );
+    if (
+      suppliedKeys.every((key) =>
+        ['status', 'priority', 'dueDate', 'assigneeText', 'assigneeUserId'].includes(key),
+      )
+    ) {
+      await updateCoreTaskFieldsForActor(ctx, args, actorId);
+      return;
+    }
     const task = await ctx.db.get(args.taskId);
     if (task === null) throw new Error('Task not found');
     await requireProjectRole(ctx, task.projectId, CONTENT_EDITOR_ROLES, actorId);
