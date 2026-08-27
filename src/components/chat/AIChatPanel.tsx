@@ -130,7 +130,14 @@ export function AIChatPanel({
           </div>
         ) : messages.length === 0 ? (
           <div className="fp-chat-msg flex flex-1 flex-col items-center justify-center gap-3 p-3 text-center">
-            <AIOrb size="lg" state="searching" />
+            <img
+              src="/images/chat/fieldpilot-engineer-robot.svg"
+              alt="FieldPilot AI engineer robot"
+              width={64}
+              height={64}
+              className="fp-ai-robot-logo size-16 shrink-0 object-contain"
+              draggable={false}
+            />
             <div>
               <p className="text-sm font-semibold text-t1">Ask FieldPilot AI</p>
               <p className="mt-1 text-xs text-t2">
