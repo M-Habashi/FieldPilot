@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAction, useQuery } from 'convex/react';
-import { Loader2, Paperclip, SendHorizontal, SlidersHorizontal, SquarePen, X } from 'lucide-react';
+import { Paperclip, SendHorizontal, SlidersHorizontal, SquarePen, X } from 'lucide-react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { userFacingError } from '../../lib/errors';
@@ -120,8 +120,13 @@ export function AIChatPanel({
         className="fp-chat-section flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
       >
         {messages === undefined ? (
-          <div className="flex flex-1 items-center justify-center text-t2">
-            <Loader2 className="size-4 animate-spin text-accent" />
+          <div
+            className="flex flex-1 flex-col items-center justify-center gap-2 text-t2"
+            role="status"
+            aria-live="polite"
+          >
+            <AIOrb size="lg" state="searching" />
+            <span className="text-xs font-medium">Loading conversation…</span>
           </div>
         ) : messages.length === 0 ? (
           <div className="fp-chat-msg flex flex-1 flex-col items-center justify-center gap-3 p-3 text-center">
@@ -159,7 +164,7 @@ export function AIChatPanel({
             role="status"
             aria-live="polite"
           >
-            <AIOrb size="sm" />
+            <AIOrb size="sm" state="searching" />
             <span className="text-xs font-medium">Thinking…</span>
           </div>
         )}
@@ -232,7 +237,7 @@ export function AIChatPanel({
               disabled={!draft.trim() || pending}
               className="rounded-full"
             >
-              {pending ? <Loader2 className="animate-spin" /> : <SendHorizontal />}
+              {pending ? <AIOrb size="sm" state="searching" /> : <SendHorizontal />}
             </Button>
           </div>
         </div>
