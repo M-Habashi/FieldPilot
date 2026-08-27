@@ -4,6 +4,7 @@ import { action, internalMutation, internalQuery, mutation, query } from './_gen
 import { requireProjectMember, requireUser } from './lib/authz';
 
 const MAX_MESSAGE_CHARS = 4000;
+const MAX_THREAD_ID_CHARS = 128;
 const HISTORY_LIMIT = 100;
 const PROMPT_HISTORY_LIMIT = 20;
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -30,6 +31,13 @@ interface ChatContext {
   view?: string;
 }
 
+function requireThreadId(threadId: string) {
+  const normalized = threadId.trim();
+  if (!normalized) throw new Error('Conversation id is required');
+  if (normalized.length > MAX_THREAD_ID_CHARS) throw new Error('Conversation id is too long');
+  return normalized;
+}
+
 const chatContextArgs = v.optional(
   v.object({
     projectName: v.optional(v.string()),
@@ -40,13 +48,16 @@ const chatContextArgs = v.optional(
 );
 
 export const history = query({
-  args: { projectId: v.id('projects') },
-  handler: async (ctx, { projectId }) => {
+  args: { projectId: v.id('projects'), threadId: v.string() },
+  handler: async (ctx, { projectId, threadId }) => {
     const userId = await requireUser(ctx);
     await requireProjectMember(ctx, projectId, userId);
+    const currentThreadId = requireThreadId(threadId);
     const recent = await ctx.db
       .query('chatMessages')
-      .withIndex('by_project_user', (q) => q.eq('projectId', projectId).eq('userId', userId))
+      .withIndex('by_project_user_thread', (q) =>
+        q.eq('projectId', projectId).eq('userId', userId).eq('threadId', currentThreadId),
+      )
       .order('desc')
       .take(HISTORY_LIMIT);
     return recent.reverse();
@@ -54,23 +65,27 @@ export const history = query({
 });
 
 export const clear = mutation({
-  args: { projectId: v.id('projects') },
-  handler: async (ctx, { projectId }) => {
+  args: { projectId: v.id('projects'), threadId: v.string() },
+  handler: async (ctx, { projectId, threadId }) => {
     const userId = await requireUser(ctx);
     await requireProjectMember(ctx, projectId, userId);
+    const currentThreadId = requireThreadId(threadId);
     const messages = await ctx.db
       .query('chatMessages')
-      .withIndex('by_project_user', (q) => q.eq('projectId', projectId).eq('userId', userId))
+      .withIndex('by_project_user_thread', (q) =>
+        q.eq('projectId', projectId).eq('userId', userId).eq('threadId', currentThreadId),
+      )
       .collect();
     for (const message of messages) await ctx.db.delete(message._id);
   },
 });
 
 export const recordUserMessage = internalMutation({
-  args: { projectId: v.id('projects'), content: v.string() },
-  handler: async (ctx, { projectId, content }) => {
+  args: { projectId: v.id('projects'), threadId: v.string(), content: v.string() },
+  handler: async (ctx, { projectId, threadId, content }) => {
     const userId = await requireUser(ctx);
     await requireProjectMember(ctx, projectId, userId);
+    const currentThreadId = requireThreadId(threadId);
     const trimmed = content.trim();
     if (!trimmed) throw new Error('Message is required');
     if (trimmed.length > MAX_MESSAGE_CHARS) {
@@ -79,6 +94,7 @@ export const recordUserMessage = internalMutation({
     await ctx.db.insert('chatMessages', {
       projectId,
       userId,
+      threadId: currentThreadId,
       role: 'user',
       content: trimmed,
       createdAt: Date.now(),
@@ -88,12 +104,15 @@ export const recordUserMessage = internalMutation({
 });
 
 export const recentForPrompt = internalQuery({
-  args: { projectId: v.id('projects'), userId: v.id('users') },
-  handler: async (ctx, { projectId, userId }) => {
+  args: { projectId: v.id('projects'), userId: v.id('users'), threadId: v.string() },
+  handler: async (ctx, { projectId, userId, threadId }) => {
     await requireProjectMember(ctx, projectId, userId);
+    const currentThreadId = requireThreadId(threadId);
     const recent = await ctx.db
       .query('chatMessages')
-      .withIndex('by_project_user', (q) => q.eq('projectId', projectId).eq('userId', userId))
+      .withIndex('by_project_user_thread', (q) =>
+        q.eq('projectId', projectId).eq('userId', userId).eq('threadId', currentThreadId),
+      )
       .order('desc')
       .take(PROMPT_HISTORY_LIMIT);
     return recent
@@ -103,12 +122,19 @@ export const recentForPrompt = internalQuery({
 });
 
 export const recordAssistantMessage = internalMutation({
-  args: { projectId: v.id('projects'), userId: v.id('users'), content: v.string() },
-  handler: async (ctx, { projectId, userId, content }) => {
+  args: {
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    threadId: v.string(),
+    content: v.string(),
+  },
+  handler: async (ctx, { projectId, userId, threadId, content }) => {
     await requireProjectMember(ctx, projectId, userId);
+    const currentThreadId = requireThreadId(threadId);
     await ctx.db.insert('chatMessages', {
       projectId,
       userId,
+      threadId: currentThreadId,
       role: 'assistant',
       content,
       createdAt: Date.now(),
@@ -119,21 +145,29 @@ export const recordAssistantMessage = internalMutation({
 export const send = action({
   args: {
     projectId: v.id('projects'),
+    threadId: v.string(),
     content: v.string(),
     context: chatContextArgs,
   },
-  handler: async (ctx, { projectId, content, context }): Promise<{ reply: string }> => {
+  handler: async (ctx, { projectId, threadId, content, context }): Promise<{ reply: string }> => {
+    const currentThreadId = requireThreadId(threadId);
     // Persisting the user message first lets the client render it immediately
     // through the realtime history query while the provider call is pending.
     const { userId } = await ctx.runMutation(internal.chat.recordUserMessage, {
       projectId,
+      threadId: currentThreadId,
       content,
     });
-    const messages = await ctx.runQuery(internal.chat.recentForPrompt, { projectId, userId });
+    const messages = await ctx.runQuery(internal.chat.recentForPrompt, {
+      projectId,
+      userId,
+      threadId: currentThreadId,
+    });
     const reply = await completeChatReply(messages, context);
     await ctx.runMutation(internal.chat.recordAssistantMessage, {
       projectId,
       userId,
+      threadId: currentThreadId,
       content: reply,
     });
     return { reply };

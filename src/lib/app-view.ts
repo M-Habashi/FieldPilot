@@ -9,25 +9,45 @@
 export interface AppView {
   projectId: string | null;
   sheetId: string | null;
+  chatThreadId: string | null;
   view: 'plans' | 'map' | 'quantities';
 }
 
 const STORAGE_KEY = 'fp:app-view';
 
-const emptyView: AppView = { projectId: null, sheetId: null, view: 'plans' };
+const emptyView: AppView = {
+  projectId: null,
+  sheetId: null,
+  chatThreadId: null,
+  view: 'plans',
+};
+
+/** Creates an opaque conversation id. It is not a credential. */
+export function createChatThreadId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 export function readAppView(): AppView {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return emptyView;
     const parsed = JSON.parse(raw) as Partial<AppView>;
+    const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : null;
     return {
-      projectId: typeof parsed.projectId === 'string' ? parsed.projectId : null,
+      projectId,
       // A sheet without its project cannot be restored, and keeping it would
       // reopen a workspace against the wrong project.
-      sheetId:
-        typeof parsed.projectId === 'string' && typeof parsed.sheetId === 'string'
-          ? parsed.sheetId
+      sheetId: projectId !== null && typeof parsed.sheetId === 'string' ? parsed.sheetId : null,
+      // Threads follow the same project boundary. A refresh inside a project
+      // keeps the conversation, while entering from Projects creates a new id.
+      chatThreadId:
+        projectId !== null &&
+        typeof parsed.chatThreadId === 'string' &&
+        parsed.chatThreadId.length > 0
+          ? parsed.chatThreadId
           : null,
       view: parsed.view === 'map' || parsed.view === 'quantities' ? parsed.view : 'plans',
     };

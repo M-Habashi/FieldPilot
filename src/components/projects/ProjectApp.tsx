@@ -3,7 +3,7 @@ import { useAuthToken } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { patchAppView, readAppView } from '../../lib/app-view';
+import { createChatThreadId, patchAppView, readAppView } from '../../lib/app-view';
 import type { PhotoUploadDiagnosticEvent } from '../../lib/photo-upload-diagnostics';
 import { useBackGuard } from '../../hooks/useBackGuard';
 import { useOfflinePhotoQueueCoordinator } from '../../hooks/useOfflinePhotoQueue';
@@ -19,11 +19,15 @@ export function ProjectApp() {
   const acceptInvitation = useMutation(api.invitations.accept);
   const recordUploadDiagnostic = useMutation(api.photoUploadDiagnostics.record);
   const authToken = useAuthToken();
+  const [initialView] = useState(readAppView);
   const [activeProjectId, setActiveProjectId] = useState<Id<'projects'> | null>(
-    () => (readAppView().projectId as Id<'projects'> | null) ?? null,
+    (initialView.projectId as Id<'projects'> | null) ?? null,
   );
   const [activeSheetId, setActiveSheetId] = useState<Id<'sheets'> | null>(
-    () => (readAppView().sheetId as Id<'sheets'> | null) ?? null,
+    (initialView.sheetId as Id<'sheets'> | null) ?? null,
+  );
+  const [chatThreadId, setChatThreadId] = useState(
+    () => initialView.chatThreadId ?? createChatThreadId(),
   );
   const [pendingTaskId, setPendingTaskId] = useState<Id<'tasks'> | null>(null);
 
@@ -40,8 +44,12 @@ export function ProjectApp() {
   });
 
   useEffect(() => {
-    patchAppView({ projectId: activeProjectId, sheetId: activeSheetId });
-  }, [activeProjectId, activeSheetId]);
+    patchAppView({
+      projectId: activeProjectId,
+      sheetId: activeSheetId,
+      chatThreadId: activeProjectId === null ? null : chatThreadId,
+    });
+  }, [activeProjectId, activeSheetId, chatThreadId]);
 
   // The phone's back gesture climbs the app's own hierarchy — sheet, then
   // project, then the list — instead of leaving for the landing page. Panes
@@ -81,6 +89,7 @@ export function ProjectApp() {
         role={activeRow.membership.role}
         userId={user?._id ?? 'pending-user'}
         sheetId={activeSheetId}
+        chatThreadId={chatThreadId}
         initialTaskId={pendingTaskId}
         onInitialTaskOpened={() => setPendingTaskId(null)}
         onOpenQuantityTask={(sheetId, taskId) => {
@@ -88,6 +97,7 @@ export function ProjectApp() {
           setActiveSheetId(sheetId);
         }}
         onBackToProject={() => setActiveSheetId(null)}
+        onNewChatThread={() => setChatThreadId(createChatThreadId())}
       />
     );
   }
@@ -117,6 +127,7 @@ export function ProjectApp() {
       ) : (
         <ProjectListPage
           onOpenProject={(projectId) => {
+            setChatThreadId(createChatThreadId());
             setActiveProjectId(projectId);
             setActiveSheetId(null);
           }}

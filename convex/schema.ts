@@ -313,13 +313,17 @@ export default defineSchema({
     .index('by_project', ['projectId'])
     .index('by_user_project_purpose', ['userId', 'projectId', 'purpose']),
 
-  // AI chat history. Conversations are per user per project: each project
-  // member talks to their own assistant thread, never a shared channel.
+  // AI chat history. Conversations are per user, project, and thread: each
+  // project member talks to their own assistant, never a shared channel.
   chatMessages: defineTable({
     projectId: v.id('projects'),
     userId: v.id('users'),
+    // Optional only so messages created before threaded chat remain valid.
+    threadId: v.optional(v.string()),
     role: v.union(v.literal('user'), v.literal('assistant')),
     content: v.string(),
     createdAt: v.number(),
-  }).index('by_project_user', ['projectId', 'userId']),
+  })
+    .index('by_project_user', ['projectId', 'userId'])
+    .index('by_project_user_thread', ['projectId', 'userId', 'threadId']),
 });

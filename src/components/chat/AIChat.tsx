@@ -15,10 +15,14 @@ export function AIChat({
   projectId,
   projectName,
   activeView,
+  threadId,
+  onNewThread,
 }: {
   projectId: Id<'projects'>;
   projectName: string;
   activeView: string;
+  threadId: string;
+  onNewThread: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const { mounted, state, onAnimationEnd } = usePresence(open);
@@ -54,9 +58,12 @@ export function AIChat({
         >
           <ChatErrorBoundary onClose={() => setOpen(false)}>
             <AIChatPanel
+              key={threadId}
               projectId={projectId}
               projectName={projectName}
               activeView={activeView}
+              threadId={threadId}
+              onNewThread={onNewThread}
               onClose={() => setOpen(false)}
             />
           </ChatErrorBoundary>

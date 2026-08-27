@@ -34,10 +34,12 @@ interface ProjectPlanWorkspaceProps {
   role: 'owner' | 'admin' | 'member' | 'viewer';
   userId: string;
   sheetId: Id<'sheets'>;
+  chatThreadId: string;
   initialTaskId: Id<'tasks'> | null;
   onInitialTaskOpened: () => void;
   onOpenQuantityTask: (sheetId: Id<'sheets'>, taskId: Id<'tasks'>) => void;
   onBackToProject: () => void;
+  onNewChatThread: () => void;
 }
 
 export function ProjectPlanWorkspace({
@@ -45,10 +47,12 @@ export function ProjectPlanWorkspace({
   role,
   userId,
   sheetId,
+  chatThreadId,
   initialTaskId,
   onInitialTaskOpened,
   onOpenQuantityTask,
   onBackToProject,
+  onNewChatThread,
 }: ProjectPlanWorkspaceProps) {
   const workspace = useQuery(api.sheets.getPdfWorkspace, { sheetId });
   const taskRows = useQuery(api.tasks.listByPdf, { sheetId });
@@ -701,7 +705,13 @@ export function ProjectPlanWorkspace({
             </>
           )}
         </div>
-        <AIChat projectId={project._id} projectName={project.name} activeView={activeView} />
+        <AIChat
+          projectId={project._id}
+          projectName={project.name}
+          activeView={activeView}
+          threadId={chatThreadId}
+          onNewThread={onNewChatThread}
+        />
       </div>
       <Lightbox />
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAction, useMutation, useQuery } from 'convex/react';
+import { useAction, useQuery } from 'convex/react';
 import { Loader2, Paperclip, SendHorizontal, SlidersHorizontal, SquarePen, X } from 'lucide-react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -7,7 +7,6 @@ import { userFacingError } from '../../lib/errors';
 import { cn } from '../../lib/utils';
 import { useProject } from '../../store/project';
 import { Button } from '../ui/button';
-import { ConfirmDialog } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
 import { AIOrb } from './AIOrb';
 
@@ -23,22 +22,24 @@ export function AIChatPanel({
   projectId,
   projectName,
   activeView,
+  threadId,
+  onNewThread,
   onClose,
 }: {
   projectId: Id<'projects'>;
   projectName: string;
   activeView: string;
+  threadId: string;
+  onNewThread: () => void;
   onClose: () => void;
 }) {
-  const messages = useQuery(api.chat.history, { projectId });
+  const messages = useQuery(api.chat.history, { projectId, threadId });
   const send = useAction(api.chat.send);
-  const clear = useMutation(api.chat.clear);
   const fileName = useProject((state) => state.fileName);
   const currentPage = useProject((state) => state.currentPage);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmClear, setConfirmClear] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -61,6 +62,7 @@ export function AIChatPanel({
     try {
       await send({
         projectId,
+        threadId,
         content,
         context: {
           projectName,
@@ -92,7 +94,7 @@ export function AIChatPanel({
         className="fp-chat-section h-10 w-full shrink-0 rounded-none font-semibold"
         onClick={onClose}
       >
-        <X />
+        <X data-icon="inline-start" />
         Close chat
       </Button>
 
@@ -104,10 +106,10 @@ export function AIChatPanel({
         <Button
           variant="ghost"
           size="iconSm"
-          title="Clear conversation"
-          aria-label="Clear conversation"
+          title="New conversation"
+          aria-label="New conversation"
           disabled={!messageCount || pending}
-          onClick={() => setConfirmClear(true)}
+          onClick={onNewThread}
         >
           <SquarePen />
         </Button>
@@ -132,14 +134,16 @@ export function AIChatPanel({
             </div>
             <div className="flex w-full flex-col gap-1.5">
               {SUGGESTED_PROMPTS.map((prompt) => (
-                <button
+                <Button
                   key={prompt}
                   type="button"
-                  className="cursor-pointer rounded-md border border-line bg-surface px-3 py-2 text-left text-xs text-t2 shadow-e1 transition-[background,border-color,color,transform] duration-(--fp-dur-fast) ease-(--fp-ease) hover:border-line-strong hover:bg-surface2 hover:text-t1 active:translate-y-px"
+                  variant="outline"
+                  size="sm"
+                  className="h-auto w-full justify-start whitespace-normal py-2 text-left"
                   onClick={() => void submit(prompt)}
                 >
                   {prompt}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -233,20 +237,6 @@ export function AIChatPanel({
           </div>
         </div>
       </form>
-
-      <ConfirmDialog
-        open={confirmClear}
-        title="Clear this conversation?"
-        description="This deletes your AI chat history for this project. This cannot be undone."
-        confirmLabel="Clear conversation"
-        danger
-        onCancel={() => setConfirmClear(false)}
-        onConfirm={() => {
-          setConfirmClear(false);
-          setError(null);
-          void clear({ projectId });
-        }}
-      />
     </div>
   );
 }

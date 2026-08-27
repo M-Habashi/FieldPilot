@@ -37,8 +37,10 @@ Last reviewed: 2026-08-16
   (default `https://api.openai.com/v1`) and `AI_CHAT_MODEL` (default `gpt-4o-mini`) are optional;
   together they must form an OpenAI-compatible chat-completions endpoint, so compatible providers
   such as OpenRouter or a self-hosted gateway also work.
-- Chat history is stored per project member (`chatMessages` table); conversations are private to
-  each member, never shared project-wide.
+- Chat history is stored per project member and conversation (`chatMessages` table). Entering a
+  project from the Projects list starts a fresh conversation, while refreshing or navigating
+  inside that project keeps the current one. Conversations are private to each member and are
+  never shared project-wide.
 - Until `AI_CHAT_API_KEY` is configured, the chat panel opens normally but replies return a
   configuration error.
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearAppView, patchAppView, readAppView } from './app-view';
+import { clearAppView, createChatThreadId, patchAppView, readAppView } from './app-view';
 
 const STORAGE_KEY = 'fp:app-view';
 
@@ -23,16 +23,31 @@ afterEach(() => {
 
 describe('readAppView', () => {
   it('defaults to the project list when nothing is stored', () => {
-    expect(readAppView()).toEqual({ projectId: null, sheetId: null, view: 'plans' });
+    expect(readAppView()).toEqual({
+      projectId: null,
+      sheetId: null,
+      chatThreadId: null,
+      view: 'plans',
+    });
   });
 
   it('restores a stored project, sheet and view', () => {
     window.sessionStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ projectId: 'p1', sheetId: 's1', view: 'map' }),
+      JSON.stringify({
+        projectId: 'p1',
+        sheetId: 's1',
+        chatThreadId: 'thread-1',
+        view: 'map',
+      }),
     );
 
-    expect(readAppView()).toEqual({ projectId: 'p1', sheetId: 's1', view: 'map' });
+    expect(readAppView()).toEqual({
+      projectId: 'p1',
+      sheetId: 's1',
+      chatThreadId: 'thread-1',
+      view: 'map',
+    });
   });
 
   it('restores the project-wide quantities view', () => {
@@ -41,13 +56,23 @@ describe('readAppView', () => {
       JSON.stringify({ projectId: 'p1', sheetId: 's1', view: 'quantities' }),
     );
 
-    expect(readAppView()).toEqual({ projectId: 'p1', sheetId: 's1', view: 'quantities' });
+    expect(readAppView()).toEqual({
+      projectId: 'p1',
+      sheetId: 's1',
+      chatThreadId: null,
+      view: 'quantities',
+    });
   });
 
   it('drops a sheet stored without its project, which cannot be reopened safely', () => {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sheetId: 's1', view: 'map' }));
 
-    expect(readAppView()).toEqual({ projectId: null, sheetId: null, view: 'map' });
+    expect(readAppView()).toEqual({
+      projectId: null,
+      sheetId: null,
+      chatThreadId: null,
+      view: 'map',
+    });
   });
 
   it('falls back to plans for an unrecognised view', () => {
@@ -59,7 +84,22 @@ describe('readAppView', () => {
   it('survives corrupt storage', () => {
     window.sessionStorage.setItem(STORAGE_KEY, 'not json');
 
-    expect(readAppView()).toEqual({ projectId: null, sheetId: null, view: 'plans' });
+    expect(readAppView()).toEqual({
+      projectId: null,
+      sheetId: null,
+      chatThreadId: null,
+      view: 'plans',
+    });
+  });
+});
+
+describe('createChatThreadId', () => {
+  it('creates a non-empty id for each new project entry', () => {
+    const first = createChatThreadId();
+    const second = createChatThreadId();
+
+    expect(first).not.toBe('');
+    expect(second).not.toBe(first);
   });
 });
 
@@ -68,14 +108,24 @@ describe('patchAppView', () => {
     patchAppView({ projectId: 'p1', sheetId: 's1' });
     patchAppView({ view: 'map' });
 
-    expect(readAppView()).toEqual({ projectId: 'p1', sheetId: 's1', view: 'map' });
+    expect(readAppView()).toEqual({
+      projectId: 'p1',
+      sheetId: 's1',
+      chatThreadId: null,
+      view: 'map',
+    });
   });
 
   it('clears the sheet when the project is cleared', () => {
     patchAppView({ projectId: 'p1', sheetId: 's1' });
     patchAppView({ projectId: null, sheetId: null });
 
-    expect(readAppView()).toEqual({ projectId: null, sheetId: null, view: 'plans' });
+    expect(readAppView()).toEqual({
+      projectId: null,
+      sheetId: null,
+      chatThreadId: null,
+      view: 'plans',
+    });
   });
 });
 
@@ -85,6 +135,11 @@ describe('clearAppView', () => {
 
     clearAppView();
 
-    expect(readAppView()).toEqual({ projectId: null, sheetId: null, view: 'plans' });
+    expect(readAppView()).toEqual({
+      projectId: null,
+      sheetId: null,
+      chatThreadId: null,
+      view: 'plans',
+    });
   });
 });
