@@ -1,7 +1,7 @@
 /* FieldPilot's single Blueprint design token contract. */
 :root {
   /* Typography */
-  --fp-font-sans: 'IBM Plex Sans Variable', 'Segoe UI', sans-serif;
+  --fp-font-sans: 'Inter Variable', 'Segoe UI', sans-serif;
   --fp-font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --fp-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 

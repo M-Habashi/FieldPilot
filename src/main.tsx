@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, ConvexReactClient, Unauthenticated } from 'convex/react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/ibm-plex-sans';
+import '@fontsource-variable/inter';
 import '@fontsource/barlow-condensed/600.css';
 import '@fontsource/barlow-condensed/700.css';
 import '@fontsource-variable/jetbrains-mono';

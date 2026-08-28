@@ -5,6 +5,8 @@ import {
   Check,
   CircleAlert,
   MapPin,
+  Maximize2,
+  Minimize2,
   Paperclip,
   Search,
   SendHorizontal,
@@ -79,6 +81,8 @@ export function AIChatPanel({
   projectName,
   activeView,
   threadId,
+  expanded,
+  onToggleExpanded,
   onNewThread,
   onClose,
 }: {
@@ -86,6 +90,8 @@ export function AIChatPanel({
   projectName: string;
   activeView: string;
   threadId: string;
+  expanded: boolean;
+  onToggleExpanded: () => void;
   onNewThread: () => void;
   onClose: () => void;
 }) {
@@ -232,6 +238,16 @@ export function AIChatPanel({
             {projectName} · Approval required for changes
           </div>
         </div>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          className="hidden sm:inline-flex"
+          title={expanded ? 'Restore chat width' : 'Expand chat panel'}
+          aria-label={expanded ? 'Restore chat width' : 'Expand chat panel'}
+          onClick={onToggleExpanded}
+        >
+          {expanded ? <Minimize2 /> : <Maximize2 />}
+        </Button>
         <Button
           variant="ghost"
           size="iconSm"
