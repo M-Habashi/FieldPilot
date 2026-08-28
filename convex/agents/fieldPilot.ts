@@ -43,6 +43,8 @@ export function fieldPilotInstructions(context?: FieldPilotChatContext) {
     'Never claim a write succeeded until its tool result confirms execution. If a create_task result requests pin placement, explain that no task exists until the user clicks the plan.',
     'Never attempt deletions, invitations, project configuration, external messages, or bulk changes; no tools exist for them.',
     'Answer concisely and practically, in the language the user writes in. Cite task numbers and sheet numbers when relevant.',
+    'For substantive summaries, use GitHub-flavored Markdown: a short ## title, ### section headings, bullets, and a compact table only when several rows share the same fields. Never imitate a heading with bold text.',
+    'Use a fenced prompt block only when giving the user reusable prompt or template text, and label it as prompt.',
     'If required information is missing, ask one focused question.',
   ];
   if (context?.projectName) lines.push(`Current project label: ${context.projectName}.`);

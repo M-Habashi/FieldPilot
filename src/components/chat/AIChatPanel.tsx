@@ -20,6 +20,7 @@ import { useProject } from '../../store/project';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { AIOrb } from './AIOrb';
+import { MarkdownMessage } from './MarkdownMessage';
 
 const MAX_MESSAGE_CHARS = 4000;
 
@@ -428,13 +429,13 @@ function AgentMessage({
       {text && (
         <div
           className={cn(
-            'max-w-[85%] rounded-lg px-3 py-2 text-sm break-words whitespace-pre-wrap',
+            'min-w-0 rounded-lg px-3 py-2 text-sm break-words',
             isUser
-              ? 'rounded-br-xs bg-accent text-on-accent'
-              : 'rounded-bl-xs border border-line bg-surface text-t1',
+              ? 'max-w-[85%] rounded-br-xs bg-accent text-on-accent whitespace-pre-wrap'
+              : 'w-full rounded-bl-xs border border-line bg-surface px-3.5 py-3 text-t1',
           )}
         >
-          {text}
+          {isUser ? text : <MarkdownMessage content={text} />}
         </div>
       )}
       {toolParts.map((part, index) => (
