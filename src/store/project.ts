@@ -72,11 +72,20 @@ export interface AgentTaskPlacement {
     status: Task['status'];
     priority: Task['priority'];
     category: string;
+    color?: string;
     assigneeText?: string;
     assigneeUserId?: string;
+    startDate?: string;
     dueDate?: string;
     locationText?: string;
     tags?: string[];
+    manpowerCount?: number;
+    costMinor?: number;
+    currencyCode?: string;
+    plannedQuantity?: number;
+    completedQuantity?: number;
+    quantityUnit?: string;
+    quantityItemId?: string;
   };
 }
 
@@ -428,20 +437,20 @@ export const useProject = create<ProjectState>((set, get) => ({
       status: placement?.task.status ?? 'open',
       priority: placement?.task.priority ?? 2,
       category: placement?.task.category ?? 'general',
-      color: get().lastTaskColor,
+      color: placement?.task.color ?? get().lastTaskColor,
       assignee: placement?.task.assigneeText ?? '',
       assigneeUserId: placement?.task.assigneeUserId ?? null,
-      plannedQuantity: null,
-      completedQuantity: null,
-      quantityUnit: 'EA',
-      quantityItemId: null,
-      startDate: null,
+      plannedQuantity: placement?.task.plannedQuantity ?? null,
+      completedQuantity: placement?.task.completedQuantity ?? null,
+      quantityUnit: placement?.task.quantityUnit ?? 'EA',
+      quantityItemId: placement?.task.quantityItemId ?? null,
+      startDate: placement?.task.startDate ?? null,
       dueDate: placement?.task.dueDate ?? null,
       locationText: placement?.task.locationText ?? '',
       tags: placement?.task.tags ?? [],
-      manpowerCount: null,
-      costMinor: null,
-      currencyCode: 'USD',
+      manpowerCount: placement?.task.manpowerCount ?? null,
+      costMinor: placement?.task.costMinor ?? null,
+      currencyCode: placement?.task.currencyCode ?? 'USD',
       notes: [],
       photos: [],
       createdAt: now,

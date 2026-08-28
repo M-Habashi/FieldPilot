@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from 'convex/react';
 import {
   AlertTriangle,
@@ -37,10 +37,12 @@ export function ProjectQuantities({
   project,
   role,
   onOpenTask,
+  endActions,
 }: {
   project: Doc<'projects'>;
   role: Doc<'projectMembers'>['role'];
   onOpenTask: (sheetId: Id<'sheets'>, taskId: Id<'tasks'>) => void;
+  endActions?: ReactNode;
 }) {
   const reportRows = useQuery(api.quantities.getProjectReport, { projectId: project._id });
   const [search, setSearch] = useState('');
@@ -143,6 +145,7 @@ export function ProjectQuantities({
               </>
             )}
           </Dropdown>
+          {endActions}
         </ActionBarGroup>
       </ActionBar>
 

@@ -149,4 +149,86 @@ describe('agent project reads', () => {
       }),
     ]);
   });
+
+  it('returns exact reference values and complete editable task details for agent grounding', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'ReferenceOwner');
+    const owner = t.withIdentity({ subject: ownerId });
+    const projectId = await owner.mutation(api.projects.create, {
+      name: 'Reference Project',
+      code: 'REF',
+    });
+    const sheetId = await owner.mutation(api.sheets.create, {
+      projectId,
+      name: 'Reference Plan',
+      number: 'R-101',
+      discipline: 'Architectural',
+      sourceFileRef: '/plans/r-101.pdf',
+      pageIndex: 0,
+      width: 1000,
+      height: 800,
+    });
+    const taskId = await owner.mutation(api.tasks.create, {
+      projectId,
+      sheetId,
+      x: 0.2,
+      y: 0.3,
+      title: 'Colored task',
+      color: '#2563eb',
+      plannedQuantity: 8,
+      completedQuantity: 2,
+      quantityUnit: 'EA',
+    });
+    await owner.mutation(api.quantities.createItem, {
+      projectId,
+      name: 'Doors',
+      defaultUnit: 'EA',
+    });
+    const definitionId = await t.run(async (ctx) => {
+      const now = Date.now();
+      return await ctx.db.insert('taskAttributeDefinitions', {
+        projectId,
+        name: 'Ready for inspection',
+        type: 'boolean',
+        createdBy: ownerId,
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+    await owner.mutation(api.taskAttributes.setTaskValue, {
+      taskId,
+      definitionId,
+      value: { type: 'boolean', value: true },
+    });
+
+    const reference = await t.query(internal.agentData.referenceData, {
+      projectId,
+      userId: ownerId,
+    });
+    expect(reference).toMatchObject({
+      project: { name: 'Reference Project', code: 'REF', callerRole: 'owner' },
+      sheets: [{ number: 'R-101', discipline: 'Architectural' }],
+      quantityItems: [{ name: 'Doors', defaultUnit: 'EA' }],
+      customTaskAttributes: [{ name: 'Ready for inspection', type: 'boolean' }],
+    });
+    expect(reference.standardPinColors).toContainEqual({ name: 'Blue', value: '#2563eb' });
+
+    const details = await t.query(internal.agentData.taskDetails, {
+      projectId,
+      userId: ownerId,
+      taskNumber: 1,
+    });
+    expect(details.task).toMatchObject({ title: 'Colored task', color: '#2563eb' });
+    expect(details.quantities).toEqual([
+      expect.objectContaining({
+        lineNumber: 1,
+        legacy: true,
+        planned: 8,
+        completed: 2,
+      }),
+    ]);
+    expect(details.attributes).toContainEqual(
+      expect.objectContaining({ name: 'Ready for inspection', type: 'boolean', value: true }),
+    );
+  });
 });

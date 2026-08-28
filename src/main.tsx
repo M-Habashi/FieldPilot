@@ -17,7 +17,11 @@ if (!convexUrl) throw new Error('VITE_CONVEX_URL is not configured');
 const convex = new ConvexReactClient(convexUrl);
 const authStorage = createAuthStorage(window.localStorage, window.sessionStorage);
 
-const viewerCursorSources = ['/cursors/macos-pan-24.png', '/cursors/macos-grabbing-24.png'];
+const viewerCursorSources = [
+  '/cursors/macos-pan-24.png',
+  '/cursors/macos-grabbing-24.png',
+  '/cursors/macos-resize-horizontal-24.svg',
+];
 
 function preloadViewerCursors() {
   for (const src of viewerCursorSources) {

@@ -10,10 +10,15 @@
 
 import type * as activity from "../activity.js";
 import type * as agentData from "../agentData.js";
+import type * as agentImages from "../agentImages.js";
 import type * as agentOperations from "../agentOperations.js";
+import type * as agentSkills from "../agentSkills.js";
 import type * as agents_fieldPilot from "../agents/fieldPilot.js";
 import type * as agents_provider from "../agents/provider.js";
+import type * as agents_skills_definitions from "../agents/skills/definitions.js";
+import type * as agents_tools_images from "../agents/tools/images.js";
 import type * as agents_tools_reads from "../agents/tools/reads.js";
+import type * as agents_tools_skills from "../agents/tools/skills.js";
 import type * as agents_tools_writes from "../agents/tools/writes.js";
 import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
@@ -21,6 +26,8 @@ import type * as authEmail from "../authEmail.js";
 import type * as chat from "../chat.js";
 import type * as http from "../http.js";
 import type * as invitations from "../invitations.js";
+import type * as lib_agentImageChanges from "../lib/agentImageChanges.js";
+import type * as lib_agentProjectChanges from "../lib/agentProjectChanges.js";
 import type * as lib_authUser from "../lib/authUser.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_demoProject from "../lib/demoProject.js";
@@ -54,10 +61,15 @@ import type {
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   agentData: typeof agentData;
+  agentImages: typeof agentImages;
   agentOperations: typeof agentOperations;
+  agentSkills: typeof agentSkills;
   "agents/fieldPilot": typeof agents_fieldPilot;
   "agents/provider": typeof agents_provider;
+  "agents/skills/definitions": typeof agents_skills_definitions;
+  "agents/tools/images": typeof agents_tools_images;
   "agents/tools/reads": typeof agents_tools_reads;
+  "agents/tools/skills": typeof agents_tools_skills;
   "agents/tools/writes": typeof agents_tools_writes;
   attachments: typeof attachments;
   auth: typeof auth;
@@ -65,6 +77,8 @@ declare const fullApi: ApiFromModules<{
   chat: typeof chat;
   http: typeof http;
   invitations: typeof invitations;
+  "lib/agentImageChanges": typeof lib_agentImageChanges;
+  "lib/agentProjectChanges": typeof lib_agentProjectChanges;
   "lib/authUser": typeof lib_authUser;
   "lib/authz": typeof lib_authz;
   "lib/demoProject": typeof lib_demoProject;

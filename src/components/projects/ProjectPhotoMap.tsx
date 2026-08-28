@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -267,10 +275,26 @@ export function ProjectPhotoMap({
   project,
   role,
   userId,
+  aiChatAction,
+  photosPanelRequested,
+  photosPanelHandoffIncoming,
+  photosPanelHandoffWidth,
+  onRequestOpenPhotos,
+  onRequestClosePhotos,
+  onPhotosPanelHandoffComplete,
+  onPhotosPanelWidthChange,
 }: {
   project: Doc<'projects'>;
   role: ProjectRole;
   userId: string;
+  aiChatAction: ReactNode;
+  photosPanelRequested: boolean;
+  photosPanelHandoffIncoming: boolean;
+  photosPanelHandoffWidth: number | null;
+  onRequestOpenPhotos: () => void;
+  onRequestClosePhotos: () => void;
+  onPhotosPanelHandoffComplete: () => void;
+  onPhotosPanelWidthChange: (width: number) => void;
 }) {
   const canEdit = role !== 'viewer';
   const mapHostRef = useRef<HTMLDivElement>(null);
@@ -399,15 +423,28 @@ export function ProjectPhotoMap({
     [filteredPhotos],
   );
   const selectedPhoto = selectedPhotos[0] ?? null;
-  const panelVisible = photosPanelOpen || selectedPhotos.length > 0;
+  const panelVisible =
+    photosPanelRequested && (photosPanelOpen || selectedPhotos.length > 0);
   // The right pane is the list, the selection and the task picker together, so
   // dismissing it clears all three.
-  const closePhotosPanel = useCallback(() => {
+  const clearPhotosPanel = useCallback(() => {
     setSelectedPhotos([]);
     setPhotosPanelOpen(false);
     setTaskFocusRequested(false);
     setDrilledId(null);
   }, []);
+  const closePhotosPanel = useCallback(() => {
+    clearPhotosPanel();
+    onRequestClosePhotos();
+  }, [clearPhotosPanel, onRequestClosePhotos]);
+  const openPhotosPanel = useCallback(() => {
+    setPhotosPanelOpen(true);
+    onRequestOpenPhotos();
+  }, [onRequestOpenPhotos]);
+
+  useLayoutEffect(() => {
+    if (!photosPanelRequested) clearPhotosPanel();
+  }, [clearPhotosPanel, photosPanelRequested]);
 
   // Re-sync selection and the move target against the live query result so a
   // stale snapshot (e.g. after a restore) never feeds a stale
@@ -589,7 +626,7 @@ export function ProjectPhotoMap({
         setUploadNotice({ tone: 'success', message: 'Image uploaded successfully.' });
         setFilter('all');
         if (!completion.hasExifLocation) {
-          setPhotosPanelOpen(true);
+          openPhotosPanel();
           setPlacePromptIds((current) =>
             current.includes(attachmentId) ? current : [...current, attachmentId],
           );
@@ -611,7 +648,7 @@ export function ProjectPhotoMap({
             console.warn('Uploaded photo undo state could not be prepared', error);
           });
       }),
-    [convex, project._id, pushUndo, userId],
+    [convex, openPhotosPanel, project._id, pushUndo, userId],
   );
 
   const handleMove = useCallback(
@@ -919,9 +956,17 @@ export function ProjectPhotoMap({
     else if (selectedPhotos.length > 0) {
       setSelectedPhotos([]);
       setTaskFocusRequested(false);
-      setPhotosPanelOpen(true);
-    } else if (photosPanelOpen) setPhotosPanelOpen(false);
-  }, [contextMenu, drilledId, movingPhoto, photosPanelOpen, selectedPhotos.length]);
+      openPhotosPanel();
+    } else if (photosPanelOpen) closePhotosPanel();
+  }, [
+    closePhotosPanel,
+    contextMenu,
+    drilledId,
+    movingPhoto,
+    openPhotosPanel,
+    photosPanelOpen,
+    selectedPhotos.length,
+  ]);
 
   useBackGuard(
     contextMenu !== null ||
@@ -1270,6 +1315,7 @@ export function ProjectPhotoMap({
         }
         clearTouchPreview();
         setSelectedPhotos(group.photos);
+        onRequestOpenPhotos();
         setTaskFocusRequested(false);
         setContextMenu(null);
       });
@@ -1305,6 +1351,7 @@ export function ProjectPhotoMap({
     hoverActive,
     justPlacedId,
     movingPhoto,
+    onRequestOpenPhotos,
     pingPhotoId,
   ]);
 
@@ -1481,6 +1528,7 @@ export function ProjectPhotoMap({
 
   const openTaskAssignment = (photo: MapPhoto) => {
     setSelectedPhotos([photo]);
+    onRequestOpenPhotos();
     setTaskFocusRequested(true);
     setContextMenu(null);
   };
@@ -1643,12 +1691,14 @@ export function ProjectPhotoMap({
           <ActionBarButton
             icon={<Images />}
             label="Photos"
+            labelFrom="lg"
             aria-label={panelVisible ? 'Close photos panel' : 'Show photos list'}
             aria-pressed={panelVisible}
             active={panelVisible}
             title="Photos"
-            onClick={() => (panelVisible ? closePhotosPanel() : setPhotosPanelOpen(true))}
+            onClick={() => (panelVisible ? closePhotosPanel() : openPhotosPanel())}
           />
+          {aiChatAction}
         </ActionBarGroup>
       </ActionBar>
 
@@ -1708,9 +1758,11 @@ export function ProjectPhotoMap({
         <MapPhotoPanel
           photos={filteredPhotos}
           selectedPhotos={selectedPhotos}
+          open={panelVisible}
+          handoffIncoming={photosPanelHandoffIncoming}
+          handoffWidth={photosPanelHandoffWidth}
           canEdit={canEdit}
           tasks={tasks ?? []}
-          listOpen={photosPanelOpen}
           focusTaskSelect={taskFocusRequested}
           onTaskSelectFocused={() => setTaskFocusRequested(false)}
           drilledId={drilledId}
@@ -1749,12 +1801,14 @@ export function ProjectPhotoMap({
             setSelectedPhotos([]);
             setTaskFocusRequested(false);
             setDrilledId(null);
-            setPhotosPanelOpen(true);
+            openPhotosPanel();
           }}
           onHoverPhoto={(photo) => {
             setHoverPhotoId(photo.attachment._id);
           }}
           onHoverEnd={() => setHoverPhotoId(null)}
+          onHandoffComplete={onPhotosPanelHandoffComplete}
+          onPanelWidthChange={onPhotosPanelWidthChange}
         />
 
         {/* Move mode needs a visible commit on a phone: dragging alone cannot
@@ -1797,7 +1851,7 @@ export function ProjectPhotoMap({
                     Photos. Place {unmappedPhotos.length === 1 ? 'it' : 'them'} on the map to create
                     {unmappedPhotos.length === 1 ? ' a marker.' : ' markers.'}
                   </p>
-                  <Button className="mt-3 min-h-11" onClick={() => setPhotosPanelOpen(true)}>
+                  <Button className="mt-3 min-h-11" onClick={openPhotosPanel}>
                     <Images />
                     Open Photos
                   </Button>

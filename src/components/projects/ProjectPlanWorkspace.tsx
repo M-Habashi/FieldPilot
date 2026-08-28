@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
@@ -10,7 +10,7 @@ import { photoContentType } from '../../lib/photo-file';
 import { setRemoteProjectSync, useProject, type RemoteProjectSync } from '../../store/project';
 import type { Markup, PageCalibration, Priority, Status, Task } from '../../types';
 import { Lightbox } from '../Lightbox';
-import { AIChat } from '../chat/AIChat';
+import { AIChat, AIChatTrigger } from '../chat/AIChat';
 import { RightDrawer } from '../RightDrawer';
 import { Sidebar } from '../Sidebar';
 import { StatusBar } from '../StatusBar';
@@ -40,6 +40,14 @@ interface ProjectPlanWorkspaceProps {
   onOpenQuantityTask: (sheetId: Id<'sheets'>, taskId: Id<'tasks'>) => void;
   onBackToProject: () => void;
   onNewChatThread: () => void;
+}
+
+type WorkspaceRightPanel = 'photos' | 'chat';
+
+interface WorkspaceRightPanelState {
+  active: WorkspaceRightPanel | null;
+  incoming: WorkspaceRightPanel | null;
+  handoffWidth: number | null;
 }
 
 export function ProjectPlanWorkspace({
@@ -109,6 +117,88 @@ export function ProjectPlanWorkspace({
   const [savingPdf, setSavingPdf] = useState(false);
   const [activeView, setActiveView] = useState<'plans' | 'map' | 'quantities'>(
     () => readAppView().view,
+  );
+  const panelWidthsRef = useRef<Record<WorkspaceRightPanel, number>>({
+    photos: 384,
+    chat: 380,
+  });
+  const [rightPanelState, setRightPanelState] = useState<WorkspaceRightPanelState>({
+    active: null,
+    incoming: null,
+    handoffWidth: null,
+  });
+
+  const requestRightPanel = useCallback((panel: WorkspaceRightPanel) => {
+    setRightPanelState((current) => {
+      const visible = current.incoming ?? current.active;
+      if (visible === panel) return current;
+      if (visible === null) return { active: panel, incoming: null, handoffWidth: null };
+      return {
+        active: visible,
+        incoming: panel,
+        handoffWidth: panelWidthsRef.current[visible],
+      };
+    });
+  }, []);
+
+  const closeRightPanel = useCallback((panel: WorkspaceRightPanel) => {
+    setRightPanelState((current) => {
+      if (current.incoming === panel) {
+        return { ...current, incoming: null, handoffWidth: null };
+      }
+      if (current.active !== panel) return current;
+      if (current.incoming) {
+        return { active: current.incoming, incoming: null, handoffWidth: null };
+      }
+      return { active: null, incoming: null, handoffWidth: null };
+    });
+  }, []);
+
+  const completeRightPanelHandoff = useCallback((panel: WorkspaceRightPanel) => {
+    setRightPanelState((current) =>
+      current.incoming === panel
+        ? { active: panel, incoming: null, handoffWidth: null }
+        : current,
+    );
+  }, []);
+
+  const reportRightPanelWidth = useCallback((panel: WorkspaceRightPanel, width: number) => {
+    if (Number.isFinite(width) && width > 0) panelWidthsRef.current[panel] = width;
+  }, []);
+
+  const requestPhotosPanel = useCallback(
+    () => requestRightPanel('photos'),
+    [requestRightPanel],
+  );
+  const closePhotosPanel = useCallback(() => closeRightPanel('photos'), [closeRightPanel]);
+  const completePhotosPanelHandoff = useCallback(
+    () => completeRightPanelHandoff('photos'),
+    [completeRightPanelHandoff],
+  );
+  const reportPhotosPanelWidth = useCallback(
+    (width: number) => reportRightPanelWidth('photos', width),
+    [reportRightPanelWidth],
+  );
+  const closeChatPanel = useCallback(() => closeRightPanel('chat'), [closeRightPanel]);
+  const completeChatPanelHandoff = useCallback(
+    () => completeRightPanelHandoff('chat'),
+    [completeRightPanelHandoff],
+  );
+  const reportChatPanelWidth = useCallback(
+    (width: number) => reportRightPanelWidth('chat', width),
+    [reportRightPanelWidth],
+  );
+
+  const photosPanelRequested =
+    rightPanelState.active === 'photos' || rightPanelState.incoming === 'photos';
+  const chatPanelRequested =
+    rightPanelState.active === 'chat' || rightPanelState.incoming === 'chat';
+
+  const aiChatAction = (
+    <AIChatTrigger
+      open={chatPanelRequested}
+      onOpen={() => (chatPanelRequested ? closeChatPanel() : requestRightPanel('chat'))}
+    />
   );
   const customTaskAttributeDefinitions = useMemo<CustomTaskAttributeDefinition[]>(
     () =>
@@ -224,6 +314,10 @@ export function ProjectPlanWorkspace({
   useEffect(() => {
     patchAppView({ view: activeView });
   }, [activeView]);
+
+  useEffect(() => {
+    if (activeView !== 'map') closeRightPanel('photos');
+  }, [activeView, closeRightPanel]);
 
   const sidebarCollapsed = useProject((state) => state.sidebarCollapsed);
   const remoteTasksRef = useRef<Record<string, Task> | null>(null);
@@ -643,9 +737,26 @@ export function ProjectPlanWorkspace({
         />
         <div className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
           {activeView === 'map' ? (
-            <ProjectPhotoMap project={project} role={role} userId={userId} />
+            <ProjectPhotoMap
+              project={project}
+              role={role}
+              userId={userId}
+              aiChatAction={aiChatAction}
+              photosPanelRequested={photosPanelRequested}
+              photosPanelHandoffIncoming={rightPanelState.incoming === 'photos'}
+              photosPanelHandoffWidth={rightPanelState.handoffWidth}
+              onRequestOpenPhotos={requestPhotosPanel}
+              onRequestClosePhotos={closePhotosPanel}
+              onPhotosPanelHandoffComplete={completePhotosPanelHandoff}
+              onPhotosPanelWidthChange={reportPhotosPanelWidth}
+            />
           ) : activeView === 'quantities' ? (
-            <ProjectQuantities project={project} role={role} onOpenTask={onOpenQuantityTask} />
+            <ProjectQuantities
+              project={project}
+              role={role}
+              onOpenTask={onOpenQuantityTask}
+              endActions={aiChatAction}
+            />
           ) : (
             <>
               <Toolbar
@@ -655,6 +766,7 @@ export function ProjectPlanWorkspace({
                 onOpenPdf={() => undefined}
                 onImportJson={() => undefined}
                 onSavePdf={() => void saveMarkedUpPdf()}
+                endActions={aiChatAction}
               />
               {document && <MarkupPropertiesBar />}
               <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -721,6 +833,12 @@ export function ProjectPlanWorkspace({
           projectName={project.name}
           activeView={activeView}
           threadId={chatThreadId}
+          open={chatPanelRequested}
+          handoffIncoming={rightPanelState.incoming === 'chat'}
+          handoffWidth={rightPanelState.handoffWidth}
+          onClose={closeChatPanel}
+          onHandoffComplete={completeChatPanelHandoff}
+          onPanelWidthChange={reportChatPanelWidth}
           onNewThread={onNewChatThread}
         />
       </div>

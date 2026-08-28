@@ -51,6 +51,7 @@
   --fp-pin-radius: 50% 50% 50% 0;
   --fp-drawer-width: 384px;
   --fp-toolbar-height: 44px;
+  --fp-actionbar-height: 34px;
   --fp-canvas-texture:
     repeating-linear-gradient(0deg, rgb(41 78 148 / 0.055) 0 1px, transparent 1px 24px),
     repeating-linear-gradient(90deg, rgb(41 78 148 / 0.055) 0 1px, transparent 1px 24px),

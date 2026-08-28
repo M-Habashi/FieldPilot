@@ -342,12 +342,50 @@ export default defineSchema({
       v.literal('failed'),
     ),
     activePromptMessageId: v.optional(v.string()),
+    // Approval continuations can arrive after newer chat messages. Persist the
+    // originating AI job for each approval so every write from one user request
+    // remains one atomic undo step.
+    pendingApprovalJobs: v.optional(
+      v.array(v.object({ approvalId: v.string(), jobId: v.string() })),
+    ),
     lastError: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index('by_project_user_client', ['projectId', 'userId', 'clientThreadId'])
     .index('by_component_thread', ['componentThreadId']),
+
+  // Versioned, code-controlled workflow guidance for FieldPilot AI. There is
+  // intentionally no public mutation for this table: deployed source is the
+  // only authority that may create or update built-in skills.
+  agentSkills: defineTable({
+    key: v.union(v.literal('tasks'), v.literal('images')),
+    name: v.string(),
+    description: v.string(),
+    instructions: v.string(),
+    allowedTools: v.array(v.string()),
+    revision: v.number(),
+    updatedAt: v.number(),
+  }).index('by_key', ['key']),
+
+  // Token-only observability for validating that lazy skill loading reduces
+  // model context. User prompts and model responses are deliberately omitted.
+  agentRunMetrics: defineTable({
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    threadBindingId: v.id('agentThreadBindings'),
+    jobId: v.string(),
+    provider: v.string(),
+    model: v.string(),
+    loadedSkills: v.array(v.union(v.literal('tasks'), v.literal('images'))),
+    skillLoadingAllowed: v.boolean(),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    totalTokens: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index('by_project_createdAt', ['projectId', 'createdAt'])
+    .index('by_user_createdAt', ['userId', 'createdAt']),
 
   // One durable receipt per model tool call. The binding/tool-call index is
   // the idempotency key, so an approved write can be retried without applying
@@ -357,7 +395,15 @@ export default defineSchema({
     userId: v.id('users'),
     threadBindingId: v.id('agentThreadBindings'),
     toolCallId: v.string(),
-    kind: v.union(v.literal('update_task'), v.literal('add_task_note'), v.literal('create_task')),
+    jobId: v.optional(v.string()),
+    kind: v.union(
+      v.literal('update_task'),
+      v.literal('add_task_note'),
+      v.literal('create_task'),
+      v.literal('change_project_data'),
+      v.literal('change_image_data'),
+      v.literal('delete_images_permanently'),
+    ),
     status: v.union(v.literal('awaiting-placement'), v.literal('executed'), v.literal('undone')),
     summary: v.string(),
     input: v.any(),
@@ -371,5 +417,6 @@ export default defineSchema({
     undoneAt: v.optional(v.number()),
   })
     .index('by_binding_tool_call', ['threadBindingId', 'toolCallId'])
-    .index('by_project_user', ['projectId', 'userId']),
+    .index('by_project_user', ['projectId', 'userId'])
+    .index('by_project_user_job', ['projectId', 'userId', 'jobId']),
 });

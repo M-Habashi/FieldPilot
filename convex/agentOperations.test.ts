@@ -217,4 +217,237 @@ describe('agent write operations', () => {
       ),
     ).toHaveLength(2);
   });
+
+  it('changes broad project data in one batch and restores the entire batch through one Undo', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'BroadOwner');
+    const { owner, projectId, taskId } = await seedProjectTask(t, ownerId);
+    const bindingId = await seedBinding(t, projectId, ownerId, 'broad-change');
+    await owner.mutation(api.quantities.createItem, {
+      projectId,
+      name: 'Concrete',
+      defaultUnit: 'CY',
+    });
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.insert('taskAttributeDefinitions', {
+        projectId,
+        name: 'Inspection required',
+        type: 'boolean',
+        createdBy: ownerId,
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+
+    const receipt = await t.mutation(internal.agentOperations.changeProjectData, {
+      projectId,
+      userId: ownerId,
+      bindingId,
+      jobId: 'job-broad-1',
+      toolCallId: 'tool-broad-1',
+      changes: [
+        {
+          kind: 'update_task',
+          taskNumber: 1,
+          title: 'Renamed by AI',
+          color: 'red',
+          startDate: '2026-08-28',
+          dueDate: '2026-09-04',
+          tags: ['closeout', 'priority'],
+          manpowerCount: 4,
+          costMinor: 12500,
+          currencyCode: 'usd',
+          customAttributes: [{ name: 'Inspection required', value: true }],
+        },
+        {
+          kind: 'set_task_quantity',
+          taskNumber: 1,
+          quantityItemName: 'Concrete',
+          plannedQuantity: 12,
+          completedQuantity: 3,
+        },
+        { kind: 'add_task_note', taskNumber: 1, text: 'AI-created coordination note.' },
+        { kind: 'update_project', name: 'Agent Writes Renamed', code: 'AWR' },
+      ],
+    });
+
+    expect(receipt).toMatchObject({ jobId: 'job-broad-1', undoAvailable: true });
+    expect(await t.run(async (ctx) => ctx.db.get(taskId))).toMatchObject({
+      title: 'Renamed by AI',
+      color: '#dc2626',
+      startDate: '2026-08-28',
+      dueDate: '2026-09-04',
+      tags: ['closeout', 'priority'],
+      manpowerCount: 4,
+      costMinor: 12500,
+      currencyCode: 'USD',
+      plannedQuantity: 12,
+      completedQuantity: 3,
+    });
+    expect((await t.run(async (ctx) => ctx.db.get(projectId)))?.name).toBe('Agent Writes Renamed');
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query('notes')
+          .withIndex('by_task', (q) => q.eq('taskId', taskId))
+          .collect(),
+      ),
+    ).toHaveLength(1);
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query('taskAttributeValues')
+          .withIndex('by_task', (q) => q.eq('taskId', taskId))
+          .collect(),
+      ),
+    ).toHaveLength(1);
+
+    await owner.mutation(api.agentOperations.undoJob, { projectId, jobId: 'job-broad-1' });
+
+    expect(await t.run(async (ctx) => ctx.db.get(taskId))).toMatchObject({
+      title: 'Original task',
+      status: 'open',
+      priority: 2,
+    });
+    const restoredTask = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(restoredTask?.color).toBeUndefined();
+    expect(restoredTask?.plannedQuantity).toBeUndefined();
+    expect(restoredTask?.completedQuantity).toBeUndefined();
+    expect((await t.run(async (ctx) => ctx.db.get(projectId)))?.name).toBe('Agent Writes');
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query('notes')
+          .withIndex('by_task', (q) => q.eq('taskId', taskId))
+          .collect(),
+      ),
+    ).toEqual([]);
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query('taskAttributeValues')
+          .withIndex('by_task', (q) => q.eq('taskId', taskId))
+          .collect(),
+      ),
+    ).toEqual([]);
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query('taskActivityEvents')
+          .withIndex('by_task_createdAt', (q) => q.eq('taskId', taskId))
+          .collect(),
+      ),
+    ).toEqual([]);
+    expect(await t.run(async (ctx) => ctx.db.get(receipt.operationId))).toMatchObject({
+      status: 'undone',
+    });
+  });
+
+  it('groups multiple tool calls from one AI job into one atomic Undo step', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'GroupedOwner');
+    const { owner, projectId, taskId } = await seedProjectTask(t, ownerId);
+    const bindingId = await seedBinding(t, projectId, ownerId, 'grouped-change');
+    const shared = { projectId, userId: ownerId, bindingId, jobId: 'job-grouped-1' };
+
+    const first = await t.mutation(internal.agentOperations.changeProjectData, {
+      ...shared,
+      toolCallId: 'tool-grouped-1',
+      changes: [{ kind: 'update_task', taskNumber: 1, title: 'First AI edit' }],
+    });
+    const second = await t.mutation(internal.agentOperations.changeProjectData, {
+      ...shared,
+      toolCallId: 'tool-grouped-2',
+      changes: [{ kind: 'update_task', taskNumber: 1, color: '#2563eb', status: 'done' }],
+    });
+    expect(await t.run(async (ctx) => ctx.db.get(taskId))).toMatchObject({
+      title: 'First AI edit',
+      color: '#2563eb',
+      status: 'done',
+    });
+
+    await owner.mutation(api.agentOperations.undoJob, { projectId, jobId: 'job-grouped-1' });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task).toMatchObject({ title: 'Original task', status: 'open' });
+    expect(task?.color).toBeUndefined();
+    expect(await t.run(async (ctx) => ctx.db.get(first.operationId))).toMatchObject({
+      status: 'undone',
+    });
+    expect(await t.run(async (ctx) => ctx.db.get(second.operationId))).toMatchObject({
+      status: 'undone',
+    });
+  });
+
+  it('refuses the whole grouped Undo when newer work would be overwritten', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'ConflictOwner');
+    const { owner, projectId, taskId } = await seedProjectTask(t, ownerId);
+    const bindingId = await seedBinding(t, projectId, ownerId, 'conflict-change');
+    const shared = { projectId, userId: ownerId, bindingId, jobId: 'job-conflict-1' };
+    const projectChange = await t.mutation(internal.agentOperations.changeProjectData, {
+      ...shared,
+      toolCallId: 'tool-conflict-project',
+      changes: [{ kind: 'update_project', name: 'AI Project Name' }],
+    });
+    const taskChange = await t.mutation(internal.agentOperations.changeProjectData, {
+      ...shared,
+      toolCallId: 'tool-conflict-task',
+      changes: [{ kind: 'update_task', taskNumber: 1, title: 'AI Task Name' }],
+    });
+    await owner.mutation(api.tasks.update, { taskId, status: 'verified' });
+
+    await expect(
+      owner.mutation(api.agentOperations.undoJob, { projectId, jobId: 'job-conflict-1' }),
+    ).rejects.toThrow('changed after the AI job');
+
+    expect(await t.run(async (ctx) => ctx.db.get(taskId))).toMatchObject({
+      title: 'AI Task Name',
+      status: 'verified',
+    });
+    expect((await t.run(async (ctx) => ctx.db.get(projectId)))?.name).toBe('AI Project Name');
+    expect(await t.run(async (ctx) => ctx.db.get(projectChange.operationId))).toMatchObject({
+      status: 'executed',
+    });
+    expect(await t.run(async (ctx) => ctx.db.get(taskChange.operationId))).toMatchObject({
+      status: 'executed',
+    });
+  });
+
+  it('can undo an AI-created task after the user places its pin', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'CreatedTaskOwner');
+    const { owner, projectId, sheetId } = await seedProjectTask(t, ownerId);
+    const bindingId = await seedBinding(t, projectId, ownerId, 'created-task-undo');
+    const prepared = await t.mutation(internal.agentOperations.prepareTaskPlacement, {
+      projectId,
+      userId: ownerId,
+      bindingId,
+      jobId: 'job-create-1',
+      toolCallId: 'tool-create-undo-1',
+      sheetNumber: 'A-101',
+      title: 'Temporary AI task',
+      color: '#16a34a',
+      manpowerCount: 2,
+    });
+    const placed = await owner.mutation(api.agentOperations.placeTask, {
+      operationId: prepared.operationId,
+      sheetId,
+      x: 0.4,
+      y: 0.5,
+    });
+    expect(await t.run(async (ctx) => ctx.db.get(placed.taskId))).toMatchObject({
+      title: 'Temporary AI task',
+      color: '#16a34a',
+      manpowerCount: 2,
+    });
+
+    await owner.mutation(api.agentOperations.undoJob, { projectId, jobId: 'job-create-1' });
+
+    expect(await t.run(async (ctx) => ctx.db.get(placed.taskId))).toBeNull();
+    expect(await t.run(async (ctx) => ctx.db.get(prepared.operationId))).toMatchObject({
+      status: 'undone',
+    });
+  });
 });

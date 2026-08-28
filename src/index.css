@@ -92,7 +92,7 @@ select {
   }
 
   .fp-actionbar {
-    min-height: 34px;
+    height: var(--fp-actionbar-height);
     background: var(--fp-bg-surface);
     border-bottom: 1px solid var(--fp-border-strong);
     font-size: var(--fp-ui-font-size);
@@ -155,6 +155,13 @@ select {
 
   .fp-panel[data-state='closing'] {
     animation: fp-panel-out var(--fp-motion-duration) var(--fp-motion-ease) both;
+  }
+
+  /* During a right-panel switch, the incoming panel reveals over the old
+     panel. The coordinator dismisses the old panel only after this reaches
+     the same measured width. */
+  .fp-panel[data-handoff='incoming'] {
+    animation: fp-panel-handoff-in var(--fp-motion-duration) var(--fp-motion-ease) both;
   }
 
   .fp-drawer-view {
@@ -322,6 +329,12 @@ select {
   cursor:
     url('/cursors/macos-grabbing-24.png') 13 8,
     grabbing;
+}
+
+.cursor-col-resize {
+  cursor:
+    url('/cursors/macos-resize-horizontal-24.svg') 12 12,
+    col-resize;
 }
 
 .fp-photo-map-leaflet-icon {
@@ -858,6 +871,15 @@ select {
   }
 }
 
+@keyframes fp-panel-handoff-in {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
 /* Default exit — reverses fp-panel-in. Designs may override via
    --fp-anim-panel-out with their own <id>-panel-out keyframes. */
 @keyframes fp-panel-out {
@@ -921,6 +943,8 @@ select {
 /* The message canvas stays pale while the controls sit on a distinct,
    darker blue-gray chrome surface. */
 .fp-chat-panel {
+  top: var(--fp-actionbar-height);
+  bottom: 0;
   --fp-chat-canvas: color-mix(in srgb, var(--fp-bg-surface-2) 72%, var(--fp-accent-soft));
   --fp-chat-chrome: color-mix(in srgb, var(--fp-bg-inset) 60%, var(--fp-border-strong));
   --fp-chat-fade-size: 32px;

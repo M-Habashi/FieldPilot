@@ -9,4 +9,8 @@ App cursor derivatives scaled to 24x24 (75%):
 - macos-pan-24.png (hotspot 12,8)
 - macos-grabbing-24.png (hotspot 13,8)
 
+Exact SVG artwork copied from the v2.0.1 source tree, with its intrinsic canvas
+set to 24x24 and the source palette placeholders resolved to the White theme:
+- svg/sb_h_double_arrow.svg -> macos-resize-horizontal-24.svg (hotspot 12,12)
+
 License: GNU GPL v3.0; see LICENSE.apple_cursor.txt.

@@ -40,6 +40,42 @@ async function seedMembership(
 }
 
 describe('AI chat', () => {
+  it('persists the originating AI job for approval continuations', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'Approval Owner', 'approval-owner@example.com');
+    const owner = t.withIdentity({ subject: ownerId });
+    const projectId = await owner.mutation(api.projects.create, { name: 'Approval Project' });
+    const bindingId = await t.run(async (ctx) => {
+      const now = Date.now();
+      return await ctx.db.insert('agentThreadBindings', {
+        projectId,
+        userId: ownerId,
+        clientThreadId: 'approval-thread',
+        componentThreadId: 'component-approval-thread',
+        runStatus: 'running',
+        activePromptMessageId: 'prompt-message-1',
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+
+    await t.mutation(internal.chat.setRunState, {
+      bindingId,
+      promptMessageId: 'prompt-message-1',
+      runStatus: 'idle',
+      jobId: 'job-message-1',
+      approvalIds: ['approval-1', 'approval-2'],
+    });
+
+    expect(await t.run(async (ctx) => ctx.db.get(bindingId))).toMatchObject({
+      runStatus: 'idle',
+      pendingApprovalJobs: [
+        { approvalId: 'approval-1', jobId: 'job-message-1' },
+        { approvalId: 'approval-2', jobId: 'job-message-1' },
+      ],
+    });
+  });
+
   it('keeps conversations private per project member and returns them in order', async () => {
     const t = createTest();
     const ownerId = await seedUser(t, 'Chat Owner', 'chat-owner@example.com');

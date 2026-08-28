@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { Bot } from 'lucide-react';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { usePanelHandoff } from '../../hooks/usePanelHandoff';
 import { usePresence } from '../../hooks/usePresence';
 import { ActionBarButton } from '../ui/action-bar';
 import { AIChatPanel } from './AIChatPanel';
@@ -31,38 +32,79 @@ function clampPanelWidth(width: number) {
 }
 
 /**
- * AI assistant entry point for the plan workspace. The launch button anchors
- * to the top-right of the content area, directly below the header's Sign out
- * control, and opens a right-hand chat panel that overlays the viewer.
+ * AI assistant entry point for the project workspace. Its trigger is rendered
+ * by the active view's action bar; this component owns the coordinated
+ * right-hand panel below that persistent bar.
  */
+export function AIChatTrigger({ open, onOpen }: { open: boolean; onOpen: () => void }) {
+  return (
+    <ActionBarButton
+      icon={<Bot />}
+      label="AI Chat"
+      labelFrom="lg"
+      active={open}
+      aria-pressed={open}
+      title="Ask the AI assistant"
+      onClick={onOpen}
+    />
+  );
+}
+
 export function AIChat({
   projectId,
   projectName,
   activeView,
   threadId,
+  open,
+  handoffIncoming,
+  handoffWidth,
+  onClose,
+  onHandoffComplete,
+  onPanelWidthChange,
   onNewThread,
 }: {
   projectId: Id<'projects'>;
   projectName: string;
   activeView: string;
   threadId: string;
+  open: boolean;
+  handoffIncoming: boolean;
+  handoffWidth: number | null;
+  onClose: () => void;
+  onHandoffComplete: () => void;
+  onPanelWidthChange: (width: number) => void;
   onNewThread: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [resizing, setResizing] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
   const resizeStart = useRef<{ pointerId: number; x: number; width: number } | null>(null);
   const { mounted, state, onAnimationEnd } = usePresence(open);
+  const handoff = usePanelHandoff({
+    incoming: handoffIncoming,
+    targetWidth: handoffWidth,
+    onComplete: onHandoffComplete,
+  });
   const expanded = panelWidth > CHAT_PANEL_DEFAULT_WIDTH + 60;
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open]);
+  }, [onClose, open]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const reportWidth = () => onPanelWidthChange(panel.getBoundingClientRect().width);
+    reportWidth();
+    const observer = new ResizeObserver(reportWidth);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [mounted, onPanelWidthChange]);
 
   useEffect(
     () => () => {
@@ -80,7 +122,8 @@ export function AIChat({
     if (event.button !== 0) return;
     resizeStart.current = { pointerId: event.pointerId, x: event.clientX, width: panelWidth };
     event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.style.cursor = 'col-resize';
+    document.body.style.cursor =
+      "url('/cursors/macos-resize-horizontal-24.svg') 12 12, col-resize";
     document.body.style.userSelect = 'none';
     setResizing(true);
   };
@@ -115,25 +158,20 @@ export function AIChat({
 
   return (
     <>
-      <ActionBarButton
-        icon={<Bot />}
-        label="AI Chat"
-        active={open}
-        className="fp-chat-launch absolute top-1 right-2 z-40"
-        data-open={open}
-        aria-hidden={open}
-        tabIndex={open ? -1 : undefined}
-        title="Ask the AI assistant"
-        onClick={() => setOpen(true)}
-      />
       {mounted && (
         <aside
+          ref={panelRef}
           data-state={state}
-          onAnimationEnd={onAnimationEnd}
+          data-handoff={handoffIncoming ? 'incoming' : undefined}
+          onAnimationEnd={(event) => {
+            onAnimationEnd(event);
+            handoff.onAnimationEnd(event);
+          }}
           aria-label="AI chat"
-          className="fp-panel fp-chat-panel absolute inset-y-0 right-0 z-40 flex min-h-0 max-w-full flex-col"
+          className="fp-panel fp-chat-panel absolute right-0 flex min-h-0 max-w-full flex-col"
           style={{
-            width: `min(100%, ${panelWidth}px)`,
+            width: `${handoff.handoffWidth ?? panelWidth}px`,
+            zIndex: handoffIncoming ? 620 : 610,
             transition: resizing ? 'none' : 'width var(--fp-dur-med) var(--fp-ease)',
           }}
         >
@@ -155,7 +193,7 @@ export function AIChat({
           >
             <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong transition-[width,background-color] group-hover:w-0.5 group-hover:bg-accent group-focus-visible:w-0.5 group-focus-visible:bg-accent" />
           </div>
-          <ChatErrorBoundary onClose={() => setOpen(false)}>
+          <ChatErrorBoundary onClose={onClose}>
             <AIChatPanel
               key={threadId}
               projectId={projectId}
@@ -165,7 +203,7 @@ export function AIChat({
               expanded={expanded}
               onToggleExpanded={togglePanelWidth}
               onNewThread={onNewThread}
-              onClose={() => setOpen(false)}
+              onClose={onClose}
             />
           </ChatErrorBoundary>
         </aside>

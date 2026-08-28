@@ -50,11 +50,19 @@ Last reviewed: 2026-08-27
   conversation. Entering a project starts a fresh conversation, while refreshing or navigating
   inside that project keeps the current one. Conversations are private to each member and never
   shared project-wide. The legacy `chatMessages` table remains temporarily for rollback.
-- Six project-data read tools execute automatically and re-check project membership on every call.
-  The initial write set is deliberately narrow: update a task's status, priority, due date, or
-  assignee; add a task note; and prepare a task for pin placement. Every write requires persisted
-  approval. Viewers receive read tools only, and deletes, invitations, project settings, outbound
-  messages, and bulk changes are not exposed.
+- The main agent starts with only `load_skill`. Greetings and other simple conversation have no
+  active project tools. Task and Image workflow instructions are versioned in source, synchronized
+  into the private `agentSkills` table, and loaded only when relevant; the loaded skill activates
+  only its domain tools for later model steps.
+- The Task skill reads and edits task, project, sheet, quantity, note, member, and custom-attribute
+  data. The Image skill reads project-wide photo metadata, analyzes selected image pixels, and—with
+  persisted approval—renames, assigns, maps, trashes, restores, or permanently deletes existing
+  photos. It cannot upload photos, change/restore original EXIF GPS, or change timestamps. Viewers
+  receive read/analysis tools only.
+- `agentRunMetrics` stores token totals and loaded skill keys without prompts or responses so lazy
+  loading can be measured. Approved reversible writes remain grouped into one atomic Undo job;
+  permanent photo deletion is separately approved, requires an already-trashed photo plus its exact
+  version and filename, and has no Undo.
 - Approved writes re-check the member's current role at execution time and use `agentOperations`
   receipts keyed by the component tool-call ID for transactional idempotency. Task updates and
   notes provide guarded Undo. A prepared task is not inserted into `tasks` until the user clicks

@@ -46,6 +46,8 @@ type MessagePart = {
 
 type OperationOutput = {
   operationId: string;
+  jobId?: string;
+  status?: 'awaiting-placement' | 'executed' | 'undone';
   summary: string;
   undoAvailable?: boolean;
   clientDirective?: {
@@ -59,11 +61,20 @@ type OperationOutput = {
       status: 'open' | 'in-progress' | 'done' | 'verified';
       priority: 1 | 2 | 3;
       category: string;
+      color?: string;
       assigneeText?: string;
       assigneeUserId?: string;
+      startDate?: string;
       dueDate?: string;
       locationText?: string;
       tags?: string[];
+      manpowerCount?: number;
+      costMinor?: number;
+      currencyCode?: string;
+      plannedQuantity?: number;
+      completedQuantity?: number;
+      quantityUnit?: string;
+      quantityItemId?: string;
     };
   };
 };
@@ -103,7 +114,7 @@ export function AIChatPanel({
   );
   const send = useMutation(api.chat.sendMessage);
   const respondToApproval = useMutation(api.chat.respondToApproval);
-  const undoOperation = useMutation(api.agentOperations.undo);
+  const undoAgentJob = useMutation(api.agentOperations.undoJob);
   const cancelPlacement = useMutation(api.agentOperations.cancelPlacement);
   const fileName = useProject((state) => state.fileName);
   const currentPage = useProject((state) => state.currentPage);
@@ -111,7 +122,7 @@ export function AIChatPanel({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<string | null>(null);
-  const [undoneOperations, setUndoneOperations] = useState<Set<string>>(() => new Set());
+  const [undoneJobs, setUndoneJobs] = useState<Set<string>>(() => new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -177,12 +188,12 @@ export function AIChatPanel({
     }
   };
 
-  const undo = async (operationId: string) => {
+  const undo = async (jobId: string) => {
     setSubmitError(null);
-    setActionPending(operationId);
+    setActionPending(jobId);
     try {
-      await undoOperation({ operationId: operationId as Id<'agentOperations'> });
-      setUndoneOperations((current) => new Set(current).add(operationId));
+      await undoAgentJob({ projectId, jobId });
+      setUndoneJobs((current) => new Set(current).add(jobId));
     } catch (cause) {
       setSubmitError(userFacingError(cause));
     } finally {
@@ -286,8 +297,8 @@ export function AIChatPanel({
             <div>
               <p className="text-sm font-semibold text-t1">Ask FieldPilot AI</p>
               <p className="mt-1 text-xs text-t2">
-                It can now inspect this project&apos;s tasks, plans, quantities, notes, and
-                activity.
+                It can inspect and, with your approval, update tasks, plans, quantities, notes, and
+                project details.
               </p>
             </div>
             <div className="flex w-full flex-col gap-1.5">
@@ -312,7 +323,7 @@ export function AIChatPanel({
               role={message.role}
               parts={message.parts as MessagePart[]}
               actionPending={actionPending}
-              undoneOperations={undoneOperations}
+              undoneJobs={undoneJobs}
               onApproval={respond}
               onUndo={undo}
               onPlaceTask={placeTask}
@@ -329,7 +340,7 @@ export function AIChatPanel({
           >
             <AIOrb size="sm" state="searching" />
             <span className="text-xs font-medium">
-              {threadState?.runStatus === 'running' ? 'Checking project data…' : 'Starting…'}
+              {threadState?.runStatus === 'running' ? 'Thinking…' : 'Starting…'}
             </span>
           </div>
         )}
@@ -415,7 +426,7 @@ function AgentMessage({
   role,
   parts,
   actionPending,
-  undoneOperations,
+  undoneJobs,
   onApproval,
   onUndo,
   onPlaceTask,
@@ -424,9 +435,9 @@ function AgentMessage({
   role: 'system' | 'user' | 'assistant';
   parts: MessagePart[];
   actionPending: string | null;
-  undoneOperations: Set<string>;
+  undoneJobs: Set<string>;
   onApproval: (approvalId: string, approved: boolean) => Promise<void>;
-  onUndo: (operationId: string) => Promise<void>;
+  onUndo: (jobId: string) => Promise<void>;
   onPlaceTask: (output: OperationOutput) => void;
   onCancelPlacement: (operationId: string) => Promise<void>;
 }) {
@@ -459,7 +470,7 @@ function AgentMessage({
           key={`${part.type}-${index}`}
           part={part}
           actionPending={actionPending}
-          undoneOperations={undoneOperations}
+          undoneJobs={undoneJobs}
           onApproval={onApproval}
           onUndo={onUndo}
           onPlaceTask={onPlaceTask}
@@ -473,7 +484,7 @@ function AgentMessage({
 function ToolActivity({
   part,
   actionPending,
-  undoneOperations,
+  undoneJobs,
   onApproval,
   onUndo,
   onPlaceTask,
@@ -481,9 +492,9 @@ function ToolActivity({
 }: {
   part: MessagePart;
   actionPending: string | null;
-  undoneOperations: Set<string>;
+  undoneJobs: Set<string>;
   onApproval: (approvalId: string, approved: boolean) => Promise<void>;
-  onUndo: (operationId: string) => Promise<void>;
+  onUndo: (jobId: string) => Promise<void>;
   onPlaceTask: (output: OperationOutput) => void;
   onCancelPlacement: (operationId: string) => Promise<void>;
 }) {
@@ -491,6 +502,10 @@ function ToolActivity({
   const name = rawName ? rawName.replaceAll('_', ' ') : 'project data';
   const approvalId = part.state === 'approval-requested' ? part.approval?.id : undefined;
   const operation = asOperationOutput(part.output);
+  const liveOperation = useQuery(
+    api.agentOperations.getReceipt,
+    operation ? { operationId: operation.operationId as Id<'agentOperations'> } : 'skip',
+  );
   if (approvalId) {
     return (
       <div className="max-w-[95%] rounded-lg border border-accent/35 bg-accent-soft p-3 text-xs text-t1">
@@ -519,45 +534,56 @@ function ToolActivity({
     );
   }
   if (operation) {
-    const undone = undoneOperations.has(operation.operationId);
+    const currentOperation = { ...operation, ...(liveOperation ?? {}) };
+    const jobId = currentOperation.jobId ?? currentOperation.operationId;
+    const undone = currentOperation.status === 'undone' || undoneJobs.has(jobId);
+    const awaitingPlacement = currentOperation.status === 'awaiting-placement';
     return (
       <div className="max-w-[95%] rounded-lg border border-line bg-surface p-3 text-xs text-t1">
         <div className="flex items-start gap-2">
           <Check className="mt-0.5 size-3.5 shrink-0 text-success" />
-          <span>{undone ? `Undid: ${operation.summary}` : operation.summary}</span>
+          <span>
+            {undone &&
+            !currentOperation.summary.startsWith('Undid:') &&
+            !currentOperation.summary.startsWith('Canceled:')
+              ? `Undid: ${currentOperation.summary}`
+              : currentOperation.summary}
+          </span>
         </div>
-        {!undone && operation.clientDirective?.kind === 'place_task_pin' && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={actionPending !== null}
-              onClick={() => onPlaceTask(operation)}
-            >
-              <MapPin data-icon="inline-start" />
-              Place pin on {operation.clientDirective.sheetNumber}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={actionPending !== null}
-              onClick={() => void onCancelPlacement(operation.operationId)}
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
-        {!undone && operation.undoAvailable && (
+        {!undone &&
+          awaitingPlacement &&
+          currentOperation.clientDirective?.kind === 'place_task_pin' && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={actionPending !== null}
+                onClick={() => onPlaceTask(currentOperation)}
+              >
+                <MapPin data-icon="inline-start" />
+                Place pin on {currentOperation.clientDirective.sheetNumber}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={actionPending !== null}
+                onClick={() => void onCancelPlacement(currentOperation.operationId)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+        {!undone && currentOperation.status === 'executed' && currentOperation.undoAvailable && (
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="mt-3"
             disabled={actionPending !== null}
-            onClick={() => void onUndo(operation.operationId)}
+            onClick={() => void onUndo(jobId)}
           >
-            Undo
+            Undo AI job
           </Button>
         )}
       </div>
@@ -591,18 +617,68 @@ function asOperationOutput(value: unknown): OperationOutput | null {
 
 function describeToolAction(toolName: string | undefined, value: unknown) {
   const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const taskNumber = typeof input.taskNumber === 'number' ? `Task #${input.taskNumber}` : 'task';
-  if (toolName === 'add_task_note') return `Add a note to ${taskNumber}.`;
-  if (toolName === 'create_task') {
+  if (toolName === 'prepare_new_task') {
     const title = typeof input.title === 'string' ? `“${input.title}”` : 'a new task';
     const sheet = typeof input.sheetNumber === 'string' ? ` on ${input.sheetNumber}` : '';
     return `Prepare ${title}${sheet}, then ask you to place its pin.`;
   }
-  if (toolName === 'update_task') {
-    const fields = ['status', 'priority', 'dueDate', 'assigneeName'].filter(
-      (field) => input[field] !== undefined,
-    );
-    return `Update ${taskNumber}${fields.length ? ` (${fields.join(', ')})` : ''}.`;
+  if (toolName === 'change_project_data') {
+    const changes = Array.isArray(input.changes) ? input.changes : [];
+    const labels = changes.slice(0, 4).map(describeProjectChange);
+    const remainder =
+      changes.length > labels.length ? `, +${changes.length - labels.length} more` : '';
+    return `Apply ${changes.length || 'the requested'} project ${changes.length === 1 ? 'change' : 'changes'}${labels.length ? `: ${labels.join('; ')}${remainder}` : ''}. This request will be one Undo step.`;
+  }
+  if (toolName === 'change_image_data') {
+    const changes = Array.isArray(input.changes) ? input.changes : [];
+    const labels = changes.slice(0, 4).map((value) => {
+      if (!value || typeof value !== 'object') return 'photo change';
+      const change = value as Record<string, unknown>;
+      const fields = Object.keys(change).filter(
+        (key) => !['photoId', 'photoUpdatedAt'].includes(key),
+      );
+      return `${typeof change.photoId === 'string' ? change.photoId : 'photo'}: ${fields.join(', ') || 'metadata'}`;
+    });
+    const remainder =
+      changes.length > labels.length ? `, +${changes.length - labels.length} more` : '';
+    return `Apply ${changes.length || 'the requested'} photo ${changes.length === 1 ? 'change' : 'changes'}${labels.length ? `: ${labels.join('; ')}${remainder}` : ''}. Original GPS and timestamps will not be changed. This request will be one Undo step.`;
+  }
+  if (toolName === 'delete_images_permanently') {
+    const photos = Array.isArray(input.photos) ? input.photos : [];
+    const names = photos
+      .slice(0, 4)
+      .flatMap((value) =>
+        value &&
+        typeof value === 'object' &&
+        typeof (value as Record<string, unknown>).confirmFileName === 'string'
+          ? [(value as Record<string, unknown>).confirmFileName as string]
+          : [],
+      );
+    return `Permanently delete ${photos.length || 'the selected'} trashed ${photos.length === 1 ? 'photo' : 'photos'}${names.length ? `: ${names.join(', ')}` : ''}. Stored image bytes and metadata will be removed, and this cannot be undone.`;
   }
   return `Run ${toolName?.replaceAll('_', ' ') ?? 'this action'}.`;
+}
+
+function describeProjectChange(value: unknown) {
+  if (!value || typeof value !== 'object') return 'change';
+  const change = value as Record<string, unknown>;
+  const kind = typeof change.kind === 'string' ? change.kind : 'change';
+  const task = typeof change.taskNumber === 'number' ? `Task #${change.taskNumber}` : 'task';
+  if (kind === 'update_task') {
+    const fields = Object.keys(change).filter((key) => !['kind', 'taskNumber'].includes(key));
+    return `${task}: ${fields.join(', ') || 'fields'}`;
+  }
+  if (kind === 'set_task_quantity') return `${task}: quantity`;
+  if (kind === 'add_task_note') return `${task}: add note`;
+  if (kind === 'update_project') return 'project metadata';
+  if (kind === 'update_sheet') {
+    return `sheet ${typeof change.sheetNumber === 'string' ? change.sheetNumber : ''}`.trim();
+  }
+  if (kind === 'create_quantity_item') {
+    return `create quantity item ${typeof change.name === 'string' ? change.name : ''}`.trim();
+  }
+  if (kind === 'update_quantity_item') {
+    return `quantity item ${typeof change.itemName === 'string' ? change.itemName : ''}`.trim();
+  }
+  return kind.replaceAll('_', ' ');
 }

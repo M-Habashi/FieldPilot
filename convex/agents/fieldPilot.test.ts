@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest';
+import {
+  activeFieldPilotToolNames,
+  fieldPilotInstructions,
+  shouldOfferProjectSkills,
+} from './fieldPilot';
+
+describe('FieldPilot agent tool surface', () => {
+  it('starts with only the skill loader and activates domain tools lazily', () => {
+    expect(activeFieldPilotToolNames(true, new Set())).toEqual(['load_skill']);
+    expect(activeFieldPilotToolNames(true, new Set(), false)).toEqual([]);
+    expect(activeFieldPilotToolNames(true, new Set(['tasks']))).toEqual([
+      'load_skill',
+      'inspect_project_data',
+      'change_project_data',
+      'prepare_new_task',
+    ]);
+    expect(activeFieldPilotToolNames(false, new Set(['images']))).toEqual([
+      'load_skill',
+      'inspect_images',
+      'analyze_images',
+    ]);
+    expect(activeFieldPilotToolNames(true, new Set(['images']))).toEqual([
+      'load_skill',
+      'inspect_images',
+      'analyze_images',
+      'change_image_data',
+      'delete_images_permanently',
+    ]);
+  });
+
+  it('hard-disables tools for simple greetings and thanks', () => {
+    expect(shouldOfferProjectSkills('Hi!')).toBe(false);
+    expect(shouldOfferProjectSkills('hello FieldPilot')).toBe(false);
+    expect(shouldOfferProjectSkills('Thank you very much.')).toBe(false);
+    expect(shouldOfferProjectSkills('How many photos are in this project?')).toBe(true);
+    expect(shouldOfferProjectSkills('Change task 6 to blue')).toBe(true);
+  });
+
+  it('keeps the main prompt concise and forbids tool calls for greetings', () => {
+    const instructions = fieldPilotInstructions({ projectName: 'Demo' });
+    expect(instructions).toContain('For greetings');
+    expect(instructions).toContain('do not call a tool');
+    expect(instructions).toContain('call load_skill');
+    expect(instructions).not.toContain('Use inspect_project_data whenever');
+    expect(instructions.split('\n').length).toBeLessThanOrEqual(12);
+  });
+});

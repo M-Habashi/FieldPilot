@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import {
   ArrowUpRight,
@@ -47,6 +47,7 @@ interface ToolbarProps {
   onImportJson: (file: File) => void;
   onSavePdf: () => void;
   allowLocalFiles?: boolean;
+  endActions?: ReactNode;
 }
 
 export function AppHeader({ onLogoClick }: { onLogoClick?: () => void } = {}) {
@@ -102,6 +103,7 @@ export function Toolbar({
   onImportJson,
   onSavePdf,
   allowLocalFiles = true,
+  endActions,
 }: ToolbarProps) {
   const addPinMode = useProject((state) => state.addPinMode);
   const setAddPinMode = useProject((state) => state.setAddPinMode);
@@ -381,6 +383,7 @@ export function Toolbar({
             )}
           </Dropdown>
         </ActionBarGroup>
+        {endActions && <ActionBarGroup align="end">{endActions}</ActionBarGroup>}
       </ActionBar>
 
       <input

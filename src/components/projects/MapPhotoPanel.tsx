@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { usePresence } from '../../hooks/usePresence';
 import { useModalFocus } from '../../hooks/useModalFocus';
+import { usePanelHandoff } from '../../hooks/usePanelHandoff';
 import { cn, formatBytes } from '../../lib/utils';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { Button } from '../ui/button';
@@ -225,9 +226,11 @@ function PhotoRow({
 export function MapPhotoPanel({
   photos,
   selectedPhotos,
+  open,
+  handoffIncoming,
+  handoffWidth,
   canEdit,
   tasks,
-  listOpen,
   focusTaskSelect,
   onTaskSelectFocused,
   drilledId,
@@ -245,12 +248,16 @@ export function MapPhotoPanel({
   onBackToList,
   onHoverPhoto,
   onHoverEnd,
+  onHandoffComplete,
+  onPanelWidthChange,
 }: {
   photos: MapPhoto[];
   selectedPhotos: MapPhoto[];
+  open: boolean;
+  handoffIncoming: boolean;
+  handoffWidth: number | null;
   canEdit: boolean;
   tasks: Doc<'tasks'>[];
-  listOpen: boolean;
   focusTaskSelect: boolean;
   onTaskSelectFocused: () => void;
   drilledId: string | null;
@@ -268,17 +275,34 @@ export function MapPhotoPanel({
   onBackToList: () => void;
   onHoverPhoto: (photo: MapPhoto) => void;
   onHoverEnd: () => void;
+  onHandoffComplete: () => void;
+  onPanelWidthChange: (width: number) => void;
 }) {
-  const present = listOpen || selectedPhotos.length > 0;
-  const { mounted, state, onAnimationEnd } = usePresence(present);
+  const { mounted, state, onAnimationEnd } = usePresence(open);
+  const panelRef = useRef<HTMLElement>(null);
+  const handoff = usePanelHandoff({
+    incoming: handoffIncoming,
+    targetWidth: handoffWidth,
+    onComplete: onHandoffComplete,
+  });
   const [lightboxPhoto, setLightboxPhoto] = useState<MapPhoto | null>(null);
   const dragStateRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
 
   useEffect(() => {
-    if (!present) {
+    if (!open) {
       setLightboxPhoto(null);
     }
-  }, [present]);
+  }, [open]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const reportWidth = () => onPanelWidthChange(panel.getBoundingClientRect().width);
+    reportWidth();
+    const observer = new ResizeObserver(reportWidth);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [mounted, onPanelWidthChange]);
 
   const detail = selectedPhotos.length > 0;
   const stack = selectedPhotos.length > 1;
@@ -413,10 +437,23 @@ export function MapPhotoPanel({
 
   return (
     <aside
+      ref={panelRef}
       data-state={state}
-      onAnimationEnd={onAnimationEnd}
+      data-handoff={handoffIncoming ? 'incoming' : undefined}
+      onAnimationEnd={(event) => {
+        onAnimationEnd(event);
+        handoff.onAnimationEnd(event);
+      }}
       aria-label="Photos"
-      className="fp-panel absolute inset-y-0 right-0 z-[500] flex w-full max-w-[var(--fp-drawer-width)] flex-col"
+      className="fp-panel absolute inset-y-0 right-0 flex flex-col transition-[width,max-width] duration-(--fp-dur-med) ease-(--fp-ease)"
+      style={{
+        width:
+          handoff.handoffWidth === null
+            ? 'min(100%, var(--fp-drawer-width))'
+            : `${handoff.handoffWidth}px`,
+        maxWidth: handoffIncoming ? '100%' : undefined,
+        zIndex: handoffIncoming ? 620 : 610,
+      }}
     >
       <div
         role="separator"

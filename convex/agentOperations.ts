@@ -1,7 +1,22 @@
 import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
-import { internalMutation, mutation, type MutationCtx } from './_generated/server';
-import { CONTENT_EDITOR_ROLES, requireProjectRole, requireUser } from './lib/authz';
+import { internalMutation, mutation, query, type MutationCtx } from './_generated/server';
+import {
+  CONTENT_EDITOR_ROLES,
+  requireProjectMember,
+  requireProjectRole,
+  requireUser,
+} from './lib/authz';
+import {
+  agentProjectChange,
+  executeAgentProjectChanges,
+  undoAgentProjectChanges,
+} from './lib/agentProjectChanges';
+import {
+  agentImageChange,
+  executeAgentImageChanges,
+  undoAgentImageChanges,
+} from './lib/agentImageChanges';
 import { createNoteForActor } from './notes';
 import { createTaskForActor, updateCoreTaskFieldsForActor, type CoreTaskUpdateArgs } from './tasks';
 
@@ -35,13 +50,18 @@ async function existingOperation(
 function operationReceipt(operation: Doc<'agentOperations'>, undoAvailable?: boolean) {
   return {
     operationId: operation._id,
+    jobId: operation.jobId ?? operation._id,
     kind: operation.kind,
     status: operation.status,
     summary: operation.summary,
     undoAvailable:
       undoAvailable ??
       (operation.status === 'executed' &&
-        (operation.kind === 'update_task' || operation.kind === 'add_task_note')),
+        (operation.kind === 'update_task' ||
+          operation.kind === 'add_task_note' ||
+          operation.kind === 'create_task' ||
+          operation.kind === 'change_project_data' ||
+          operation.kind === 'change_image_data')),
   };
 }
 
@@ -91,6 +111,148 @@ async function resolveAssignee(
     assigneeText: matches[0].user.name?.trim() || matches[0].user.email?.trim() || 'Project member',
   } as const;
 }
+
+export const changeProjectData = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    bindingId: v.id('agentThreadBindings'),
+    jobId: v.string(),
+    toolCallId: v.string(),
+    changes: v.array(agentProjectChange),
+  },
+  handler: async (ctx, args) => {
+    await requireAgentBinding(ctx, args.bindingId, args.projectId, args.userId);
+    const existing = await existingOperation(ctx, args.bindingId, args.toolCallId);
+    if (existing) return operationReceipt(existing);
+    const result = await executeAgentProjectChanges(ctx, args.projectId, args.userId, args.changes);
+    const now = Date.now();
+    const operationId = await ctx.db.insert('agentOperations', {
+      projectId: args.projectId,
+      userId: args.userId,
+      threadBindingId: args.bindingId,
+      jobId: args.jobId,
+      toolCallId: args.toolCallId,
+      kind: 'change_project_data',
+      status: 'executed',
+      summary: result.summary,
+      input: { changes: args.changes },
+      undoData: result.undoData,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const operation = await ctx.db.get(operationId);
+    if (!operation) throw new Error('Could not save the AI job receipt');
+    return operationReceipt(operation, true);
+  },
+});
+
+export const changeImageData = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    bindingId: v.id('agentThreadBindings'),
+    jobId: v.string(),
+    toolCallId: v.string(),
+    changes: v.array(agentImageChange),
+  },
+  handler: async (ctx, args) => {
+    await requireAgentBinding(ctx, args.bindingId, args.projectId, args.userId);
+    const existing = await existingOperation(ctx, args.bindingId, args.toolCallId);
+    if (existing) return operationReceipt(existing);
+    const result = await executeAgentImageChanges(ctx, args.projectId, args.userId, args.changes);
+    const now = Date.now();
+    const operationId = await ctx.db.insert('agentOperations', {
+      projectId: args.projectId,
+      userId: args.userId,
+      threadBindingId: args.bindingId,
+      jobId: args.jobId,
+      toolCallId: args.toolCallId,
+      kind: 'change_image_data',
+      status: 'executed',
+      summary: result.summary,
+      input: { changes: args.changes },
+      undoData: result.undoData,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const operation = await ctx.db.get(operationId);
+    if (!operation) throw new Error('Could not save the AI image-job receipt');
+    return operationReceipt(operation, true);
+  },
+});
+
+export const deleteImagesPermanently = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    bindingId: v.id('agentThreadBindings'),
+    jobId: v.string(),
+    toolCallId: v.string(),
+    photos: v.array(
+      v.object({
+        photoId: v.id('attachments'),
+        photoUpdatedAt: v.number(),
+        confirmFileName: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requireAgentBinding(ctx, args.bindingId, args.projectId, args.userId);
+    const existing = await existingOperation(ctx, args.bindingId, args.toolCallId);
+    if (existing) return operationReceipt(existing, false);
+    if (args.photos.length < 1 || args.photos.length > 10) {
+      throw new Error('Permanently delete between one and ten photos per call');
+    }
+    if (new Set(args.photos.map((photo) => photo.photoId)).size !== args.photos.length) {
+      throw new Error('Duplicate photo ids');
+    }
+    const records = await Promise.all(args.photos.map((photo) => ctx.db.get(photo.photoId)));
+    for (const [index, supplied] of args.photos.entries()) {
+      const photo = records[index];
+      if (!photo || photo.projectId !== args.projectId || photo.kind !== 'photo') {
+        throw new Error(`Photo ${index + 1} was not found in this project`);
+      }
+      if ((photo.photoUpdatedAt ?? photo.createdAt) !== supplied.photoUpdatedAt) {
+        throw new Error(`${photo.fileName} changed after it was inspected; inspect it again`);
+      }
+      if (photo.deletedAt === undefined) {
+        throw new Error(`${photo.fileName} must be moved to trash before permanent deletion`);
+      }
+      if (supplied.confirmFileName !== photo.fileName) {
+        throw new Error(`Confirm the exact filename for ${photo.fileName}`);
+      }
+    }
+    for (const photo of records) {
+      if (!photo) continue;
+      try {
+        await ctx.storage.delete(photo.storageRef);
+      } catch {
+        // The metadata must still be removed if an older blob is already gone.
+      }
+      await ctx.db.delete(photo._id);
+    }
+    const fileNames = records.flatMap((photo) => (photo ? [photo.fileName] : []));
+    const summary = `Permanently deleted ${fileNames.length} ${fileNames.length === 1 ? 'photo' : 'photos'}: ${fileNames.join(', ')}`;
+    const now = Date.now();
+    const operationId = await ctx.db.insert('agentOperations', {
+      projectId: args.projectId,
+      userId: args.userId,
+      threadBindingId: args.bindingId,
+      jobId: args.jobId,
+      toolCallId: args.toolCallId,
+      kind: 'delete_images_permanently',
+      status: 'executed',
+      summary,
+      input: { photos: args.photos },
+      createdAt: now,
+      updatedAt: now,
+    });
+    const operation = await ctx.db.get(operationId);
+    if (!operation) throw new Error('Could not save the permanent-delete receipt');
+    return operationReceipt(operation, false);
+  },
+});
 
 export const updateTask = internalMutation({
   args: {
@@ -224,6 +386,7 @@ export const prepareTaskPlacement = internalMutation({
     projectId: v.id('projects'),
     userId: v.id('users'),
     bindingId: v.id('agentThreadBindings'),
+    jobId: v.optional(v.string()),
     toolCallId: v.string(),
     sheetNumber: v.string(),
     title: v.string(),
@@ -238,10 +401,19 @@ export const prepareTaskPlacement = internalMutation({
     ),
     priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
     category: v.optional(v.string()),
+    color: v.optional(v.string()),
     assigneeName: v.optional(v.string()),
+    startDate: v.optional(v.string()),
     dueDate: v.optional(v.string()),
     locationText: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
+    manpowerCount: v.optional(v.number()),
+    costMinor: v.optional(v.number()),
+    currencyCode: v.optional(v.string()),
+    plannedQuantity: v.optional(v.number()),
+    completedQuantity: v.optional(v.number()),
+    quantityUnit: v.optional(v.string()),
+    quantityItemName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await requireAgentBinding(ctx, args.bindingId, args.projectId, args.userId);
@@ -277,6 +449,32 @@ export const prepareTaskPlacement = internalMutation({
     if (args.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(args.dueDate)) {
       throw new Error('Due date must use YYYY-MM-DD format');
     }
+    if (args.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(args.startDate)) {
+      throw new Error('Start date must use YYYY-MM-DD format');
+    }
+    if (args.startDate && args.dueDate && args.dueDate < args.startDate) {
+      throw new Error('Due date cannot be earlier than start date');
+    }
+    if (args.color && !/^#[0-9a-f]{6}$/i.test(args.color)) {
+      throw new Error('Pin color must use #RRGGBB format');
+    }
+    for (const [value, label, whole] of [
+      [args.plannedQuantity, 'Planned quantity', false],
+      [args.completedQuantity, 'Completed quantity', false],
+      [args.manpowerCount, 'Manpower', true],
+      [args.costMinor, 'Cost', true],
+    ] as const) {
+      if (
+        value !== undefined &&
+        (!Number.isFinite(value) || value < 0 || (whole && !Number.isSafeInteger(value)))
+      ) {
+        throw new Error(`${label} must be a non-negative${whole ? ' whole' : ''} number`);
+      }
+    }
+    const currencyCode = args.currencyCode?.trim().toUpperCase();
+    if (currencyCode && !/^[A-Z]{3}$/.test(currencyCode)) {
+      throw new Error('Currency must be a three-letter code');
+    }
     const sheets = await ctx.db
       .query('sheets')
       .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
@@ -294,17 +492,48 @@ export const prepareTaskPlacement = internalMutation({
     }
     const sheet = matches[0];
     const assignee = await resolveAssignee(ctx, args.projectId, args.assigneeName);
+    let quantityItem: Doc<'quantityItems'> | undefined;
+    if (args.quantityItemName?.trim()) {
+      const quantityItemName = args.quantityItemName.trim().toLocaleLowerCase();
+      const quantityItems = await ctx.db
+        .query('quantityItems')
+        .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
+        .collect();
+      const quantityMatches = quantityItems.filter(
+        (item) =>
+          item.archivedAt === undefined && item.name.toLocaleLowerCase() === quantityItemName,
+      );
+      if (quantityMatches.length !== 1) {
+        throw new Error(`Quantity item "${args.quantityItemName}" was not found uniquely`);
+      }
+      quantityItem = quantityMatches[0];
+    }
     const task = {
       title,
       description: args.description?.trim() ?? '',
       status: args.status ?? ('open' as const),
       priority: args.priority ?? (2 as const),
       category: args.category?.trim() || 'general',
+      ...(args.color ? { color: args.color.toLocaleLowerCase() } : {}),
       ...(assignee ? { assigneeText: assignee.assigneeText } : {}),
       ...(assignee?.assigneeUserId ? { assigneeUserId: assignee.assigneeUserId } : {}),
       ...(args.dueDate ? { dueDate: args.dueDate } : {}),
+      ...(args.startDate ? { startDate: args.startDate } : {}),
       ...(args.locationText?.trim() ? { locationText: args.locationText.trim() } : {}),
       ...(args.tags ? { tags: args.tags } : {}),
+      ...(args.manpowerCount !== undefined ? { manpowerCount: args.manpowerCount } : {}),
+      ...(args.costMinor !== undefined ? { costMinor: args.costMinor } : {}),
+      ...(currencyCode ? { currencyCode } : {}),
+      ...(args.plannedQuantity !== undefined ? { plannedQuantity: args.plannedQuantity } : {}),
+      ...(args.completedQuantity !== undefined
+        ? { completedQuantity: args.completedQuantity }
+        : {}),
+      ...(args.quantityUnit?.trim()
+        ? { quantityUnit: args.quantityUnit.trim().toUpperCase() }
+        : quantityItem
+          ? { quantityUnit: quantityItem.defaultUnit }
+          : {}),
+      ...(quantityItem ? { quantityItemId: quantityItem._id } : {}),
     };
     const summary = `Ready to place "${title}" on ${sheet.number}`;
     const now = Date.now();
@@ -312,6 +541,7 @@ export const prepareTaskPlacement = internalMutation({
       projectId: args.projectId,
       userId: args.userId,
       threadBindingId: args.bindingId,
+      jobId: args.jobId,
       toolCallId: args.toolCallId,
       kind: 'create_task',
       status: 'awaiting-placement',
@@ -346,8 +576,17 @@ type PlacementInput = {
     assigneeText?: string;
     assigneeUserId?: Id<'users'>;
     dueDate?: string;
+    startDate?: string;
     locationText?: string;
     tags?: string[];
+    color?: string;
+    manpowerCount?: number;
+    costMinor?: number;
+    currencyCode?: string;
+    plannedQuantity?: number;
+    completedQuantity?: number;
+    quantityUnit?: string;
+    quantityItemId?: Id<'quantityItems'>;
   };
 };
 
@@ -402,50 +641,171 @@ export const placeTask = mutation({
   },
 });
 
+export const getReceipt = query({
+  args: { operationId: v.id('agentOperations') },
+  handler: async (ctx, { operationId }) => {
+    const userId = await requireUser(ctx);
+    const operation = await ctx.db.get(operationId);
+    if (!operation || operation.userId !== userId) return null;
+    await requireProjectMember(ctx, operation.projectId, userId);
+    return operationReceipt(operation);
+  },
+});
+
+async function deletePlacedTaskForUndo(
+  ctx: MutationCtx,
+  operation: Doc<'agentOperations'>,
+  userId: Id<'users'>,
+) {
+  if (!operation.targetTaskId) throw new Error('Created task is missing from the AI receipt');
+  const task = await ctx.db.get(operation.targetTaskId);
+  if (!task) throw new Error('The task created by this AI job no longer exists');
+  await requireProjectRole(ctx, task.projectId, CONTENT_EDITOR_ROLES, userId);
+  if (task.updatedAt !== operation.targetUpdatedAt) {
+    throw new Error(`Task #${task.seq} changed after the AI job and cannot be removed safely`);
+  }
+  const [notes, attachments, attributeValues, quantityLines, activityEvents] = await Promise.all([
+    ctx.db
+      .query('notes')
+      .withIndex('by_task', (q) => q.eq('taskId', task._id))
+      .collect(),
+    ctx.db
+      .query('attachments')
+      .withIndex('by_task', (q) => q.eq('taskId', task._id))
+      .collect(),
+    ctx.db
+      .query('taskAttributeValues')
+      .withIndex('by_task', (q) => q.eq('taskId', task._id))
+      .collect(),
+    ctx.db
+      .query('taskQuantities')
+      .withIndex('by_task', (q) => q.eq('taskId', task._id))
+      .collect(),
+    ctx.db
+      .query('taskActivityEvents')
+      .withIndex('by_task_createdAt', (q) => q.eq('taskId', task._id))
+      .collect(),
+  ]);
+  if (notes.length || attachments.length || attributeValues.length || quantityLines.length) {
+    throw new Error(`Task #${task.seq} now has related data and cannot be removed safely`);
+  }
+  await Promise.all(activityEvents.map((event) => ctx.db.delete(event._id)));
+  await ctx.db.delete(task._id);
+}
+
+async function undoExecutedOperation(
+  ctx: MutationCtx,
+  operation: Doc<'agentOperations'>,
+  userId: Id<'users'>,
+) {
+  if (operation.kind === 'change_project_data') {
+    await undoAgentProjectChanges(ctx, operation.undoData, userId);
+    return;
+  }
+  if (operation.kind === 'change_image_data') {
+    await undoAgentImageChanges(ctx, operation.undoData, userId);
+    return;
+  }
+  if (operation.kind === 'update_task') {
+    if (!operation.targetTaskId) throw new Error('Updated task is missing from the receipt');
+    const task = await ctx.db.get(operation.targetTaskId);
+    if (task === null) throw new Error('The updated task no longer exists');
+    if (task.updatedAt !== operation.targetUpdatedAt) {
+      throw new Error('This task changed after the AI action, so Undo would overwrite newer work');
+    }
+    const undoData = operation.undoData as Omit<CoreTaskUpdateArgs, 'taskId'>;
+    await updateCoreTaskFieldsForActor(
+      ctx,
+      { taskId: operation.targetTaskId, ...undoData },
+      userId,
+    );
+    return;
+  }
+  if (operation.kind === 'add_task_note') {
+    if (!operation.targetNoteId) throw new Error('Added note is missing from the receipt');
+    const note = await ctx.db.get(operation.targetNoteId);
+    if (note === null) throw new Error('The added note no longer exists');
+    if (note.authorId !== userId || note.editedAt !== undefined) {
+      throw new Error('This note changed after the AI action and cannot be undone safely');
+    }
+    await ctx.db.delete(note._id);
+    return;
+  }
+  if (operation.kind === 'delete_images_permanently') {
+    throw new Error('Permanent photo deletion cannot be undone');
+  }
+  await deletePlacedTaskForUndo(ctx, operation, userId);
+}
+
+async function undoOperations(
+  ctx: MutationCtx,
+  operations: Doc<'agentOperations'>[],
+  userId: Id<'users'>,
+) {
+  const ordered = [...operations].sort((a, b) => b._creationTime - a._creationTime);
+  for (const operation of ordered) {
+    if (operation.userId !== userId) throw new Error('This AI job belongs to another user');
+    await requireProjectRole(ctx, operation.projectId, CONTENT_EDITOR_ROLES, userId);
+    if (operation.status === 'undone') continue;
+    if (operation.status === 'executed') {
+      await undoExecutedOperation(ctx, operation, userId);
+    } else if (operation.status !== 'awaiting-placement') {
+      throw new Error('This AI action cannot be undone yet');
+    }
+    const now = Date.now();
+    await ctx.db.patch(operation._id, {
+      status: 'undone',
+      summary:
+        operation.status === 'awaiting-placement'
+          ? `Canceled: ${operation.summary}`
+          : `Undid: ${operation.summary}`,
+      undoneAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
+export const undoJob = mutation({
+  args: { projectId: v.id('projects'), jobId: v.string() },
+  handler: async (ctx, { projectId, jobId }) => {
+    const userId = await requireUser(ctx);
+    await requireProjectRole(ctx, projectId, CONTENT_EDITOR_ROLES, userId);
+    const operations = await ctx.db
+      .query('agentOperations')
+      .withIndex('by_project_user_job', (q) =>
+        q.eq('projectId', projectId).eq('userId', userId).eq('jobId', jobId),
+      )
+      .collect();
+    if (operations.length === 0) {
+      const legacyId = ctx.db.normalizeId('agentOperations', jobId);
+      const legacy = legacyId ? await ctx.db.get(legacyId) : null;
+      if (legacy?.userId === userId && legacy.projectId === projectId) operations.push(legacy);
+    }
+    if (operations.length === 0) throw new Error('AI job receipt not found');
+    await undoOperations(ctx, operations, userId);
+    return { undone: true as const, operationCount: operations.length };
+  },
+});
+
 export const undo = mutation({
   args: { operationId: v.id('agentOperations') },
   handler: async (ctx, { operationId }) => {
     const userId = await requireUser(ctx);
     const operation = await ctx.db.get(operationId);
     if (operation === null) throw new Error('AI action receipt not found');
-    if (operation.userId !== userId) throw new Error('This AI action belongs to another user');
-    await requireProjectRole(ctx, operation.projectId, CONTENT_EDITOR_ROLES, userId);
-    if (operation.status === 'undone') return { undone: true as const };
-    if (operation.status !== 'executed') throw new Error('This AI action cannot be undone yet');
-
-    if (operation.kind === 'update_task') {
-      if (!operation.targetTaskId) throw new Error('Updated task is missing from the receipt');
-      const task = await ctx.db.get(operation.targetTaskId);
-      if (task === null) throw new Error('The updated task no longer exists');
-      if (task.updatedAt !== operation.targetUpdatedAt) {
-        throw new Error(
-          'This task changed after the AI action, so Undo would overwrite newer work',
-        );
-      }
-      const undoData = operation.undoData as Omit<CoreTaskUpdateArgs, 'taskId'>;
-      await updateCoreTaskFieldsForActor(
-        ctx,
-        { taskId: operation.targetTaskId, ...undoData },
-        userId,
-      );
-    } else if (operation.kind === 'add_task_note') {
-      if (!operation.targetNoteId) throw new Error('Added note is missing from the receipt');
-      const note = await ctx.db.get(operation.targetNoteId);
-      if (note === null) throw new Error('The added note no longer exists');
-      if (note.authorId !== userId || note.editedAt !== undefined) {
-        throw new Error('This note changed after the AI action and cannot be undone safely');
-      }
-      await ctx.db.delete(note._id);
-    } else {
-      throw new Error('Undo for placed tasks is not available in this release');
+    let operations = [operation];
+    if (operation.jobId) {
+      operations = await ctx.db
+        .query('agentOperations')
+        .withIndex('by_project_user_job', (q) =>
+          q
+            .eq('projectId', operation.projectId)
+            .eq('userId', operation.userId)
+            .eq('jobId', operation.jobId),
+        )
+        .collect();
     }
-
-    await ctx.db.patch(operationId, {
-      status: 'undone',
-      summary: `Undid: ${operation.summary}`,
-      undoneAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+    await undoOperations(ctx, operations, userId);
     return { undone: true as const };
   },
 });

@@ -8,6 +8,28 @@ const taskStatusArg = v.optional(
 );
 const taskPriorityArg = v.optional(v.union(v.literal(1), v.literal(2), v.literal(3)));
 
+const AGENT_TASK_CATEGORIES = [
+  'general',
+  'structural',
+  'electrical',
+  'plumbing',
+  'hvac',
+  'finishes',
+  'safety',
+  'punch',
+];
+
+const AGENT_PIN_COLORS = [
+  { name: 'Amber', value: '#d97706' },
+  { name: 'Red', value: '#dc2626' },
+  { name: 'Blue', value: '#2563eb' },
+  { name: 'Cyan', value: '#0891b2' },
+  { name: 'Green', value: '#16a34a' },
+  { name: 'Teal', value: '#0f766e' },
+  { name: 'Violet', value: '#7c3aed' },
+  { name: 'Slate', value: '#475569' },
+];
+
 function clip(value: string | undefined, max = 1200) {
   if (!value) return value;
   return value.length <= max ? value : `${value.slice(0, max)}…`;
@@ -219,31 +241,35 @@ export const taskDetails = internalQuery({
     const authorById = new Map(authorIds.map((id, index) => [id, authors[index]]));
     const itemIds = [
       ...new Set(
-        quantityLines
-          .map((line) => line.quantityItemId)
-          .filter((id): id is NonNullable<typeof id> => id !== undefined),
+        [...quantityLines.map((line) => line.quantityItemId), task.quantityItemId].filter(
+          (id): id is NonNullable<typeof id> => id !== undefined,
+        ),
       ),
     ];
     const items = await Promise.all(itemIds.map((itemId) => ctx.db.get(itemId)));
     const itemById = new Map(itemIds.map((id, index) => [id, items[index]]));
-    const definitionById = new Map(definitions.map((definition) => [definition._id, definition]));
-
-    const storedQuantities = quantityLines.map((line) => ({
-      item: line.quantityItemId ? itemById.get(line.quantityItemId)?.name : undefined,
-      planned: line.plannedQuantity,
-      completed: line.completedQuantity,
-      remaining:
-        line.plannedQuantity === undefined
-          ? undefined
-          : line.plannedQuantity - (line.completedQuantity ?? 0),
-      unit: line.quantityUnit,
-    }));
+    const storedQuantities = [...quantityLines]
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((line, index) => ({
+        lineNumber: index + 1,
+        legacy: false,
+        item: line.quantityItemId ? itemById.get(line.quantityItemId)?.name : undefined,
+        planned: line.plannedQuantity,
+        completed: line.completedQuantity,
+        remaining:
+          line.plannedQuantity === undefined
+            ? undefined
+            : line.plannedQuantity - (line.completedQuantity ?? 0),
+        unit: line.quantityUnit,
+      }));
     const quantities =
       storedQuantities.length > 0
         ? storedQuantities
         : [
             {
-              item: undefined,
+              lineNumber: 1,
+              legacy: true,
+              item: task.quantityItemId ? itemById.get(task.quantityItemId)?.name : undefined,
               planned: task.plannedQuantity,
               completed: task.completedQuantity,
               remaining:
@@ -252,7 +278,13 @@ export const taskDetails = internalQuery({
                   : task.plannedQuantity - (task.completedQuantity ?? 0),
               unit: task.quantityUnit,
             },
-          ].filter((line) => line.planned !== undefined || line.completed !== undefined);
+          ].filter(
+            (line) =>
+              line.item !== undefined ||
+              line.planned !== undefined ||
+              line.completed !== undefined ||
+              line.unit !== undefined,
+          );
 
     return {
       task: {
@@ -262,6 +294,7 @@ export const taskDetails = internalQuery({
         status: task.status,
         priority: task.priority,
         category: task.category,
+        color: task.color,
         assignee: task.assigneeText,
         startDate: task.startDate,
         dueDate: task.dueDate,
@@ -277,17 +310,35 @@ export const taskDetails = internalQuery({
         ? { number: sheet.number, name: sheet.name, page: sheet.pageIndex + 1 }
         : undefined,
       quantities,
-      attributes: attributes.flatMap((attribute) => {
-        const definition = definitionById.get(attribute.definitionId);
-        if (!definition) return [];
-        const value =
-          attribute.textValue ??
-          attribute.numberValue ??
-          attribute.dateValue ??
-          attribute.booleanValue ??
-          attribute.selectOptionId;
-        return [{ name: definition.name, type: definition.type, value }];
-      }),
+      attributes: definitions
+        .filter((definition) => definition.archivedAt === undefined)
+        .map((definition) => {
+          const attribute = attributes.find(
+            (candidate) => candidate.definitionId === definition._id,
+          );
+          const selectedOption = definition.options?.find(
+            (option) => option.id === attribute?.selectOptionId,
+          );
+          const value = attribute
+            ? (attribute.textValue ??
+              attribute.numberValue ??
+              attribute.dateValue ??
+              attribute.booleanValue ??
+              selectedOption?.label)
+            : undefined;
+          return {
+            name: definition.name,
+            type: definition.type,
+            unit: definition.unit,
+            value,
+            options:
+              definition.type === 'select'
+                ? definition.options
+                    ?.filter((option) => option.active)
+                    .map((option) => option.label)
+                : undefined,
+          };
+        }),
       notes: notes.map((note) => ({
         author: authorById.get(note.authorId)?.name ?? 'Project member',
         text: clip(note.text),
@@ -412,5 +463,73 @@ export const listMembers = internalQuery({
         role: membership.role,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
+export const referenceData = internalQuery({
+  args: { projectId: v.id('projects'), userId: v.id('users') },
+  handler: async (ctx, { projectId, userId }) => {
+    const membership = await requireProjectMember(ctx, projectId, userId);
+    const [project, sheets, memberships, quantityItems, definitions] = await Promise.all([
+      ctx.db.get(projectId),
+      ctx.db
+        .query('sheets')
+        .withIndex('by_project', (q) => q.eq('projectId', projectId))
+        .collect(),
+      ctx.db
+        .query('projectMembers')
+        .withIndex('by_project', (q) => q.eq('projectId', projectId))
+        .collect(),
+      ctx.db
+        .query('quantityItems')
+        .withIndex('by_project', (q) => q.eq('projectId', projectId))
+        .collect(),
+      ctx.db
+        .query('taskAttributeDefinitions')
+        .withIndex('by_project', (q) => q.eq('projectId', projectId))
+        .collect(),
+    ]);
+    if (project === null) throw new Error('Project not found');
+    const users = await Promise.all(
+      memberships.map((projectMembership) => ctx.db.get(projectMembership.userId)),
+    );
+    return {
+      project: { name: project.name, code: project.code, callerRole: membership.role },
+      allowedTaskStatuses: ['open', 'in-progress', 'done', 'verified'],
+      allowedTaskPriorities: [1, 2, 3],
+      standardTaskCategories: AGENT_TASK_CATEGORIES,
+      standardPinColors: AGENT_PIN_COLORS,
+      sheets: sheets
+        .sort((a, b) => a.pageIndex - b.pageIndex || a.number.localeCompare(b.number))
+        .map((sheet) => ({
+          number: sheet.number,
+          name: sheet.name,
+          discipline: sheet.discipline,
+          page: sheet.pageIndex + 1,
+          version: sheet.version,
+        })),
+      members: memberships
+        .map((projectMembership, index) => ({
+          name: users[index]?.name,
+          email: users[index]?.email,
+          role: projectMembership.role,
+        }))
+        .sort((a, b) => (a.name ?? a.email ?? '').localeCompare(b.name ?? b.email ?? '')),
+      quantityItems: quantityItems
+        .filter((item) => item.archivedAt === undefined)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((item) => ({ name: item.name, defaultUnit: item.defaultUnit })),
+      customTaskAttributes: definitions
+        .filter((definition) => definition.archivedAt === undefined)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((definition) => ({
+          name: definition.name,
+          type: definition.type,
+          unit: definition.unit,
+          options: definition.options
+            ?.filter((option) => option.active)
+            .map((option) => option.label),
+        })),
+    };
   },
 });

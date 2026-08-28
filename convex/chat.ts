@@ -11,10 +11,13 @@ import {
   query,
 } from './_generated/server';
 import {
+  activeFieldPilotToolNames,
   createFieldPilotAgent,
   fieldPilotInstructions,
+  shouldOfferProjectSkills,
   type FieldPilotAgentContext,
 } from './agents/fieldPilot';
+import { syncBuiltInAgentSkills, type AgentSkillKey } from './agents/skills/definitions';
 import { assertChatConfigured, chatProviderInfo } from './agents/provider';
 import {
   CONTENT_EDITOR_ROLES,
@@ -64,6 +67,27 @@ function requireMessage(content: string) {
 
 function normalizedLocalDate(value?: string) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : new Date().toISOString().slice(0, 10);
+}
+
+function approvalIdsFromSavedMessages(
+  savedMessages: Array<{ message?: { content?: unknown } }> | undefined,
+) {
+  const approvalIds = new Set<string>();
+  for (const savedMessage of savedMessages ?? []) {
+    const content = savedMessage.message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      if (
+        part &&
+        typeof part === 'object' &&
+        (part as { type?: unknown }).type === 'tool-approval-request' &&
+        typeof (part as { approvalId?: unknown }).approvalId === 'string'
+      ) {
+        approvalIds.add((part as { approvalId: string }).approvalId);
+      }
+    }
+  }
+  return [...approvalIds];
 }
 
 async function findBinding(
@@ -208,6 +232,7 @@ export const sendMessage = mutation({
       throw new Error('Please wait for the current reply to finish');
     }
     await limitAiChat(ctx, userId);
+    await syncBuiltInAgentSkills(ctx);
 
     const agent = createFieldPilotAgent();
     if (binding === null) {
@@ -244,7 +269,9 @@ export const sendMessage = mutation({
     await ctx.scheduler.runAfter(0, internal.chat.generateResponse, {
       bindingId: binding._id,
       promptMessageId: messageId,
+      jobId: messageId,
       context,
+      allowSkillLoading: shouldOfferProjectSkills(prompt),
     });
     return { accepted: true as const };
   },
@@ -269,6 +296,10 @@ export const respondToApproval = mutation({
     }
     await limitAiChat(ctx, userId);
     const agent = createFieldPilotAgent();
+    const approvalJob = binding.pendingApprovalJobs?.find(
+      (candidate) => candidate.approvalId === approvalId,
+    );
+    const jobId = approvalJob?.jobId ?? approvalId;
     const { messageId } = approved
       ? await agent.approveToolCall(ctx, {
           threadId: binding.componentThreadId,
@@ -282,13 +313,18 @@ export const respondToApproval = mutation({
     await ctx.db.patch(binding._id, {
       runStatus: 'queued',
       activePromptMessageId: messageId,
+      pendingApprovalJobs: binding.pendingApprovalJobs?.filter(
+        (candidate) => candidate.approvalId !== approvalId,
+      ),
       lastError: undefined,
       updatedAt: Date.now(),
     });
     await ctx.scheduler.runAfter(0, internal.chat.generateResponse, {
       bindingId: binding._id,
       promptMessageId: messageId,
+      jobId,
       context,
+      resumeApproval: true,
     });
   },
 });
@@ -309,16 +345,66 @@ export const setRunState = internalMutation({
     promptMessageId: v.string(),
     runStatus: v.union(v.literal('running'), v.literal('idle'), v.literal('failed')),
     error: v.optional(v.string()),
+    jobId: v.optional(v.string()),
+    approvalIds: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { bindingId, promptMessageId, runStatus, error }) => {
+  handler: async (ctx, { bindingId, promptMessageId, runStatus, error, jobId, approvalIds }) => {
     const binding = await ctx.db.get(bindingId);
     if (binding === null || binding.activePromptMessageId !== promptMessageId) return;
     await requireProjectMember(ctx, binding.projectId, binding.userId);
+    const pendingApprovalJobs = [...(binding.pendingApprovalJobs ?? [])];
+    if (jobId && approvalIds) {
+      for (const approvalId of approvalIds) {
+        const existingIndex = pendingApprovalJobs.findIndex(
+          (candidate) => candidate.approvalId === approvalId,
+        );
+        const record = { approvalId, jobId };
+        if (existingIndex === -1) pendingApprovalJobs.push(record);
+        else pendingApprovalJobs[existingIndex] = record;
+      }
+    }
     await ctx.db.patch(bindingId, {
       runStatus,
       activePromptMessageId: runStatus === 'running' ? promptMessageId : undefined,
+      pendingApprovalJobs: pendingApprovalJobs.slice(-100),
       lastError: error,
       updatedAt: Date.now(),
+    });
+  },
+});
+
+export const recordRunMetric = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    bindingId: v.id('agentThreadBindings'),
+    jobId: v.string(),
+    provider: v.string(),
+    model: v.string(),
+    loadedSkills: v.array(v.union(v.literal('tasks'), v.literal('images'))),
+    skillLoadingAllowed: v.boolean(),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    totalTokens: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const binding = await ctx.db.get(args.bindingId);
+    if (!binding || binding.projectId !== args.projectId || binding.userId !== args.userId) {
+      throw new Error('Agent conversation binding is invalid');
+    }
+    await ctx.db.insert('agentRunMetrics', {
+      projectId: args.projectId,
+      userId: args.userId,
+      threadBindingId: args.bindingId,
+      jobId: args.jobId,
+      provider: args.provider,
+      model: args.model,
+      loadedSkills: args.loadedSkills,
+      skillLoadingAllowed: args.skillLoadingAllowed,
+      inputTokens: args.inputTokens,
+      outputTokens: args.outputTokens,
+      totalTokens: args.totalTokens,
+      createdAt: Date.now(),
     });
   },
 });
@@ -327,9 +413,15 @@ export const generateResponse = internalAction({
   args: {
     bindingId: v.id('agentThreadBindings'),
     promptMessageId: v.string(),
+    jobId: v.string(),
     context: chatContextArgs,
+    resumeApproval: v.optional(v.boolean()),
+    allowSkillLoading: v.optional(v.boolean()),
   },
-  handler: async (ctx, { bindingId, promptMessageId, context }) => {
+  handler: async (
+    ctx,
+    { bindingId, promptMessageId, jobId, context, resumeApproval, allowSkillLoading },
+  ) => {
     const binding = await ctx.runQuery(internal.chat.getRunBinding, { bindingId });
     await ctx.runMutation(internal.chat.setRunState, {
       bindingId,
@@ -344,9 +436,16 @@ export const generateResponse = internalAction({
         projectId: binding.projectId,
         actorId: binding.userId,
         bindingId: binding._id,
+        jobId,
         today,
       } satisfies typeof ctx & FieldPilotAgentContext;
-      const agent = createFieldPilotAgent(binding.role !== 'viewer');
+      const canWrite = binding.role !== 'viewer';
+      const loadedSkills = new Set<AgentSkillKey>();
+      if (resumeApproval) {
+        loadedSkills.add('tasks');
+        loadedSkills.add('images');
+      }
+      const agent = createFieldPilotAgent(canWrite, loadedSkills);
       const scope = {
         userId: `${binding.projectId}:${binding.userId}`,
         threadId: binding.componentThreadId,
@@ -354,19 +453,63 @@ export const generateResponse = internalAction({
       const prompt = {
         promptMessageId,
         instructions: fieldPilotInstructions(context as ChatContext | undefined),
+        prepareStep: async () => ({
+          activeTools: activeFieldPilotToolNames(
+            canWrite,
+            loadedSkills,
+            resumeApproval || allowSkillLoading !== false,
+          ),
+        }),
       };
-      if (chatProviderInfo().provider === 'openai') {
-        await agent.streamText(agentCtx, scope, prompt, { saveStreamDeltas: true });
+      let approvalIds: string[];
+      let usage: {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+      };
+      const providerInfo = chatProviderInfo();
+      if (providerInfo.provider === 'openai') {
+        const result = await agent.streamText(agentCtx, scope, prompt, {
+          saveStreamDeltas: true,
+        });
+        approvalIds = approvalIdsFromSavedMessages(result.savedMessages);
+        const resolvedUsage = await result.usage;
+        usage = {
+          inputTokens: resolvedUsage.inputTokens,
+          outputTokens: resolvedUsage.outputTokens,
+          totalTokens: resolvedUsage.totalTokens,
+        };
       } else {
         // The existing provider contract guarantees Chat Completions and tool
         // calling, not SSE streaming. Keep that path non-streaming so current
         // OpenAI-compatible gateways continue to work unchanged.
-        await agent.generateText(agentCtx, scope, prompt);
+        const result = await agent.generateText(agentCtx, scope, prompt);
+        approvalIds = approvalIdsFromSavedMessages(result.savedMessages);
+        usage = {
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+        };
       }
+      await ctx.runMutation(internal.chat.recordRunMetric, {
+        projectId: binding.projectId,
+        userId: binding.userId,
+        bindingId,
+        jobId,
+        provider: providerInfo.provider,
+        model: providerInfo.model,
+        loadedSkills: [...loadedSkills],
+        skillLoadingAllowed: resumeApproval || allowSkillLoading !== false,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+      });
       await ctx.runMutation(internal.chat.setRunState, {
         bindingId,
         promptMessageId,
         runStatus: 'idle',
+        jobId,
+        approvalIds,
       });
     } catch (cause) {
       const message =
