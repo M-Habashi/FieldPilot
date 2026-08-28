@@ -494,7 +494,7 @@ export const useProject = create<ProjectState>((set, get) => ({
             void adapter
               .updateTask(serverId, remotePatch(currentTask))
               .finally(() => pendingRemoteUpdates.delete(serverId));
-          } else {
+          } else if (!currentTask) {
             void adapter.deleteTask(serverId);
           }
         })

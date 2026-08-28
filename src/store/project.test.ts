@@ -147,7 +147,8 @@ describe('remote project synchronization', () => {
 
   it('waits for the plan click before creating an agent-prepared task', async () => {
     const createTask = vi.fn(async () => 'agent-task');
-    projectStore.setRemoteProjectSync(remoteSync({ createTask }));
+    const deleteTask = vi.fn(async () => undefined);
+    projectStore.setRemoteProjectSync(remoteSync({ createTask, deleteTask }));
     projectStore.useProject.getState().startAgentTaskPlacement({
       operationId: 'operation-1',
       page: 2,
@@ -181,5 +182,27 @@ describe('remote project synchronization', () => {
     await vi.waitFor(() => {
       expect(projectStore.useProject.getState().tasks['agent-task']).toBeDefined();
     });
+    expect(deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('removes a remotely created task only when its optimistic task was deleted first', async () => {
+    let resolveCreate!: (taskId: string) => void;
+    const createTask = vi.fn(
+      async () =>
+        await new Promise<string>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    const deleteTask = vi.fn(async () => undefined);
+    projectStore.setRemoteProjectSync(remoteSync({ createTask, deleteTask }));
+
+    const localTaskId = projectStore.useProject.getState().addTask(1, 0.25, 0.75);
+    await projectStore.useProject.getState().deleteTask(localTaskId);
+    resolveCreate('orphaned-server-task');
+
+    await vi.waitFor(() => {
+      expect(deleteTask).toHaveBeenCalledWith('orphaned-server-task');
+    });
+    expect(projectStore.useProject.getState().tasks['orphaned-server-task']).toBeUndefined();
   });
 });

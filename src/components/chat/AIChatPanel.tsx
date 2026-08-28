@@ -27,6 +27,7 @@ import { MarkdownMessage } from './MarkdownMessage';
 const MAX_MESSAGE_CHARS = 4000;
 
 const SUGGESTED_PROMPTS = [
+  'Summarize the tasks in a table',
   'Summarize open work on this project',
   'What overdue high-priority tasks need attention?',
   'Which quantities are at risk of overrunning?',
@@ -245,9 +246,6 @@ export function AIChatPanel({
       <div className="fp-chat-chrome fp-chat-section fp-chat-topbar flex shrink-0 items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-t1">FieldPilot AI</div>
-          <div className="truncate text-[11px] text-t2">
-            {projectName} · Approval required for changes
-          </div>
         </div>
         <Button
           variant="ghost"
