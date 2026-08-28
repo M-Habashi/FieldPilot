@@ -262,7 +262,7 @@ export function AIChatPanel({
 
       <div
         ref={scrollRef}
-        className="fp-chat-section fp-chat-stream flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-7"
+        className="fp-chat-section fp-chat-stream flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-8"
       >
         {loading ? (
           <div

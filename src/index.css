@@ -922,7 +922,8 @@ select {
    darker blue-gray chrome surface. */
 .fp-chat-panel {
   --fp-chat-canvas: color-mix(in srgb, var(--fp-bg-surface-2) 72%, var(--fp-accent-soft));
-  --fp-chat-chrome: color-mix(in srgb, var(--fp-bg-inset) 82%, var(--fp-accent-soft));
+  --fp-chat-chrome: color-mix(in srgb, var(--fp-bg-inset) 88%, var(--fp-border-strong));
+  --fp-chat-fade-size: 32px;
   background: var(--fp-chat-canvas);
 }
 
@@ -930,14 +931,6 @@ select {
   position: relative;
   z-index: 2;
   background: var(--fp-chat-chrome);
-}
-
-.fp-chat-topbar {
-  border-bottom: 1px solid color-mix(in srgb, var(--fp-border-strong) 68%, transparent);
-}
-
-.fp-chat-bottombar {
-  border-top: 1px solid color-mix(in srgb, var(--fp-border-strong) 68%, transparent);
 }
 
 /* These overlays extend beyond the chrome and sit above the scroll layer.
@@ -948,18 +941,18 @@ select {
   position: absolute;
   right: 0;
   left: 0;
-  height: 28px;
+  height: var(--fp-chat-fade-size);
   pointer-events: none;
   content: '';
 }
 
 .fp-chat-topbar::after {
-  bottom: -28px;
+  bottom: calc(-1 * var(--fp-chat-fade-size));
   background: linear-gradient(to bottom, var(--fp-chat-chrome), transparent);
 }
 
 .fp-chat-bottombar::before {
-  top: -28px;
+  top: calc(-1 * var(--fp-chat-fade-size));
   background: linear-gradient(to bottom, transparent, var(--fp-chat-chrome));
 }
 
