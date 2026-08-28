@@ -922,7 +922,7 @@ select {
    darker blue-gray chrome surface. */
 .fp-chat-panel {
   --fp-chat-canvas: color-mix(in srgb, var(--fp-bg-surface-2) 72%, var(--fp-accent-soft));
-  --fp-chat-chrome: color-mix(in srgb, var(--fp-bg-inset) 88%, var(--fp-border-strong));
+  --fp-chat-chrome: color-mix(in srgb, var(--fp-bg-inset) 60%, var(--fp-border-strong));
   --fp-chat-fade-size: 32px;
   background: var(--fp-chat-canvas);
 }

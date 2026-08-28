@@ -234,7 +234,7 @@ export function AIChatPanel({
       <div className="fp-chat-chrome fp-chat-section fp-chat-topbar flex shrink-0 items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-t1">FieldPilot AI</div>
-          <div className="truncate text-[11px] text-t3">
+          <div className="truncate text-[11px] text-t2">
             {projectName} · Approval required for changes
           </div>
         </div>
