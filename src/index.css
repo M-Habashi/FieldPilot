@@ -918,11 +918,54 @@ select {
   pointer-events: none;
 }
 
-/* One continuous pale blue canvas runs behind the chat chrome, messages and
-   composer. White prompts and assistant messages remain the boxed layer. */
+/* The message canvas stays pale while the controls sit on a distinct,
+   darker blue-gray chrome surface. */
 .fp-chat-panel {
-  background: var(--fp-bg-surface-2);
-  background: color-mix(in srgb, var(--fp-bg-surface-2) 72%, var(--fp-accent-soft));
+  --fp-chat-canvas: color-mix(in srgb, var(--fp-bg-surface-2) 72%, var(--fp-accent-soft));
+  --fp-chat-chrome: color-mix(in srgb, var(--fp-bg-inset) 82%, var(--fp-accent-soft));
+  background: var(--fp-chat-canvas);
+}
+
+.fp-chat-chrome {
+  position: relative;
+  z-index: 2;
+  background: var(--fp-chat-chrome);
+}
+
+.fp-chat-topbar {
+  border-bottom: 1px solid color-mix(in srgb, var(--fp-border-strong) 68%, transparent);
+}
+
+.fp-chat-bottombar {
+  border-top: 1px solid color-mix(in srgb, var(--fp-border-strong) 68%, transparent);
+}
+
+/* These overlays extend beyond the chrome and sit above the scroll layer.
+   Any bubble, table or text passing underneath loses opacity gradually
+   instead of being clipped at the header or composer edge. */
+.fp-chat-topbar::after,
+.fp-chat-bottombar::before {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 28px;
+  pointer-events: none;
+  content: '';
+}
+
+.fp-chat-topbar::after {
+  bottom: -28px;
+  background: linear-gradient(to bottom, var(--fp-chat-chrome), transparent);
+}
+
+.fp-chat-bottombar::before {
+  top: -28px;
+  background: linear-gradient(to bottom, transparent, var(--fp-chat-chrome));
+}
+
+.fp-chat-stream {
+  position: relative;
+  z-index: 1;
 }
 
 /* Panel sections (close bar, header, messages, composer) stagger in after

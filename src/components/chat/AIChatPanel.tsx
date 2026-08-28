@@ -224,14 +224,14 @@ export function AIChatPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       <Button
         variant="ghost"
-        className="fp-chat-section h-10 w-full shrink-0 rounded-none font-semibold"
+        className="fp-chat-chrome fp-chat-section h-10 w-full shrink-0 rounded-none font-semibold"
         onClick={onClose}
       >
         <X data-icon="inline-start" />
         Close chat
       </Button>
 
-      <div className="fp-chat-section flex shrink-0 items-center gap-2 px-3 py-2.5">
+      <div className="fp-chat-chrome fp-chat-section fp-chat-topbar flex shrink-0 items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-t1">FieldPilot AI</div>
           <div className="truncate text-[11px] text-t3">
@@ -262,7 +262,7 @@ export function AIChatPanel({
 
       <div
         ref={scrollRef}
-        className="fp-chat-section flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
+        className="fp-chat-section fp-chat-stream flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-7"
       >
         {loading ? (
           <div
@@ -342,13 +342,13 @@ export function AIChatPanel({
       </div>
 
       <form
-        className="fp-chat-section shrink-0 px-3 pt-3 pb-12"
+        className="fp-chat-bottombar fp-chat-chrome fp-chat-section shrink-0 px-3 pt-3 pb-12"
         onSubmit={(event) => {
           event.preventDefault();
           void submit(draft);
         }}
       >
-        <div className="rounded-lg border border-line-strong px-3 py-2.5 shadow-e1 transition-[border-color,box-shadow] duration-(--fp-dur-fast) ease-(--fp-ease) focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15">
+        <div className="rounded-lg border border-line-strong bg-surface px-3 py-2.5 shadow-e1 transition-[border-color,box-shadow] duration-(--fp-dur-fast) ease-(--fp-ease) focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15">
           <Textarea
             ref={textareaRef}
             value={draft}
