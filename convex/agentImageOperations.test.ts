@@ -1,6 +1,7 @@
 import { convexTest } from 'convex-test';
 import { describe, expect, it } from 'vitest';
 import { api, internal } from './_generated/api';
+import { PHOTO_TRASH_RETENTION_MS } from './attachments';
 import schema from './schema';
 import { modules } from './test.setup';
 
@@ -130,6 +131,25 @@ describe('agent image writes', () => {
       changes: [{ photoId, photoUpdatedAt: version, trashed: true }],
     });
     const trashedPhoto = await t.run(async (ctx) => ctx.db.get(photoId));
+    await expect(
+      t.mutation(internal.agentOperations.deleteImagesPermanently, {
+        projectId,
+        userId: ownerId,
+        bindingId,
+        jobId: 'image-delete-too-soon',
+        toolCallId: 'image-delete-too-soon-tool',
+        photos: [
+          {
+            photoId,
+            photoUpdatedAt: trashedPhoto!.photoUpdatedAt!,
+            confirmFileName: 'site.jpg',
+          },
+        ],
+      }),
+    ).rejects.toThrow('must stay in trash for 30 days');
+    await t.run(async (ctx) => {
+      await ctx.db.patch(photoId, { deletedAt: Date.now() - PHOTO_TRASH_RETENTION_MS });
+    });
     const deleted = await t.mutation(internal.agentOperations.deleteImagesPermanently, {
       projectId,
       userId: ownerId,

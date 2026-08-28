@@ -19,6 +19,7 @@ import {
 } from './lib/agentImageChanges';
 import { createNoteForActor } from './notes';
 import { createTaskForActor, updateCoreTaskFieldsForActor, type CoreTaskUpdateArgs } from './tasks';
+import { PHOTO_TRASH_RETENTION_DAYS, PHOTO_TRASH_RETENTION_MS } from './attachments';
 
 async function requireAgentBinding(
   ctx: MutationCtx,
@@ -218,6 +219,11 @@ export const deleteImagesPermanently = internalMutation({
       }
       if (photo.deletedAt === undefined) {
         throw new Error(`${photo.fileName} must be moved to trash before permanent deletion`);
+      }
+      if (photo.deletedAt > Date.now() - PHOTO_TRASH_RETENTION_MS) {
+        throw new Error(
+          `${photo.fileName} must stay in trash for ${PHOTO_TRASH_RETENTION_DAYS} days before permanent deletion`,
+        );
       }
       if (supplied.confirmFileName !== photo.fileName) {
         throw new Error(`Confirm the exact filename for ${photo.fileName}`);

@@ -257,6 +257,7 @@ export default defineSchema({
   })
     .index('by_task', ['taskId'])
     .index('by_project_createdAt', ['projectId', 'createdAt'])
+    .index('by_kind_deletedAt', ['kind', 'deletedAt'])
     .index('by_storageRef', ['storageRef'])
     .index('by_uploadedBy_clientUploadId', ['uploadedBy', 'clientUploadId']),
 
@@ -348,6 +349,7 @@ export default defineSchema({
     pendingApprovalJobs: v.optional(
       v.array(v.object({ approvalId: v.string(), jobId: v.string() })),
     ),
+    loadedSkills: v.optional(v.array(v.union(v.literal('tasks'), v.literal('images')))),
     lastError: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),

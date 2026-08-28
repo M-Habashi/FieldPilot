@@ -1,13 +1,14 @@
 import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { internalQuery } from './_generated/server';
+import { PHOTO_TRASH_RETENTION_MS } from './attachments';
 import { requireProjectMember } from './lib/authz';
 
-const imageState = v.optional(v.union(v.literal('active'), v.literal('trashed'), v.literal('all')));
 const assignmentState = v.optional(
   v.union(v.literal('assigned'), v.literal('unassigned'), v.literal('all')),
 );
 const mapState = v.optional(v.union(v.literal('mapped'), v.literal('unmapped'), v.literal('all')));
+const imageState = v.optional(v.union(v.literal('active'), v.literal('trashed'), v.literal('all')));
 
 async function projectPhotoRows(
   ctx: Parameters<typeof requireProjectMember>[0],
@@ -51,6 +52,9 @@ function photoMetadata(
     contentType: photo.contentType,
     sizeBytes: photo.size,
     state: photo.deletedAt === undefined ? ('active' as const) : ('trashed' as const),
+    deletedAt: photo.deletedAt,
+    permanentDeletionAt:
+      photo.deletedAt === undefined ? undefined : photo.deletedAt + PHOTO_TRASH_RETENTION_MS,
     assignedTask: task ? { taskNumber: task.seq, title: task.title, color: task.color } : null,
     mapLocation:
       photo.latitude !== undefined && photo.longitude !== undefined
@@ -72,7 +76,6 @@ function photoMetadata(
     uploadedBy: uploader?.name ?? uploader?.email ?? 'Project member',
     createdAt: photo.createdAt,
     locationUpdatedAt: photo.locationUpdatedAt,
-    deletedAt: photo.deletedAt,
   };
 }
 
@@ -88,9 +91,10 @@ export const overview = internalQuery({
     ).length;
     const assigned = active.filter(({ task }) => task !== undefined).length;
     return {
-      total: rows.length,
+      visibleInPhotosTab: active.length,
       active: active.length,
       trashed,
+      includingTrash: rows.length,
       mapped,
       unmapped: active.length - mapped,
       assigned,

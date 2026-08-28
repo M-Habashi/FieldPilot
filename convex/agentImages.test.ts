@@ -83,25 +83,48 @@ describe('agent image reads', () => {
     });
 
     expect(await t.query(internal.agentImages.overview, { projectId, userId: ownerId })).toEqual({
-      total: 3,
+      visibleInPhotosTab: 2,
       active: 2,
       trashed: 1,
+      includingTrash: 3,
       mapped: 1,
       unmapped: 1,
       assigned: 1,
       unassigned: 1,
     });
-    const listed = await t.query(internal.agentImages.list, {
+    const visibleInPhotosTab = await t.query(internal.agentImages.list, {
+      projectId,
+      userId: ownerId,
+    });
+    expect(visibleInPhotosTab.totalMatches).toBe(2);
+    expect(visibleInPhotosTab.images.map((image) => image.photoId)).toEqual([
+      unassignedId,
+      assignedId,
+    ]);
+    const allPhotos = await t.query(internal.agentImages.list, {
       projectId,
       userId: ownerId,
       state: 'all',
     });
-    expect(listed.totalMatches).toBe(3);
-    expect(listed.images.map((image) => image.photoId)).toEqual([
-      trashedId,
-      unassignedId,
-      assignedId,
+    expect(allPhotos.totalMatches).toBe(3);
+    expect(allPhotos.images.map((image) => image.photoId)).toContain(trashedId);
+    const trashedPhotos = await t.query(internal.agentImages.list, {
+      projectId,
+      userId: ownerId,
+      state: 'trashed',
+    });
+    expect(trashedPhotos.images).toMatchObject([
+      { photoId: trashedId, fileName: 'trashed.jpg', state: 'trashed' },
     ]);
+    const trashedDetails = await t.query(internal.agentImages.details, {
+      projectId,
+      userId: ownerId,
+      photoId: trashedId,
+    });
+    expect(trashedDetails).toMatchObject({
+      state: 'trashed',
+      permanentDeletionAt: trashedDetails.deletedAt! + 30 * 24 * 60 * 60 * 1000,
+    });
     const details = await t.query(internal.agentImages.details, {
       projectId,
       userId: ownerId,

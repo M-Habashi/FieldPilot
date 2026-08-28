@@ -21,8 +21,20 @@ describe('database-backed agent skills', () => {
         'change_image_data',
         'delete_images_permanently',
       ],
-      revision: 2,
+      revision: 10,
     });
+    expect(skills.find((skill) => skill.key === 'images')?.instructions).toContain(
+      'visibleInPhotosTab',
+    );
+    expect(skills.find((skill) => skill.key === 'images')?.instructions).toContain(
+      'Trash lasts 30 days',
+    );
+    expect(skills.find((skill) => skill.key === 'images')?.instructions).toContain(
+      'Total: {visibleInPhotosTab}; Assigned: {assigned}',
+    );
+    expect(skills.find((skill) => skill.key === 'images')?.instructions).toContain(
+      'ignore trashed and includingTrash completely',
+    );
     expect(skills.find((skill) => skill.key === 'tasks')?.instructions).toContain(
       'Use change_project_data',
     );

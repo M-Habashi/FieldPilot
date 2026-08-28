@@ -24,6 +24,7 @@ import type * as attachments from "../attachments.js";
 import type * as auth from "../auth.js";
 import type * as authEmail from "../authEmail.js";
 import type * as chat from "../chat.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as invitations from "../invitations.js";
 import type * as lib_agentImageChanges from "../lib/agentImageChanges.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authEmail: typeof authEmail;
   chat: typeof chat;
+  crons: typeof crons;
   http: typeof http;
   invitations: typeof invitations;
   "lib/agentImageChanges": typeof lib_agentImageChanges;

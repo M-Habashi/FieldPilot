@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internalQuery, mutation, query } from './_generated/server';
+import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import {
   CONTENT_EDITOR_ROLES,
   requireProjectMember,
@@ -7,6 +7,10 @@ import {
   requireUser,
 } from './lib/authz';
 import { recordTaskEvent } from './lib/taskActivity';
+
+export const PHOTO_TRASH_RETENTION_DAYS = 30;
+export const PHOTO_TRASH_RETENTION_MS = PHOTO_TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const PHOTO_TRASH_PURGE_BATCH_SIZE = 100;
 
 function nextPhotoUpdatedAt(photo: { photoUpdatedAt?: number }): number {
   return Math.max(Date.now(), (photo.photoUpdatedAt ?? 0) + 1);
@@ -402,6 +406,36 @@ export const restorePhoto = mutation({
     const now = nextPhotoUpdatedAt(attachment);
     await ctx.db.patch(attachment._id, { deletedAt: undefined, photoUpdatedAt: now });
     return { photoUpdatedAt: now };
+  },
+});
+
+export const purgeExpiredTrashedPhotos = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - PHOTO_TRASH_RETENTION_MS;
+    const expiredPhotos = await ctx.db
+      .query('attachments')
+      .withIndex('by_kind_deletedAt', (q) =>
+        q.eq('kind', 'photo').gt('deletedAt', 0).lte('deletedAt', cutoff),
+      )
+      .take(PHOTO_TRASH_PURGE_BATCH_SIZE);
+    let missingStorageObjects = 0;
+    for (const photo of expiredPhotos) {
+      try {
+        await ctx.storage.delete(photo.storageRef);
+      } catch {
+        // Old development records can outlive their storage objects. Their
+        // expired metadata should still be purged from the trash.
+        missingStorageObjects += 1;
+      }
+      await ctx.db.delete(photo._id);
+    }
+    return {
+      deleted: expiredPhotos.length,
+      missingStorageObjects,
+      cutoff,
+      hasMore: expiredPhotos.length === PHOTO_TRASH_PURGE_BATCH_SIZE,
+    };
   },
 });
 

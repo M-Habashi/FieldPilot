@@ -41,8 +41,21 @@ describe('FieldPilot agent tool surface', () => {
     const instructions = fieldPilotInstructions({ projectName: 'Demo' });
     expect(instructions).toContain('For greetings');
     expect(instructions).toContain('do not call a tool');
-    expect(instructions).toContain('call load_skill');
+    expect(instructions).toContain('Resolve omitted subjects only from this conversation');
+    expect(instructions).toContain('ask one focused question before loading a skill');
+    expect(instructions).toContain('never from the open app view');
+    expect(instructions).toContain('ensure exactly the relevant skill is loaded');
+    expect(instructions).toContain('Never guess or reuse project facts from conversation history');
+    expect(instructions).toContain('Normal photo counts must list exactly five lines');
+    expect(instructions).toContain('Never mention trash unless the current message explicitly asks');
     expect(instructions).not.toContain('Use inspect_project_data whenever');
     expect(instructions.split('\n').length).toBeLessThanOrEqual(12);
+  });
+
+  it('directly clarifies omitted subjects on the first turn of a conversation', () => {
+    const instructions = fieldPilotInstructions({ view: 'map' }, true);
+    expect(instructions).toContain('This is the first turn of a new conversation');
+    expect(instructions).toContain('ask what it refers to and call no tool');
+    expect(instructions).toContain('“Which are assigned?”');
   });
 });

@@ -22,7 +22,7 @@ type InspectImagesInput = z.infer<typeof inspectImagesInput>;
 
 export const inspectImagesTool: ImageTool<InspectImagesInput> = createTool({
   description:
-    'Read project photo metadata after loading the images skill. Use overview for counts, images to find/filter photos, and image for one complete photo record. This tool does not inspect pixels.',
+    'Read project photo metadata after loading the images skill. Use overview for counts: visibleInPhotosTab is the normal answer to how many photos/images the project has; trashed and includingTrash are separate. Trashed records include their scheduled permanentDeletionAt after the 30-day retention period. Use images to find/filter photos and image for one complete photo record. This tool does not inspect pixels.',
   inputSchema: inspectImagesInput,
   execute: async (ctx: FieldPilotToolCtx, input): Promise<unknown> => {
     if (input.view === 'overview') {
@@ -184,7 +184,7 @@ type DeleteImagesPermanentlyInput = z.infer<typeof deleteImagesPermanentlyInput>
 
 export const deleteImagesPermanentlyTool: ImageTool<DeleteImagesPermanentlyInput> = createTool({
   description:
-    'Irreversibly delete one to ten existing photos that are already in trash. Use only when the user explicitly asks for permanent deletion, after inspect_images confirms each exact photoId, version, and filename. This action deletes stored image bytes and metadata and has no Undo.',
+    'Irreversibly delete one to ten existing photos that have already spent 30 days in trash. Use only when the user explicitly asks for permanent deletion, after inspect_images confirms each exact photoId, version, filename, and permanentDeletionAt. This action deletes stored image bytes and metadata and has no Undo.',
   inputSchema: deleteImagesPermanentlyInput,
   needsApproval: true,
   execute: async (ctx: FieldPilotToolCtx, input, options): Promise<unknown> =>

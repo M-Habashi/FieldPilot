@@ -228,6 +228,7 @@ export const sendMessage = mutation({
     const currentThreadId = requireThreadId(threadId);
     const prompt = requireMessage(content);
     let binding = await findBinding(ctx, projectId, userId, currentThreadId);
+    const isNewConversation = binding === null;
     if (binding?.runStatus === 'queued' || binding?.runStatus === 'running') {
       throw new Error('Please wait for the current reply to finish');
     }
@@ -272,6 +273,7 @@ export const sendMessage = mutation({
       jobId: messageId,
       context,
       allowSkillLoading: shouldOfferProjectSkills(prompt),
+      isNewConversation,
     });
     return { accepted: true as const };
   },
@@ -347,8 +349,12 @@ export const setRunState = internalMutation({
     error: v.optional(v.string()),
     jobId: v.optional(v.string()),
     approvalIds: v.optional(v.array(v.string())),
+    loadedSkills: v.optional(v.array(v.union(v.literal('tasks'), v.literal('images')))),
   },
-  handler: async (ctx, { bindingId, promptMessageId, runStatus, error, jobId, approvalIds }) => {
+  handler: async (
+    ctx,
+    { bindingId, promptMessageId, runStatus, error, jobId, approvalIds, loadedSkills },
+  ) => {
     const binding = await ctx.db.get(bindingId);
     if (binding === null || binding.activePromptMessageId !== promptMessageId) return;
     await requireProjectMember(ctx, binding.projectId, binding.userId);
@@ -367,6 +373,7 @@ export const setRunState = internalMutation({
       runStatus,
       activePromptMessageId: runStatus === 'running' ? promptMessageId : undefined,
       pendingApprovalJobs: pendingApprovalJobs.slice(-100),
+      ...(loadedSkills ? { loadedSkills: [...new Set(loadedSkills)] } : {}),
       lastError: error,
       updatedAt: Date.now(),
     });
@@ -417,10 +424,19 @@ export const generateResponse = internalAction({
     context: chatContextArgs,
     resumeApproval: v.optional(v.boolean()),
     allowSkillLoading: v.optional(v.boolean()),
+    isNewConversation: v.optional(v.boolean()),
   },
   handler: async (
     ctx,
-    { bindingId, promptMessageId, jobId, context, resumeApproval, allowSkillLoading },
+    {
+      bindingId,
+      promptMessageId,
+      jobId,
+      context,
+      resumeApproval,
+      allowSkillLoading,
+      isNewConversation,
+    },
   ) => {
     const binding = await ctx.runQuery(internal.chat.getRunBinding, { bindingId });
     await ctx.runMutation(internal.chat.setRunState, {
@@ -440,7 +456,7 @@ export const generateResponse = internalAction({
         today,
       } satisfies typeof ctx & FieldPilotAgentContext;
       const canWrite = binding.role !== 'viewer';
-      const loadedSkills = new Set<AgentSkillKey>();
+      const loadedSkills = new Set<AgentSkillKey>(binding.loadedSkills ?? []);
       if (resumeApproval) {
         loadedSkills.add('tasks');
         loadedSkills.add('images');
@@ -452,7 +468,10 @@ export const generateResponse = internalAction({
       };
       const prompt = {
         promptMessageId,
-        instructions: fieldPilotInstructions(context as ChatContext | undefined),
+        instructions: fieldPilotInstructions(
+          context as ChatContext | undefined,
+          isNewConversation === true,
+        ),
         prepareStep: async () => ({
           activeTools: activeFieldPilotToolNames(
             canWrite,
@@ -510,6 +529,7 @@ export const generateResponse = internalAction({
         runStatus: 'idle',
         jobId,
         approvalIds,
+        loadedSkills: [...loadedSkills],
       });
     } catch (cause) {
       const message =
