@@ -4,6 +4,7 @@ import { components } from '../_generated/api';
 import type { Id } from '../_generated/dataModel';
 import { fieldPilotLanguageModel } from './provider';
 import type { AgentSkillKey } from './skills/definitions';
+import { fieldPilotCalculationTools } from './tools/calculations';
 import { fieldPilotImageTools } from './tools/images';
 import { fieldPilotReadTools } from './tools/reads';
 import { createLoadSkillTool } from './tools/skills';
@@ -33,7 +34,9 @@ export type FieldPilotToolName =
   | 'inspect_images'
   | 'analyze_images'
   | 'change_image_data'
-  | 'delete_images_permanently';
+  | 'delete_images_permanently'
+  | 'inspect_calculations'
+  | 'change_calculation_data';
 
 export function activeFieldPilotToolNames(
   canWrite: boolean,
@@ -49,6 +52,10 @@ export function activeFieldPilotToolNames(
   if (loadedSkills.has('images')) {
     names.push('inspect_images', 'analyze_images');
     if (canWrite) names.push('change_image_data', 'delete_images_permanently');
+  }
+  if (loadedSkills.has('quantities')) {
+    names.push('inspect_calculations');
+    if (canWrite) names.push('change_calculation_data');
   }
   return names;
 }
@@ -71,12 +78,13 @@ export function createFieldPilotAgent(canWrite = true, loadedSkills = new Set<Ag
     name: 'FieldPilot AI',
     languageModel: fieldPilotLanguageModel(),
     tools: canWrite
-      ? { ...skillTools, ...readTools, ...fieldPilotWriteTools }
+      ? { ...skillTools, ...readTools, ...fieldPilotWriteTools, ...fieldPilotCalculationTools }
       : {
           ...skillTools,
           inspect_project_data: fieldPilotReadTools.inspect_project_data,
           inspect_images: fieldPilotImageTools.inspect_images,
           analyze_images: fieldPilotImageTools.analyze_images,
+          inspect_calculations: fieldPilotCalculationTools.inspect_calculations,
         },
     stopWhen: stepCountIs(12),
     contextOptions: { recentMessages: 30, excludeToolMessages: false },
@@ -84,10 +92,7 @@ export function createFieldPilotAgent(canWrite = true, loadedSkills = new Set<Ag
   });
 }
 
-export function fieldPilotInstructions(
-  context?: FieldPilotChatContext,
-  isNewConversation = false,
-) {
+export function fieldPilotInstructions(context?: FieldPilotChatContext, isNewConversation = false) {
   const lines = [
     'You are FieldPilot AI, a project-scoped construction assistant.',
     'Be concise, practical, calm, and direct. Reply in the user’s language and cite visible task, sheet, or photo identifiers when relevant.',

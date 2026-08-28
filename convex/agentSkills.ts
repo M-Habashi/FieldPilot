@@ -15,7 +15,7 @@ export const getForAgent = internalQuery({
   args: {
     projectId: v.id('projects'),
     userId: v.id('users'),
-    key: v.union(v.literal('tasks'), v.literal('images')),
+    key: v.union(v.literal('tasks'), v.literal('images'), v.literal('quantities')),
   },
   handler: async (ctx, { projectId, userId, key }) => {
     await requireProjectMember(ctx, projectId, userId);

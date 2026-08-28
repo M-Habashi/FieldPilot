@@ -349,7 +349,9 @@ export default defineSchema({
     pendingApprovalJobs: v.optional(
       v.array(v.object({ approvalId: v.string(), jobId: v.string() })),
     ),
-    loadedSkills: v.optional(v.array(v.union(v.literal('tasks'), v.literal('images')))),
+    loadedSkills: v.optional(
+      v.array(v.union(v.literal('tasks'), v.literal('images'), v.literal('quantities'))),
+    ),
     lastError: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -361,7 +363,7 @@ export default defineSchema({
   // intentionally no public mutation for this table: deployed source is the
   // only authority that may create or update built-in skills.
   agentSkills: defineTable({
-    key: v.union(v.literal('tasks'), v.literal('images')),
+    key: v.union(v.literal('tasks'), v.literal('images'), v.literal('quantities')),
     name: v.string(),
     description: v.string(),
     instructions: v.string(),
@@ -379,7 +381,9 @@ export default defineSchema({
     jobId: v.string(),
     provider: v.string(),
     model: v.string(),
-    loadedSkills: v.array(v.union(v.literal('tasks'), v.literal('images'))),
+    loadedSkills: v.array(
+      v.union(v.literal('tasks'), v.literal('images'), v.literal('quantities')),
+    ),
     skillLoadingAllowed: v.boolean(),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),

@@ -46,9 +46,16 @@ const setTaskQuantityChange = v.object({
   quantityUnit: optionalString,
 });
 
+const removeTaskQuantityChange = v.object({
+  kind: v.literal('remove_task_quantity'),
+  taskNumber: v.number(),
+  lineNumber: v.optional(v.number()),
+});
+
 export const agentProjectChange = v.union(
   updateTaskChange,
   setTaskQuantityChange,
+  removeTaskQuantityChange,
   v.object({ kind: v.literal('add_task_note'), taskNumber: v.number(), text: v.string() }),
   v.object({
     kind: v.literal('update_project'),
@@ -74,6 +81,7 @@ export const agentProjectChange = v.union(
     name: v.optional(v.string()),
     defaultUnit: v.optional(v.string()),
   }),
+  v.object({ kind: v.literal('archive_quantity_item'), itemName: v.string() }),
 );
 
 export type AgentProjectChange =
@@ -105,6 +113,7 @@ export type AgentProjectChange =
       completedQuantity?: number | null;
       quantityUnit?: string | null;
     }
+  | { kind: 'remove_task_quantity'; taskNumber: number; lineNumber?: number }
   | { kind: 'add_task_note'; taskNumber: number; text: string }
   | { kind: 'update_project'; name?: string; code?: string | null }
   | {
@@ -116,7 +125,8 @@ export type AgentProjectChange =
       version?: number;
     }
   | { kind: 'create_quantity_item'; name: string; defaultUnit: string }
-  | { kind: 'update_quantity_item'; itemName: string; name?: string; defaultUnit?: string };
+  | { kind: 'update_quantity_item'; itemName: string; name?: string; defaultUnit?: string }
+  | { kind: 'archive_quantity_item'; itemName: string };
 
 type TaskSnapshot = {
   title: string;
@@ -201,9 +211,28 @@ type UndoEntry =
     }
   | { kind: 'delete_quantity_line'; lineId: Id<'taskQuantities'>; createdAt: number }
   | {
+      kind: 'recreate_quantity_line';
+      before: {
+        projectId: Id<'projects'>;
+        taskId: Id<'tasks'>;
+        quantityItemId: Id<'quantityItems'> | null;
+        plannedQuantity: number | null;
+        completedQuantity: number | null;
+        quantityUnit: string | null;
+        createdBy: Id<'users'>;
+        createdAt: number;
+        updatedAt: number;
+      };
+    }
+  | {
       kind: 'restore_quantity_item';
       itemId: Id<'quantityItems'>;
-      before: { name: string; defaultUnit: string; updatedAt: number };
+      before: {
+        name: string;
+        defaultUnit: string;
+        archivedAt: number | null;
+        updatedAt: number;
+      };
       afterUpdatedAt: number;
     }
   | { kind: 'delete_quantity_item'; itemId: Id<'quantityItems'>; createdAt: number };
@@ -930,6 +959,105 @@ async function applyTaskQuantity(
   return `Task #${task.seq} quantity line 1`;
 }
 
+async function removeTaskQuantity(
+  ctx: MutationCtx,
+  projectId: Id<'projects'>,
+  actorId: Id<'users'>,
+  change: Extract<AgentProjectChange, { kind: 'remove_task_quantity' }>,
+  entries: UndoEntry[],
+  activityEventIds: Id<'taskActivityEvents'>[],
+) {
+  if (
+    change.lineNumber !== undefined &&
+    (!Number.isSafeInteger(change.lineNumber) || change.lineNumber < 1)
+  ) {
+    throw new Error('Quantity line number must be a positive whole number');
+  }
+  const task = await taskByNumber(ctx, projectId, change.taskNumber);
+  const lines = await ctx.db
+    .query('taskQuantities')
+    .withIndex('by_task', (q) => q.eq('taskId', task._id))
+    .collect();
+  lines.sort((a, b) => a.createdAt - b.createdAt);
+  if (lines.length > 0) {
+    if (change.lineNumber === undefined && lines.length !== 1) {
+      throw new Error(`Task #${task.seq} has multiple quantities; provide lineNumber`);
+    }
+    const index = (change.lineNumber ?? 1) - 1;
+    const line = lines[index];
+    if (!line) {
+      throw new Error(`Quantity line ${change.lineNumber} was not found on Task #${task.seq}`);
+    }
+    const item = line.quantityItemId ? await ctx.db.get(line.quantityItemId) : undefined;
+    entries.push({
+      kind: 'recreate_quantity_line',
+      before: {
+        projectId: line.projectId,
+        taskId: line.taskId,
+        quantityItemId: line.quantityItemId ?? null,
+        plannedQuantity: line.plannedQuantity ?? null,
+        completedQuantity: line.completedQuantity ?? null,
+        quantityUnit: line.quantityUnit ?? null,
+        createdBy: line.createdBy,
+        createdAt: line.createdAt,
+        updatedAt: line.updatedAt,
+      },
+    });
+    await ctx.db.delete(line._id);
+    const eventId = await recordAgentChange(ctx, {
+      projectId,
+      taskId: task._id,
+      actorId,
+      kind: 'quantity_changed',
+      fieldKey: `quantity:${line._id}`,
+      fieldLabel: `${item?.name ?? 'Unclassified'} quantity`,
+      oldValue: displayQuantity(
+        item?.name,
+        line.plannedQuantity,
+        line.completedQuantity,
+        line.quantityUnit,
+      ),
+    });
+    if (eventId) activityEventIds.push(eventId);
+    return `Task #${task.seq} quantity line ${index + 1}`;
+  }
+
+  const hasLegacyQuantity =
+    task.quantityItemId !== undefined ||
+    task.plannedQuantity !== undefined ||
+    task.completedQuantity !== undefined;
+  if (!hasLegacyQuantity || (change.lineNumber !== undefined && change.lineNumber !== 1)) {
+    throw new Error(`Quantity line ${change.lineNumber ?? 1} was not found on Task #${task.seq}`);
+  }
+  const item = task.quantityItemId ? await ctx.db.get(task.quantityItemId) : undefined;
+  const before = taskSnapshot(task);
+  const updatedAt = timestampAfter(task.updatedAt);
+  await ctx.db.patch(task._id, {
+    quantityItemId: undefined,
+    plannedQuantity: undefined,
+    completedQuantity: undefined,
+    quantityUnit: undefined,
+    updatedAt,
+  });
+  entries.push({ kind: 'restore_task', taskId: task._id, before, afterUpdatedAt: updatedAt });
+  const eventId = await recordAgentChange(ctx, {
+    projectId,
+    taskId: task._id,
+    actorId,
+    kind: 'quantity_changed',
+    fieldKey: 'quantity:legacy',
+    fieldLabel: `${item?.name ?? 'Unclassified'} quantity`,
+    oldValue: displayQuantity(
+      item?.name,
+      task.plannedQuantity,
+      task.completedQuantity,
+      task.quantityUnit,
+    ),
+  });
+  if (eventId) activityEventIds.push(eventId);
+  return `Task #${task.seq} quantity line 1`;
+}
+
 async function uniqueSheetByNumber(
   ctx: MutationCtx,
   projectId: Id<'projects'>,
@@ -997,6 +1125,12 @@ export async function executeAgentProjectChanges(
     if (change.kind === 'set_task_quantity') {
       summaries.push(
         await applyTaskQuantity(ctx, projectId, actorId, change, entries, activityEventIds),
+      );
+      continue;
+    }
+    if (change.kind === 'remove_task_quantity') {
+      summaries.push(
+        await removeTaskQuantity(ctx, projectId, actorId, change, entries, activityEventIds),
       );
       continue;
     }
@@ -1102,6 +1236,27 @@ export async function executeAgentProjectChanges(
       summaries.push(`quantity item ${name}`);
       continue;
     }
+    if (change.kind === 'archive_quantity_item') {
+      await requireProjectRole(ctx, projectId, ['owner', 'admin'], actorId);
+      const item = await activeQuantityItemByName(ctx, projectId, change.itemName);
+      if (!item) throw new Error(`Quantity item "${change.itemName}" was not found`);
+      const before = {
+        name: item.name,
+        defaultUnit: item.defaultUnit,
+        archivedAt: item.archivedAt ?? null,
+        updatedAt: item.updatedAt,
+      };
+      const updatedAt = timestampAfter(item.updatedAt);
+      await ctx.db.patch(item._id, { archivedAt: Date.now(), updatedAt });
+      entries.push({
+        kind: 'restore_quantity_item',
+        itemId: item._id,
+        before,
+        afterUpdatedAt: updatedAt,
+      });
+      summaries.push(`quantity item ${item.name}`);
+      continue;
+    }
     await requireProjectRole(ctx, projectId, ['owner', 'admin'], actorId);
     if (change.name === undefined && change.defaultUnit === undefined) {
       throw new Error(`No fields were supplied for quantity item ${change.itemName}`);
@@ -1117,7 +1272,12 @@ export async function executeAgentProjectChanges(
         ? item.defaultUnit
         : normalizedRequired(change.defaultUnit, 'Default unit', 24).toUpperCase();
     await assertUniqueQuantityItemName(ctx, projectId, nextName, item._id);
-    const before = { name: item.name, defaultUnit: item.defaultUnit, updatedAt: item.updatedAt };
+    const before = {
+      name: item.name,
+      defaultUnit: item.defaultUnit,
+      archivedAt: item.archivedAt ?? null,
+      updatedAt: item.updatedAt,
+    };
     const updatedAt = timestampAfter(item.updatedAt);
     await ctx.db.patch(item._id, { name: nextName, defaultUnit, updatedAt });
     entries.push({
@@ -1326,6 +1486,25 @@ export async function undoAgentProjectChanges(
       await ctx.db.delete(line._id);
       continue;
     }
+    if (entry.kind === 'recreate_quantity_line') {
+      const task = await ctx.db.get(entry.before.taskId);
+      if (!task || task.projectId !== entry.before.projectId) {
+        throw new Error('The task for a removed quantity no longer exists');
+      }
+      await requireProjectRole(ctx, entry.before.projectId, CONTENT_EDITOR_ROLES, actorId);
+      await ctx.db.insert('taskQuantities', {
+        projectId: entry.before.projectId,
+        taskId: entry.before.taskId,
+        quantityItemId: entry.before.quantityItemId ?? undefined,
+        plannedQuantity: entry.before.plannedQuantity ?? undefined,
+        completedQuantity: entry.before.completedQuantity ?? undefined,
+        quantityUnit: entry.before.quantityUnit ?? undefined,
+        createdBy: entry.before.createdBy,
+        createdAt: entry.before.createdAt,
+        updatedAt: entry.before.updatedAt,
+      });
+      continue;
+    }
     if (entry.kind === 'restore_quantity_item') {
       const item = await ctx.db.get(entry.itemId);
       if (!item) throw new Error('A quantity item changed by this AI job no longer exists');
@@ -1336,6 +1515,7 @@ export async function undoAgentProjectChanges(
       await ctx.db.patch(item._id, {
         name: entry.before.name,
         defaultUnit: entry.before.defaultUnit,
+        archivedAt: entry.before.archivedAt ?? undefined,
         updatedAt: entry.before.updatedAt,
       });
       continue;

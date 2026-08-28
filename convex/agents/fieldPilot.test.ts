@@ -27,6 +27,15 @@ describe('FieldPilot agent tool surface', () => {
       'change_image_data',
       'delete_images_permanently',
     ]);
+    expect(activeFieldPilotToolNames(true, new Set(['quantities']))).toEqual([
+      'load_skill',
+      'inspect_calculations',
+      'change_calculation_data',
+    ]);
+    expect(activeFieldPilotToolNames(false, new Set(['quantities']))).toEqual([
+      'load_skill',
+      'inspect_calculations',
+    ]);
   });
 
   it('hard-disables tools for simple greetings and thanks', () => {
@@ -47,7 +56,9 @@ describe('FieldPilot agent tool surface', () => {
     expect(instructions).toContain('ensure exactly the relevant skill is loaded');
     expect(instructions).toContain('Never guess or reuse project facts from conversation history');
     expect(instructions).toContain('Normal photo counts must list exactly five lines');
-    expect(instructions).toContain('Never mention trash unless the current message explicitly asks');
+    expect(instructions).toContain(
+      'Never mention trash unless the current message explicitly asks',
+    );
     expect(instructions).not.toContain('Use inspect_project_data whenever');
     expect(instructions.split('\n').length).toBeLessThanOrEqual(12);
   });

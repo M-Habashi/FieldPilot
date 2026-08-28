@@ -9,6 +9,7 @@
  */
 
 import type * as activity from "../activity.js";
+import type * as agentCalculations from "../agentCalculations.js";
 import type * as agentData from "../agentData.js";
 import type * as agentImages from "../agentImages.js";
 import type * as agentOperations from "../agentOperations.js";
@@ -16,6 +17,7 @@ import type * as agentSkills from "../agentSkills.js";
 import type * as agents_fieldPilot from "../agents/fieldPilot.js";
 import type * as agents_provider from "../agents/provider.js";
 import type * as agents_skills_definitions from "../agents/skills/definitions.js";
+import type * as agents_tools_calculations from "../agents/tools/calculations.js";
 import type * as agents_tools_images from "../agents/tools/images.js";
 import type * as agents_tools_reads from "../agents/tools/reads.js";
 import type * as agents_tools_skills from "../agents/tools/skills.js";
@@ -61,6 +63,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   activity: typeof activity;
+  agentCalculations: typeof agentCalculations;
   agentData: typeof agentData;
   agentImages: typeof agentImages;
   agentOperations: typeof agentOperations;
@@ -68,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   "agents/fieldPilot": typeof agents_fieldPilot;
   "agents/provider": typeof agents_provider;
   "agents/skills/definitions": typeof agents_skills_definitions;
+  "agents/tools/calculations": typeof agents_tools_calculations;
   "agents/tools/images": typeof agents_tools_images;
   "agents/tools/reads": typeof agents_tools_reads;
   "agents/tools/skills": typeof agents_tools_skills;

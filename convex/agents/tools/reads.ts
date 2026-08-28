@@ -12,7 +12,7 @@ export type FieldPilotToolCtx = ToolCtx<DataModel> & {
 };
 
 type InspectProjectInput = {
-  view: 'overview' | 'tasks' | 'task' | 'quantities' | 'reference_data';
+  view: 'overview' | 'tasks' | 'task' | 'reference_data';
   taskNumber?: number;
   text?: string;
   status?: 'open' | 'in-progress' | 'done' | 'verified';
@@ -27,9 +27,9 @@ type InspectProjectInput = {
 
 export const inspectProjectTool = createTool<InspectProjectInput, unknown, FieldPilotToolCtx>({
   description:
-    'Read current project data. Choose exactly one view: overview for counts and health; tasks to find/filter task numbers and ground simple bulk status or priority edits; task for one complete task before detailed edits; quantities for the quantity report; reference_data for exact member, sheet, quantity-item, custom-attribute, category, color, project, and permission values. This is the only project read tool. Use it repeatedly when one view does not contain enough information, and never guess identifiers or current values.',
+    'Read current task and project data. Choose exactly one view: overview for counts and health; tasks to find/filter task numbers and ground simple bulk edits; task for one complete task before detailed edits; reference_data for exact member, sheet, custom-attribute, category, color, project, and permission values. Use inspect_calculations for Quantities-tab work.',
   inputSchema: z.object({
-    view: z.enum(['overview', 'tasks', 'task', 'quantities', 'reference_data']),
+    view: z.enum(['overview', 'tasks', 'task', 'reference_data']),
     taskNumber: z
       .number()
       .int()
@@ -81,12 +81,6 @@ export const inspectProjectTool = createTool<InspectProjectInput, unknown, Field
         projectId: ctx.projectId,
         userId: ctx.actorId,
         taskNumber: input.taskNumber,
-      });
-    }
-    if (input.view === 'quantities') {
-      return await ctx.runQuery(internal.agentData.quantityReport, {
-        projectId: ctx.projectId,
-        userId: ctx.actorId,
       });
     }
     return await ctx.runQuery(internal.agentData.referenceData, {

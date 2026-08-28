@@ -6,7 +6,6 @@ import type { FieldPilotToolCtx } from './reads';
 type WriteTool<Input> = ReturnType<typeof createTool<Input, unknown, FieldPilotToolCtx>>;
 
 const nullableText = z.string().nullable().optional();
-const nullableNonnegativeNumber = z.number().nonnegative().nullable().optional();
 
 const projectChangeSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -52,22 +51,6 @@ const projectChangeSchema = z.discriminatedUnion('kind', [
       .describe('Use exact attribute and dropdown-option names from reference_data.'),
   }),
   z.object({
-    kind: z.literal('set_task_quantity'),
-    taskNumber: z.number().int().positive(),
-    lineNumber: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe('Use the task view line number. Use 0 to add a new quantity row.'),
-    quantityItemName: nullableText.describe(
-      'Exact quantity item name from reference_data, or null to unclassify.',
-    ),
-    plannedQuantity: nullableNonnegativeNumber,
-    completedQuantity: nullableNonnegativeNumber,
-    quantityUnit: nullableText,
-  }),
-  z.object({
     kind: z.literal('add_task_note'),
     taskNumber: z.number().int().positive(),
     text: z.string().min(1).max(4000),
@@ -85,17 +68,6 @@ const projectChangeSchema = z.discriminatedUnion('kind', [
     discipline: z.string().max(120).nullable().optional(),
     version: z.number().int().positive().optional(),
   }),
-  z.object({
-    kind: z.literal('create_quantity_item'),
-    name: z.string().min(1).max(80),
-    defaultUnit: z.string().min(1).max(24),
-  }),
-  z.object({
-    kind: z.literal('update_quantity_item'),
-    itemName: z.string().min(1).describe('Current exact item name from reference_data.'),
-    name: z.string().min(1).max(80).optional(),
-    defaultUnit: z.string().min(1).max(24).optional(),
-  }),
 ]);
 
 const changeProjectDataInput = z.object({
@@ -112,7 +84,7 @@ type ChangeProjectDataInput = z.infer<typeof changeProjectDataInput>;
 
 export const changeProjectDataTool: WriteTool<ChangeProjectDataInput> = createTool({
   description:
-    'Change existing project data in one approved batch. Use update_task for title, description, status, priority, category, pin color, dates, location, tags, manpower, cost, currency, assignee, and custom attributes; set_task_quantity for quantity rows; add_task_note for new notes; update_project/update_sheet for admin metadata; and create_quantity_item/update_quantity_item for the quantity catalog. Before calling, inspect every target and use reference_data for exact names and allowed values. Include all already-known related edits in one changes array. Every approved call is grouped with any other write calls from the same user request and Undo reverses the whole AI job atomically.',
+    'Change existing task and project data in one approved batch. Use update_task for title, description, status, priority, category, pin color, dates, location, tags, manpower, cost, currency, assignee, and custom attributes; add_task_note for notes; and update_project/update_sheet for admin metadata. Use change_calculation_data for quantity rows or catalog items. Inspect every target and exact allowed value first. Every approved call is grouped with other writes from the same request and Undo reverses the AI job atomically.',
   inputSchema: changeProjectDataInput,
   needsApproval: true,
   execute: async (

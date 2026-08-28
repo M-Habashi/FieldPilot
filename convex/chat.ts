@@ -65,6 +65,20 @@ function requireMessage(content: string) {
   return trimmed;
 }
 
+function agentErrorSummary(cause: unknown) {
+  const retry = cause as { reason?: unknown; lastError?: unknown } | null;
+  const lastError = retry?.lastError;
+  const resolved = lastError instanceof Error ? lastError : cause;
+  return {
+    name: cause instanceof Error ? cause.name : 'Error',
+    reason: typeof retry?.reason === 'string' ? retry.reason : undefined,
+    detail:
+      resolved instanceof Error
+        ? resolved.message.replace(/\s+/g, ' ').slice(0, 500)
+        : 'Unknown agent error',
+  };
+}
+
 function normalizedLocalDate(value?: string) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : new Date().toISOString().slice(0, 10);
 }
@@ -349,7 +363,9 @@ export const setRunState = internalMutation({
     error: v.optional(v.string()),
     jobId: v.optional(v.string()),
     approvalIds: v.optional(v.array(v.string())),
-    loadedSkills: v.optional(v.array(v.union(v.literal('tasks'), v.literal('images')))),
+    loadedSkills: v.optional(
+      v.array(v.union(v.literal('tasks'), v.literal('images'), v.literal('quantities'))),
+    ),
   },
   handler: async (
     ctx,
@@ -388,7 +404,9 @@ export const recordRunMetric = internalMutation({
     jobId: v.string(),
     provider: v.string(),
     model: v.string(),
-    loadedSkills: v.array(v.union(v.literal('tasks'), v.literal('images'))),
+    loadedSkills: v.array(
+      v.union(v.literal('tasks'), v.literal('images'), v.literal('quantities')),
+    ),
     skillLoadingAllowed: v.boolean(),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
@@ -460,6 +478,7 @@ export const generateResponse = internalAction({
       if (resumeApproval) {
         loadedSkills.add('tasks');
         loadedSkills.add('images');
+        loadedSkills.add('quantities');
       }
       const agent = createFieldPilotAgent(canWrite, loadedSkills);
       const scope = {
@@ -536,7 +555,7 @@ export const generateResponse = internalAction({
         cause instanceof Error && cause.message.startsWith('AI chat is not configured')
           ? cause.message
           : 'The AI assistant is unavailable right now. Try again in a moment.';
-      console.error('FieldPilot agent run failed', cause instanceof Error ? cause.name : 'Error');
+      console.error('FieldPilot agent run failed', agentErrorSummary(cause));
       await ctx.runMutation(internal.chat.setRunState, {
         bindingId,
         promptMessageId,

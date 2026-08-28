@@ -450,4 +450,55 @@ describe('agent write operations', () => {
       status: 'undone',
     });
   });
+
+  it('removes quantity rows, archives catalog items, and restores both with one Undo', async () => {
+    const t = createTest();
+    const ownerId = await seedUser(t, 'CalculationOwner');
+    const { owner, projectId, taskId } = await seedProjectTask(t, ownerId);
+    const bindingId = await seedBinding(t, projectId, ownerId, 'calculation-change');
+    const itemId = await owner.mutation(api.quantities.createItem, {
+      projectId,
+      name: 'Concrete',
+      defaultUnit: 'CY',
+    });
+    await owner.mutation(api.quantities.updateTaskLine, {
+      taskId,
+      quantityItemId: itemId,
+      plannedQuantity: 12,
+      completedQuantity: 3,
+    });
+    const secondLineId = await owner.mutation(api.quantities.addTaskLine, { taskId });
+    await owner.mutation(api.quantities.updateTaskLine, {
+      taskId,
+      lineId: secondLineId,
+      quantityItemId: itemId,
+      plannedQuantity: 5,
+      completedQuantity: 1,
+    });
+
+    await t.mutation(internal.agentOperations.changeProjectData, {
+      projectId,
+      userId: ownerId,
+      bindingId,
+      jobId: 'job-calculation-1',
+      toolCallId: 'tool-calculation-1',
+      changes: [
+        { kind: 'remove_task_quantity', taskNumber: 1, lineNumber: 2 },
+        { kind: 'archive_quantity_item', itemName: 'Concrete' },
+      ],
+    });
+
+    expect(await owner.query(api.quantities.listTaskLines, { taskId })).toHaveLength(1);
+    expect(await owner.query(api.quantities.listItems, { projectId })).toEqual([]);
+
+    await owner.mutation(api.agentOperations.undoJob, {
+      projectId,
+      jobId: 'job-calculation-1',
+    });
+
+    expect(await owner.query(api.quantities.listTaskLines, { taskId })).toHaveLength(2);
+    expect(await owner.query(api.quantities.listItems, { projectId })).toEqual([
+      expect.objectContaining({ _id: itemId, name: 'Concrete', defaultUnit: 'CY' }),
+    ]);
+  });
 });

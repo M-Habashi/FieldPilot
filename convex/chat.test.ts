@@ -65,7 +65,7 @@ describe('AI chat', () => {
       runStatus: 'idle',
       jobId: 'job-message-1',
       approvalIds: ['approval-1', 'approval-2'],
-      loadedSkills: ['images', 'tasks', 'images'],
+      loadedSkills: ['images', 'quantities', 'tasks', 'images'],
     });
 
     expect(await t.run(async (ctx) => ctx.db.get(bindingId))).toMatchObject({
@@ -74,7 +74,7 @@ describe('AI chat', () => {
         { approvalId: 'approval-1', jobId: 'job-message-1' },
         { approvalId: 'approval-2', jobId: 'job-message-1' },
       ],
-      loadedSkills: ['images', 'tasks'],
+      loadedSkills: ['images', 'quantities', 'tasks'],
     });
   });
 
