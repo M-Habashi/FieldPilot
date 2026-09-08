@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, ConvexReactClient, Unauthenticated } from 'convex/react';
 import { createRoot } from 'react-dom/client';
+import { Analytics } from '@vercel/analytics/react';
 import '@fontsource-variable/inter';
 import '@fontsource/barlow-condensed/600.css';
 import '@fontsource/barlow-condensed/700.css';
@@ -45,6 +46,7 @@ createRoot(document.getElementById('root')!).render(
         <App />
       </Authenticated>
     </ConvexAuthProvider>
+    <Analytics />
   </StrictMode>,
 );
 
